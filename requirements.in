@@ -1,0 +1,10 @@
+e2b_code_interpreter==1.0.0
+anthropic==0.35.0 
+openai
+python-dotenv==1.0.1
+ipykernel
+aws-cdk-lib==2.171.0
+constructs>=10.0.0,<11.0.0
+aws_cdk.aws_lambda_python_alpha
+aws-lambda-powertools
+boto3

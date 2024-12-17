@@ -1,0 +1,20 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# UV pip install outputs
+.uv/
+.pytest_cache/
+**/.uv/
+**/__pycache__/
+
+# CDK output
+cdk.out/
+**/cdk.out/
