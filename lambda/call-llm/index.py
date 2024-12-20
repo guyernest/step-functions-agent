@@ -26,6 +26,7 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY)
 from anthropic.types import Message, TextBlock, ToolUseBlock
 
 def convert_claude_message_to_json(message):
+    logger.info(f"Converting Claude message to JSON: {message}")
     message_dict = {
         "message" : {
             "role": message.role,
@@ -73,14 +74,15 @@ def lambda_handler(event, context):
     system = event.get('system')
     messages = event.get('messages')
     tools = event.get('tools', [])
-    model = event.get('model', 'claude-3.5').lower()  # Default to Claude 3
+    # Default to Claude 3.5 Sonner
+    model = event.get('model', 'claude-3-5-sonnet-20241022').lower() 
     
     try:
         if 'claude' in model:
             #Send a request to Claude
             response = anthropic_client.messages.create(
                 system = system,
-                model="claude-3-5-sonnet-20241022",
+                model=model,
                 max_tokens=4096,
                 tools=tools,
                 messages=messages
@@ -91,7 +93,7 @@ def lambda_handler(event, context):
             # Update messages to include Claude's response
             messages.append(assistant_message["message"])
             
-            logger.info(f"Claude result: {response.content[0].text}")
+            logger.info(f"Claude result: {assistant_message}")
             
         elif 'gpt-4' in model:
 

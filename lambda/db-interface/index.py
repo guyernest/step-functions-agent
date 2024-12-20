@@ -96,7 +96,14 @@ def lambda_handler(event, context):
     if tool_use["name"] == 'get_db_schema':
         result = db.get_db_schema()
     elif tool_use["name"] == 'execute_sql_query':        
-        result = db.execute_sql_query(tool_use['input']['sql_query'])
+        # The SQL provided might cause ad error. We need to return the error message to the LLM
+        # so it can fix the SQL and try again.
+        try:
+            result = db.execute_sql_query(tool_use['input']['sql_query'])
+        except sqlite3.OperationalError as e:
+            result = json.dumps({
+                'error': str(e)
+            })
 
     return {
         "type": "tool_result",
