@@ -18,3 +18,4 @@ wheels/
 # CDK output
 cdk.out/
 **/cdk.out/
+.DS_Store
