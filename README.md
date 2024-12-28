@@ -2,8 +2,13 @@
 
 ## AI Agent Overview
 
-AI Agents are a combination of LLMs and Tools. Each tool can perform a specific task, and the LLM can use them to perform complex tasks, requested by the user. AI Agents are a powerful tool for automating complex tasks in the cloud, and they are a great way to reduce the cost of building and maintaining complex systems.
+AI Agents are a combination of LLMs and Tools. Each tool can perform a specific task, and the LLM can use them to perform complex tasks, requested by the user. AI Agents are a powerful tool for automating complex tasks in the cloud, and they are a great way to reduce the cost of building and maintaining complex systems. However, the deployment and operation of AI Agents can be a complex process. 
 
+This repository provides a simple implementation of AI Agents in AWS Step Functions, which is a serverless computing platform for building and deploying serverless applications. The repository contains the implementation of an SQL Agent, which can analyze a SQL database with multiple tables, and answer business questions about the data, including visualization and reporting. The implementation should be used as a template for building a custom AI Agent for any specific use case.
+
+You can read more in [this blog post](https://medium.com/@guyernest/building-scalable-ai-agents-with-aws-step-functions-a-practical-guide-1e4f6dd19764).
+
+### Step Functions Graph for SQL AI Agent:
 <img src="images/agent_stepfunctions_graph.svg" width="100%"/>
 
 
@@ -33,7 +38,7 @@ Please note that each Lambda function is implemented in a dedicated directory an
 
 Each tool is implemented using a Lambda function in a dedicated directory, and has its own requirements.txt file. The requirements.txt file is used to install the required Python packages for the tool, by the `CDK` stack.
 
-A tool should know how to parse the tool input, and return the tool output. The tool input is passed to the tool as a JSON object, and the tool output is returned as a JSON object. For example, the following Lambda function implements two tools: `get_db_schema` and `execute_sql_query`:
+A tool should know how to parse the tool input, and return the tool output. The tool input is passed to the tool as a JSON object, and the tool output is returned as a JSON object. For example, the following [Lambda function](lambda/db-interface/index.py) implements two tools: `get_db_schema` and `execute_sql_query`:
 
 ```python
 def lambda_handler(event, context):
@@ -113,7 +118,7 @@ def lambda_handler(event, context):
 
 ## Building the AI Agent Step Function
 
-Once we have the LLM caller, and the tools, we can build the AI Agent Step Function, which is implemented in the `CDK` stack, using the `step_functions_sql_agent/step_functions_sql_agent_stack.py` file. The stack uses a local construct that reads a template of the Amazon Step Functions Language (ASL) to create the AI Agent Step Functions Flow. The template is implemented in the `step_functions_sql_agent/ai_agent_construct_from_json.py` file.
+Once we have the LLM caller, and the tools, we can build the AI Agent Step Function, which is implemented in the `CDK` stack, using the  [stack definition](step_functions_sql_agent/step_functions_sql_agent_stack.py). The stack uses a local construct that reads a [template](step-functions/agent-with-tools-flow-template.json) of the Amazon Step Functions Language (ASL) to create the AI Agent Step Functions Flow. The construct is implemented in the [ai_agent_construct_from_json.py](step_functions_sql_agent/ai_agent_construct_from_json.py) file.
 
 Please note that the template is needed, instead of the CDK constructs for Step Functions, because current constructs for Step Functions do not support JSONata, which is needed to simplify the AI Agent implementation.
 
@@ -231,6 +236,8 @@ uv pip compile lambda/db-interface/requirements.in --output-file lambda/db-inter
 The `CDK` stack will use Docker to build the Lambda functions, and it will use the requirements.txt file to install the required Python packages, into the format of zip file, and deploy it to the Cloud.
 
 ## Deploying the AI Agent Step Function using CDK
+
+The CDK Stack defines all the necessary resources to deploy the AI Agent Step Function, including the IAM roles, Secrets Manager secrets (for API keys), Lambda functions (tools and LLM caller), and Step Functions.
 
 ```shell
 cdk deploy
