@@ -1,8 +1,4 @@
 import json
-import boto3
-import os
-import re
-from openai import AzureOpenAI
 from aws_lambda_powertools import Logger
 from aws_lambda_powertools.utilities import parameters
 import anthropic
@@ -12,11 +8,11 @@ logger = Logger(level="INFO")
 
 # Loading the API KEYs for the LLM and related services
 try:
-    ANTHROPIC_API_KEY = json.loads(parameters.get_secret("/ai-agent/ANTHROPIC_API_KEY"))["/ai-agent/ANTHROPIC_API_KEY"]
+    ANTHROPIC_API_KEY = json.loads(parameters.get_secret("/ai-agent/ANTHROPIC_API_KEY"))["ANTHROPIC_API_KEY"]
 except ValueError:
     ANTHROPIC_API_KEY = parameters.get_secret("/ai-agent/ANTHROPIC_API_KEY")
 try:
-    OPENAI_API_KEY = json.loads(parameters.get_secret("/ai-agent/OPENAI_API_KEY"))["/ai-agent/OPENAI_API_KEY"]
+    OPENAI_API_KEY = json.loads(parameters.get_secret("/ai-agent/OPENAI_API_KEY"))["OPENAI_API_KEY"]
 except ValueError:
     OPENAI_API_KEY = parameters.get_secret("/ai-agent/OPENAI_API_KEY")
 

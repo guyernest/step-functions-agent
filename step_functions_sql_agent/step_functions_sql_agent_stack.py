@@ -7,10 +7,9 @@ from aws_cdk import (
     aws_secretsmanager as secretsmanager,
     aws_s3 as s3,
     aws_lambda_python_alpha as _lambda_python,
-    aws_stepfunctions as sfn,
-    aws_stepfunctions_tasks as tasks,
 )
 from constructs import Construct
+from .ai_agent_construct_from_json import ConfigurableStepFunctionsConstruct, Tool
 
 class SQLAgentStack(Stack):
 
@@ -20,17 +19,17 @@ class SQLAgentStack(Stack):
         ### Create the secret for the API keys from the local .env file
 
         # Reading the API KEYs for the LLM and related services for each line in the .env file
-        # with open(".env", "r") as f:
-        #     for line in f:
-        #         if line.startswith("#") or line.strip() == "":
-        #             continue
-        #         key, value = line.strip().split("=", 1)
-        #         secretsmanager.Secret(self, f"Secret-{key}", 
-        #             secret_name=f"/ai-agent/{key}", 
-        #             secret_object_value={
-        #                 f"{key}": SecretValue.unsafe_plain_text(value),
-        #             }
-        #         )
+        with open(".env", "r") as f:
+            for line in f:
+                if line.startswith("#") or line.strip() == "":
+                    continue
+                key, value = line.strip().split("=", 1)
+                secretsmanager.Secret(self, f"Secret-{key}", 
+                    secret_name=f"/ai-agent/{key}", 
+                    secret_object_value={
+                        f"{key}": SecretValue.unsafe_plain_text(value),
+                    }
+                )
 
         ####### Call LLM Lambda   ######
 
@@ -61,7 +60,7 @@ class SQLAgentStack(Stack):
         )
 
         # Define the Lambda function
-        lambda_function = _lambda_python.PythonFunction(
+        call_llm_lambda_function = _lambda_python.PythonFunction(
             self, "CallLLMLambda",
             function_name="CallLLM",
             entry="lambda/call-llm",
@@ -133,7 +132,7 @@ class SQLAgentStack(Stack):
                     "secretsmanager:GetSecretValue"
                 ],
                 resources=[
-                    f"arn:aws:secretsmanager:{self.region}:{self.account}:secret:/ai-agent/e2b-api-key*"
+                    f"arn:aws:secretsmanager:{self.region}:{self.account}:secret:/ai-agent/E2B_API_KEY*"
                 ]
             )
         )
@@ -160,112 +159,68 @@ class SQLAgentStack(Stack):
 
         # Define the Step Functions state machine
 
-        # # Get function ARNs
-        # call_llm_function_arn = lambda_function.function_arn
-        # db_interface_function_arn = db_interface_lambda_function.function_arn
-        # code_interpreter_function_arn = code_interpreter_lambda_function.function_arn
+        # Create test tools
+        tools = [
+            Tool(
+                "get_db_schema", 
+                "Describe the schema of the SQLite database, including table names, and column names and types.",
+                db_interface_lambda_function
+            ),
+            Tool(
+                "execute_sql_query", 
+                "Return the query results of the given SQL query to the SQLite database.",
+                db_interface_lambda_function,
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "sql_query": {
+                            "type": "string",
+                            "description": "The sql query to execute against the SQLite database."
+                        }
+                    },
+                    "required": [
+                        "sql_query"
+                    ]
+                }
+            ),
+            Tool(
+                "execute_python", 
+                "Execute python code in a Jupyter notebook cell and URL of the image that was created.",
+                code_interpreter_lambda_function,
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "code": {
+                            "type": "string",
+                            "description": "The python code to execute in a single cell."
+                        }
+                    },
+                    "required": [
+                        "code"
+                    ]
+                }
+            )
+        ]
 
-        # # Call LLM Task
-        # call_llm_task = tasks.LambdaInvoke(
-        #     self, "Call LLM",
-        #     lambda_function=_lambda.Function.from_function_arn(self, "CallLLM", call_llm_function_arn),
-        #     payload=sfn.TaskInput.from_object({
-        #         "Payload": sfn.JsonPath.entire_payload,
-        #         "FunctionName": call_llm_function_arn
-        #     }),
-        #     retry_on_service_exceptions=True
-        # ).add_retry(
-        #     errors=["Lambda.ServiceException", 
-        #            "Lambda.AWSLambdaException", 
-        #            "Lambda.SdkClientException", 
-        #            "Lambda.TooManyRequestsException"],
-        #     interval=Duration.seconds(1),
-        #     max_attempts=3,
-        #     backoff_rate=2.0
-        # )
-
-        # # Choice State: If Tool Use
-        # if_tool_use = sfn.Choice(self, "If Tool Use").when(
-        #     sfn.Condition.string_equals("$.metadata.stop_reason", "tool_use"),
-        #     sfn.Map(
-        #         self, "For each tool use",
-        #         items_path="$.messages[-1].content",
-        #         parameters={"Payload.$": "$"},
-        #         item_processor=sfn.StateMachineFragment.to_single_state(
-        #             sfn.Choice(self, "Which Tool to Use?")
-        #             .when(sfn.Condition.and_(
-        #                 sfn.Condition.string_equals("$.type", "tool_use"),
-        #                 sfn.Condition.string_equals("$.name", "get_db_schema")),
-        #                 tasks.LambdaInvoke(
-        #                     self, "Get DB Schema",
-        #                     lambda_function=_lambda.Function.from_function_arn(
-        #                         self, "GetDBSchema", db_interface_function_arn
-        #                     ),
-        #                     output_path="$.Payload"
-        #                 ).add_retry(
-        #                     errors=["Lambda.ServiceException", 
-        #                            "Lambda.AWSLambdaException", 
-        #                            "Lambda.SdkClientException", 
-        #                            "Lambda.TooManyRequestsException"],
-        #                     interval=Duration.seconds(1),
-        #                     max_attempts=3,
-        #                     backoff_rate=2.0
-        #                 )
-        #             )
-        #             .when(sfn.Condition.and_(
-        #                 sfn.Condition.string_equals("$.type", "tool_use"),
-        #                 sfn.Condition.string_equals("$.name", "execute_sql_query")),
-        #                 tasks.LambdaInvoke(
-        #                     self, "Execute SQL Query",
-        #                     lambda_function=_lambda.Function.from_function_arn(
-        #                         self, "ExecuteSQLQuery", db_interface_function_arn
-        #                     ),
-        #                     output_path="$.Payload"
-        #                 ).add_retry(
-        #                     errors=["Lambda.ServiceException", 
-        #                            "Lambda.AWSLambdaException", 
-        #                            "Lambda.SdkClientException", 
-        #                            "Lambda.TooManyRequestsException"],
-        #                     interval=Duration.seconds(1),
-        #                     max_attempts=3,
-        #                     backoff_rate=2.0
-        #                 )
-        #             )
-        #             .when(sfn.Condition.and_(
-        #                 sfn.Condition.string_equals("$.type", "tool_use"),
-        #                 sfn.Condition.string_equals("$.name", "execute_python")),
-        #                 tasks.LambdaInvoke(
-        #                     self, "Execute Python",
-        #                     lambda_function=_lambda.Function.from_function_arn(
-        #                         self, "ExecutePython", code_interpreter_function_arn
-        #                     ),
-        #                     output_path="$.Payload"
-        #                 ).add_retry(
-        #                     errors=["Lambda.ServiceException", 
-        #                            "Lambda.AWSLambdaException", 
-        #                            "Lambda.SdkClientException", 
-        #                            "Lambda.TooManyRequestsException"],
-        #                     interval=Duration.seconds(1),
-        #                     max_attempts=3,
-        #                     backoff_rate=2.0
-        #                 )
-        #             )
-        #             .otherwise(sfn.Pass(self, "No Tool to Use (ignore)"))
-        #         )
-        #     )
-        # ).otherwise(sfn.Pass(self, "Prepare Output"))
-
-        # # Final States
-        # prepare_output = sfn.Pass(self, "Prepare Output", parameters={
-        #     "messages.$": "$.messages",
-        #     "answer.$": "$.messages[-1].content[0].text"
-        # })
-
-        # # Define State Machine
-        # definition = call_llm_task.next(if_tool_use).next(prepare_output)
-
-        # sfn.StateMachine(
-        #     self, "AIAgentStateMachine",
-        #     definition=definition,
-        #     state_machine_name="AiAgentStateMachine"
-        # )
+        agent_flow = ConfigurableStepFunctionsConstruct(
+            self, 
+            "AIStateMachine",
+            region=self.region,
+            account=self.account,
+            state_machine_path="step-functions/agent-with-tools-flow-template.json", 
+            llm_caller=call_llm_lambda_function, 
+            tools=tools,
+            system_prompt="You are an expert business analyst with deep knowledge of SQL and visualization code in Python. Your job is to help users understand and analyze their internal baseball data. You have access to a set of tools, but only use them when needed. You also have access to a tool that allows execution of python code. Use it to generate the visualizations in your analysis. - the python code runs in jupyter notebook. - every time you call `execute_python` tool, the python code is executed in a separate cell. it's okay to multiple calls to `execute_python`. - display visualizations using matplotlib directly in the notebook. don't worry about saving the visualizations to a file. - you can run any python code you want, everything is running in a secure sandbox environment.",
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "answer": {
+                        "type": "string",
+                        "description": "The answer to the question"
+                    }
+                },
+                "required": [
+                    "answer"
+                ]
+            }
+        )
