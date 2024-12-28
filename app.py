@@ -8,7 +8,7 @@ from step_functions_sql_agent.step_functions_sql_agent_stack import SQLAgentStac
 
 
 app = cdk.App()
-SQLAgentStack(app, "SQLAgentStack",
+AIAgentStack = SQLAgentStack(app, "SQLAgentStack",
     # If you don't specify 'env', this stack will be environment-agnostic.
     # Account/Region-dependent features and context lookups will not work,
     # but a single synthesized template can be deployed anywhere.
@@ -26,6 +26,6 @@ SQLAgentStack(app, "SQLAgentStack",
     # For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
     )
 
-# Tags.of(SQLAgentStack).add("project", "sql-ai-agent")
+Tags.of(AIAgentStack).add("project", "sql-ai-agent")
 
 app.synth()
