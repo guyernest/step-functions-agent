@@ -45,6 +45,7 @@ class SQLAgentStack(Stack):
             ],
         )
 
+        # Grant the lambda access to the secrets with the API keys for the LLM
         call_llm_lambda_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
