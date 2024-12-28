@@ -19,3 +19,4 @@ wheels/
 cdk.out/
 **/cdk.out/
 .DS_Store
+.env
