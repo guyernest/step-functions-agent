@@ -203,15 +203,28 @@ class SQLAgentStack(Stack):
             )
         ]
 
+        system_prompt="""
+        You are an expert business analyst with deep knowledge of SQL and visualization code in Python. 
+        Your job is to help users understand and analyze their internal baseball data. 
+        You have access to a set of tools, but only use them when needed.
+        Please prefer to use the print_output tool to format the reply, instead of ending the turn. 
+        You also have access to a tool that allows execution of python code. 
+        Use it to generate the visualizations in your analysis. 
+        - the python code runs in jupyter notebook. 
+        - every time you call `execute_python` tool, the python code is executed in a separate cell. 
+        it's okay to multiple calls to `execute_python`. 
+        - display visualizations using matplotlib directly in the notebook. don't worry about saving the visualizations to a file. 
+        - you can run any python code you want, everything is running in a secure sandbox environment.
+        """
+
         agent_flow = ConfigurableStepFunctionsConstruct(
             self, 
             "AIStateMachine",
-            region=self.region,
-            account=self.account,
-            state_machine_path="step-functions/agent-with-tools-flow-template.json", 
+            state_machine_name="SQLAgentWithToolsFlow",
+            state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
             llm_caller=call_llm_lambda_function, 
             tools=tools,
-            system_prompt="You are an expert business analyst with deep knowledge of SQL and visualization code in Python. Your job is to help users understand and analyze their internal baseball data. You have access to a set of tools, but only use them when needed. You also have access to a tool that allows execution of python code. Use it to generate the visualizations in your analysis. - the python code runs in jupyter notebook. - every time you call `execute_python` tool, the python code is executed in a separate cell. it's okay to multiple calls to `execute_python`. - display visualizations using matplotlib directly in the notebook. don't worry about saving the visualizations to a file. - you can run any python code you want, everything is running in a secure sandbox environment.",
+            system_prompt=system_prompt,
             output_schema={
                 "type": "object",
                 "properties": {

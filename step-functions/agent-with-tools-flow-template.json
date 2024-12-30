@@ -121,8 +121,7 @@
       "Output": {
         "messages": "{% $states.input.messages %}",
         "output": {
-          "answer": "{% $states.input.messages[-1].content[0].text %}",
-          "chart": "{% ( $toolMessage := $states.input.messages[role = \"assistant\"].content[name = \"execute_python\"].id; $toolResult := $states.input.messages[role = \"user\"].content[tool_use_id = $toolMessage].content; ) %}"
+          "answer": "{% $states.input.messages[-1].content[0].text %}"
         }
       },
       "Comment": "Extracts the relevant information from the flow, including all the message flow, the textual answer from the last message, and the chart that was generated during the flow."

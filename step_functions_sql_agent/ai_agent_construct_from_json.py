@@ -39,11 +39,10 @@ class Tool:
 class ConfigurableStepFunctionsConstruct(Construct):
     def __init__(
         self, 
-        scope: Construct, 
-        construct_id: str, 
-        region: str,
-        account: str,
-        state_machine_path: str,
+        scope: Construct,
+        construct_id: str,
+        state_machine_name: str,
+        state_machine_template_path: str,
         llm_caller: lambda_.Function,
         tools: List[Tool],
         system_prompt: str = None,
@@ -51,11 +50,10 @@ class ConfigurableStepFunctionsConstruct(Construct):
         **kwargs
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
-        self.region = region
-        self.account = account
+        self.state_machine_name = state_machine_name
 
         # Load the base state machine definition
-        with open(state_machine_path, 'r') as f:
+        with open(state_machine_template_path, 'r') as f:
             state_machine_def = json.load(f)
 
         # Configure the state machine definition with the provided LLM caller
@@ -72,13 +70,15 @@ class ConfigurableStepFunctionsConstruct(Construct):
 
         # Create the state machine
         state_machine = sfn.CfnStateMachine(
-            self, "ConfigurableStateMachine",
+            self, 
+            construct_id,
+            state_machine_name=state_machine_name,
             role_arn=role.role_arn,
             definition_string=json.dumps(state_machine_def),
         )
 
         # Print the generated state machine definition
-        print(json.dumps(state_machine_def, indent=4))
+        # print(json.dumps(state_machine_def, indent=4))
 
 
     def _configure_llm_call(
@@ -265,10 +265,9 @@ if __name__ == "__main__":
     # Create the state machine
     ai_state_machine = ConfigurableStepFunctionsConstruct(
         stack, 
-        "AIStateMachine", 
-        region="us-east-1",
-        account="123456789012",
-        state_machine_path="step-functions/agent-with-tools-flow-template.json", 
+        "TestAIStateMachine", 
+        state_machine_name="TestSQLAgentWithToolsFlow",
+        state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
         llm_caller=llm_caller, 
         tools=tools
     )
