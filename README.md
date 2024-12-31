@@ -214,10 +214,15 @@ In the CDK stack we define the tools by following the following steps:
                     "answer": {
                         "type": "string",
                         "description": "The answer to the question"
+                    },
+                    "chart": {
+                        "type": "string",
+                        "description": "The URL of the chart"
                     }
                 },
                 "required": [
-                    "answer"
+                    "answer",
+                    "chart"
                 ]
             }
         )
