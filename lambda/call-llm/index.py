@@ -55,14 +55,43 @@ def convert_claude_message_to_json(message):
     
     return message_dict
 
-def convert_gpt4_message_to_json(message):
-    # TODO Add implementation for GPT-4
+def convert_gpt4_message_to_json(completion):
+    logger.info(f"Converting GPT-4 message to JSON: {completion}")
+
+    choice = completion.choices[0]
+    message = choice.message
     message_dict = {
         "message" : {
+            "role": message.role,
+            "content": [],
+            "tool_calls": []
         }, 
         "metadata" : {
+            "stop_reason": choice.finish_reason,
+            "usage": {
+                "input_tokens": completion.usage.prompt_tokens,
+                "output_tokens": completion.usage.completion_tokens
+            }
         }
     }
+    
+    if message.tool_calls:
+        for tool_call in message.tool_calls:
+            message_dict["message"]["tool_calls"].append({
+                "id": tool_call.id,
+                "function": {   
+                    "arguments": tool_call.function.arguments,
+                    "name": tool_call.function.name,
+                },
+                "type": tool_call.type
+            })
+
+    if message.content:
+        message_dict["message"]["content"].append({
+            "text": message.content,
+            "type": "text"
+        })
+
     return message_dict
 
 def lambda_handler(event, context):
@@ -100,11 +129,11 @@ def lambda_handler(event, context):
                 messages=messages
             )            
             # Update messages to include GPT-4's response
-            assistant_message = convert_gpt4_message_to_json(completion.choices[0])
+            assistant_message = convert_gpt4_message_to_json(completion)
 
             messages.append(assistant_message["message"])
             
-            logger.info(f"GPT-4 result: {completion.choices[0].message.content}")
+            logger.info(f"GPT-4 result: {assistant_message}")
             
         else:
             raise ValueError(f"Unsupported model: {model}")
@@ -130,7 +159,7 @@ def lambda_handler(event, context):
 if __name__ == "__main__":
     # Test event for Claude 3
     test_event_claude = {
-        'model': 'claude-3',
+        'model': 'claude-3-5-sonnet-20241022',
         'system': "You are chatbot, who is helping people with answers to their questions.",
         'messages': [
             {
@@ -151,25 +180,26 @@ if __name__ == "__main__":
     }
     
     # Call lambda handler with test events
-    print("\nTesting Claude 3:")
-    response_claude = lambda_handler(test_event_claude, None)
-    print(response_claude)
+    # print("\nTesting Claude 3:")
+    # response_claude = lambda_handler(test_event_claude, None)
+    # print(response_claude)
 
     # Test event for GPT-4
     test_event_gpt4 = {
         'model': 'gpt-4',
         'messages': [
-            {"role": "user", "content": "What is 2+2?"}
+            {"role": "user", "content": "What is 25*4?"}
         ],
         'tools': [
             {
                 "type": "function",
                 "function": {
-                    "name": "get_weather",
+                    "name": "calculator",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "location": {"type": "string"}
+                            "a": {"type": "number"},
+                            "b": {"type": "number"},
                         },
                     },
                 },

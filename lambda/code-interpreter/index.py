@@ -99,10 +99,9 @@ def lambda_handler(event, context):
     except Exception as e:
         logger.exception("Error executing code")
         return {
-            'statusCode': 500,
-            'body': json.dumps({
-                'error': str(e)
-            })
+            "type": "tool_result",
+            "tool_use_id": tool_use["id"],
+            "content": str(e)
         }
 
 if __name__ == "__main__":

@@ -25,69 +25,7 @@
         "Payload": {
           "system": "You are an expert business analyst with deep knowledge of SQL and visualization code in Python. Your job is to help users understand and analyze their internal baseball data. You have access to a set of tools, but only use them when needed. You also have access to a tool that allows execution of python code. Use it to generate the visualizations in your analysis. - the python code runs in jupyter notebook. - every time you call `execute_python` tool, the python code is executed in a separate cell. it's okay to multiple calls to `execute_python`. - display visualizations using matplotlib directly in the notebook. don't worry about saving the visualizations to a file. - you can run any python code you want, everything is running in a secure sandbox environment.",
           "messages": "{% $states.input.messages %}",
-          "tools": [
-            {
-              "name": "get_db_schema",
-              "description": "Describe the schema of the SQLite database, including table names, and column names and types.",
-              "input_schema": {
-                "type": "object",
-                "properties": {}
-              }
-            },
-            {
-              "name": "execute_sql_query",
-              "description": "Return the query results of the given SQL query to the SQLite database.",
-              "input_schema": {
-                "type": "object",
-                "properties": {
-                  "sql_query": {
-                    "type": "string",
-                    "description": "The sql query to execute against the SQLite database"
-                  }
-                },
-                "required": [
-                  "sql_query"
-                ]
-              }
-            },
-            {
-              "name": "execute_python",
-              "description": "Execute python code in a Jupyter notebook cell and URL of the image that was created.",
-              "input_schema": {
-                "type": "object",
-                "properties": {
-                  "code": {
-                    "type": "string",
-                    "description": "The python code to execute in a single cell."
-                  }
-                },
-                "required": [
-                  "code"
-                ]
-              }
-            },
-            {
-              "name": "print_output",
-              "description": "Print the output of the agents in the expected format by the users.",
-              "input_schema": {
-                "type": "object",
-                "properties": {
-                  "answer": {
-                    "type": "string",
-                    "description": "The textual part of the answer to the analytical question."
-                  },
-                  "chart": {
-                    "type": "string",
-                    "description": "The URL of the image part of the answer to the analytical question"
-                  }
-                },
-                "required": [
-                  "answer",
-                  "chart"
-                ]
-              }
-            }
-          ]
+          "tools": []
         },
         "FunctionName": "arn:aws:lambda:<region>:<account>:function:CallLLM:$LATEST"
       },
@@ -105,12 +43,12 @@
       "Default": "For each tool use",
       "Choices": [
         {
-          "Condition": "{% $states.input.metadata.stop_reason = \"end_turn\" %}",
+          "Condition": "{% $states.input.metadata.stop_reason in [\"end_turn\", \"stop\"] %}",
           "Next": "Prepare Output"
         },
         {
-          "Next": "Print Output",
-          "Condition": "{% $count($states.input.messages[-1].content[name = \"print_output\"]) >0 %}"
+          "Condition": "{% $states.input.messages[-1].**.name = \"print_output\" %}",
+          "Next": "Print Output"
         }
       ],
       "Comment": "Checks if the 'stop_reason' from the LLM was a request for a 'tool_use' (except for print_output), and if so, route it to the tools path, otherwise reply to the user."
@@ -128,7 +66,7 @@
     },
     "For each tool use": {
       "Type": "Map",
-      "Items": "{% $states.input.messages[-1].content %}",
+      "Items": "{% ($provider = \"anthropic\" ? $states.input.messages[-1].content : $states.input.messages[-1].tool_calls) %}",
       "ItemProcessor": {
         "ProcessorConfig": {
           "Mode": "INLINE"
@@ -164,7 +102,7 @@
       },
       "Next": "Append Map to Messages",
       "Output": {
-        "messages": "{% $append($states.input.messages, [ {  \"role\": \"user\",    \"content\": [$filter($states.result,function($v) { $v != {} })] } ] ) %}"
+        "messages": "{% $provider = \"anthropic\" ? $append($states.input.messages, [ {  \"role\": \"user\",    \"content\": [$filter($states.result,function($v) { $v != {} })] } ] ) : $append($states.input.messages, [$filter($states.result,function($v) { $v != {} })]) %}"
       },
       "Comment": "The reply of the LLM can include one or more 'tool_use' request, and we can apply them in parallel."
     },
@@ -178,7 +116,7 @@
       "End": true,
       "Output": {
         "messages": "{% $messages %}",
-        "output": "{% $states.input.messages[-1].content[name = \"print_output\"].input %}"
+        "output": "{% $provider = \"anthropic\" ? $states.input.messages[-1].content[**.name = \"print_output\"].input : $parse($states.input.messages[-1].tool_calls[**.name = \"print_output\"].function.arguments) %}"
       }
     }
   }
