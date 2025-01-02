@@ -7,17 +7,24 @@ from aws_cdk import (
 )
 from constructs import Construct
 
+# Enum for LLM providers (OpenAI, Anthropic, etc.)
+class LLMProviderEnum:
+    OPENAI = "openai"
+    ANTHROPIC = "anthropic"
+
 class Tool:
     def __init__(
         self,
         name: str,
         description: str,
         lambda_function: lambda_.Function,
+        provider: str = LLMProviderEnum.ANTHROPIC,
         input_schema: Dict[str, Any] = None
     ):
         self.name = name
         self.description = description
         self.lambda_function = lambda_function
+        self.provider = provider
         self.input_schema = input_schema or {"type": "object", "properties": {}}
 
     
@@ -27,12 +34,24 @@ class Tool:
 
     def to_tool_definition(self) -> Dict[str, Any]:
         """Convert tool to the format expected in the LLM system message"""
-        return {
-            "name": self.name,
-            "description": self.description,
-            "input_schema": self.input_schema
-        }
-
+        if self.provider == LLMProviderEnum.OPENAI:
+            return {
+                "type": "function",
+                "function": {
+                    "name": self.name,
+                    "description": self.description,
+                    "parameters": self.input_schema,
+                }
+            } 
+        elif self.provider == LLMProviderEnum.ANTHROPIC:
+            return {
+                "name": self.name,
+                "description": self.description,
+                "input_schema": self.input_schema
+            }
+        else:
+            raise ValueError(f"Unsupported LLM provider: {self.provider}")
+        
     def get_lambda_arn(self) -> str:
         return self.lambda_function.function_arn
 
@@ -44,23 +63,38 @@ class ConfigurableStepFunctionsConstruct(Construct):
         state_machine_name: str,
         state_machine_template_path: str,
         llm_caller: lambda_.Function,
-        tools: List[Tool],
+        provider: str = LLMProviderEnum.ANTHROPIC,
+        tools: List[Tool] = [],
         system_prompt: str = None,
         output_schema: Dict[str, Any] = None,
         **kwargs
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
         self.state_machine_name = state_machine_name
+        self.provider = provider
 
         # Load the base state machine definition
         with open(state_machine_template_path, 'r') as f:
             state_machine_def = json.load(f)
 
+        # print the call_llm state definition before configuration
+        print(json.dumps(state_machine_def["States"]["Call LLM"], indent=4))
         # Configure the state machine definition with the provided LLM caller
-        self._configure_llm_call(state_machine_def, llm_caller, system_prompt)
+        self._configure_llm_call(
+            state_machine_def, 
+            llm_caller, 
+            provider, 
+            system_prompt
+        )
 
         # Update the state machine definition with tools configuration
-        self._configure_tools(state_machine_def, tools, output_schema)
+        self._configure_tools(
+            state_machine_def, 
+            tools, 
+            output_schema
+        )
+        # print the call_llm state definition after configuration
+        print(json.dumps(state_machine_def["States"]["Call LLM"], indent=4))
 
         # Create the state machine role with permissions for all tool Lambda functions
         role = self._create_state_machine_role(
@@ -85,17 +119,25 @@ class ConfigurableStepFunctionsConstruct(Construct):
         self, 
         definition: Dict[str, Any], 
         llm_caller: lambda_.Function,
+        provider: str = LLMProviderEnum.ANTHROPIC,
         system_prompt: str = None
     ) -> None:
         """Configure the state machine definition with the provided LLM caller"""
         # Update the LLM call state with the provided LLM caller
         llm_state = definition["States"]["Call LLM"]
         llm_state["Arguments"]["FunctionName"] = llm_caller.function_arn
+        llm_state["Assign"]["provider"] = provider
 
         payload = llm_state["Arguments"]["Payload"]
+
         # Update system prompt if provided
         if system_prompt:
             payload["system"] = system_prompt
+
+        if provider == LLMProviderEnum.OPENAI:
+            payload["model"] = "gpt-4o"
+        elif provider == LLMProviderEnum.ANTHROPIC:
+            payload["model"] = "claude-3-5-sonnet-20241022"
 
     def _configure_tools(
         self, 
@@ -111,19 +153,30 @@ class ConfigurableStepFunctionsConstruct(Construct):
         # Update tools list
         payload["tools"] = [tool.to_tool_definition() for tool in tools]
 
+        if self.provider == LLMProviderEnum.OPENAI:
+            print_output_tool = {
+                "type": "function", 
+                "function": {
+                    "name": "print_output", 
+                    "description": "Print the output of the previous steps", 
+                    "parameters": output_schema if output_schema else {
+                        "type": "object", 
+                        "properties": {}
+                    }
+                }
+            } 
+        elif self.provider == LLMProviderEnum.ANTHROPIC:
+            print_output_tool = {
+                "name": "print_output",
+                "description": "Print the output of the previous steps",
+                "input_schema": output_schema if output_schema else {
+                    "type": "object", 
+                    "properties": {},
+                },
+            }
+
         # Adding print_output tool
-        if output_schema is not None:
-            payload["tools"].append({
-                "name": "print_output",
-                "description": "Print the output of the previous step",
-                "input_schema": output_schema
-            })
-        else:
-            payload["tools"].append({
-                "name": "print_output",
-                "description": "Print the output of the previous step",
-                "input_schema": {"type": "object", "properties": {}}
-            })
+        payload["tools"].append(print_output_tool)
 
         # Update tool choice state
         tool_processor_states = definition["States"]["For each tool use"]["ItemProcessor"]["States"]
@@ -132,11 +185,11 @@ class ConfigurableStepFunctionsConstruct(Construct):
         # Create a choice for each tool
         for tool in tools:
             choice = {
-                "Next": f"Execute {tool.name}",
                 "Condition": (
-                    f"{{% ($states.input.type = \"tool_use\") and "
-                    f"($states.input.name = \"{tool.name}\") %}}"
-                )
+                    "{% ($states.input.type in [\"function\",\"tool_use\"]) and "
+                    f"($states.input.**.name = \"{tool.name}\") %}}"
+                ),
+                "Next": f"Execute {tool.name}"
             }
             choices.append(choice)
             
@@ -146,7 +199,11 @@ class ConfigurableStepFunctionsConstruct(Construct):
                 "Resource": "arn:aws:states:::lambda:invoke",
                 "Arguments": {
                     "FunctionName": tool.get_lambda_arn(),
-                    "Payload": "{% $states.input %}",
+                    "Payload": {
+                        "name": "{% $states.input.**.name %}",
+                        "id": "{% $states.input.id %}",
+                        "input": "{% $provider = \"anthropic\" ? $states.input.input : $parse($states.input.function.arguments) %}"
+                    }
                 },
                 "Retry": [{
                     "ErrorEquals": [
@@ -162,7 +219,7 @@ class ConfigurableStepFunctionsConstruct(Construct):
                 }],
                 "End": True,
                 "Comment": f"Call the tool (Lambda function) {tool.name}.",
-                "Output": "{% $states.result.Payload %}",
+                "Output": "{% \n  $provider = \"anthropic\" ? $states.result.Payload :  {\n    \"tool_call_id\": $states.result.Payload.tool_use_id,\n    \"role\": \"tool\",\n    \"content\": [{ \"content\": $states.result.Payload.content, \"type\": \"text\" }]\n \n} %}"
             }
 
         # Update the choice state with new choices
@@ -218,47 +275,30 @@ if __name__ == "__main__":
     output_schema = {
         "type": "object",
         "properties": {
+            "sql_query": {
+                "type": "string",
+                "description": "The sql query to execute against the SQLite database."
+            },
             "output": {
                 "type": "string",
                 "description": "The output of the previous step"
             }
-        }
+        },
+        "required": [
+            "sql_query",
+            "output"
+        ]
     }
+
+    provider = LLMProviderEnum.OPENAI
 
     # Create test tools
     tools = [
         Tool(
-            "get_db_schema", 
-            "Describe the schema of the SQLite database, including table names, and column names and types.",
-            tool_lambda_1
-        ),
-        Tool(
-            "execute_sql_query", 
-            "Return the query results of the given SQL query to the SQLite database.",
+            "calculator", 
+            "Calculate the result of a mathematical expression.",
             tool_lambda_1,
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "sql_query": {
-                        "type": "string",
-                        "description": "The SQL query to execute"
-                    }
-                }
-            }
-        ),
-        Tool(
-            "execute_python", 
-            "Execute python code in a Jupyter notebook cell and URL of the image that was created.",
-            tool_lambda_1,
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "code": {
-                        "type": "string",
-                        "description": "The python code to execute"
-                    }
-                }
-            }
+            provider
         )
     ]
 
@@ -268,7 +308,10 @@ if __name__ == "__main__":
         "TestAIStateMachine", 
         state_machine_name="TestSQLAgentWithToolsFlow",
         state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
+        system_prompt="Blah",
         llm_caller=llm_caller, 
-        tools=tools
+        provider=provider,
+        tools=tools,
+        output_schema=output_schema
     )
 

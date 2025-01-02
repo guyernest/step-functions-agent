@@ -9,7 +9,7 @@ from aws_cdk import (
     aws_lambda_python_alpha as _lambda_python,
 )
 from constructs import Construct
-from .ai_agent_construct_from_json import ConfigurableStepFunctionsConstruct, Tool
+from .ai_agent_construct_from_json import ConfigurableStepFunctionsConstruct, Tool, LLMProviderEnum
 
 class SQLAgentStack(Stack):
 
@@ -160,17 +160,19 @@ class SQLAgentStack(Stack):
 
         # Define the Step Functions state machine
 
-        # Create test tools
-        tools = [
+        # Create claude tools
+        claude_tools = [
             Tool(
                 "get_db_schema", 
                 "Describe the schema of the SQLite database, including table names, and column names and types.",
-                db_interface_lambda_function
+                db_interface_lambda_function,
+                provider=LLMProviderEnum.ANTHROPIC
             ),
             Tool(
                 "execute_sql_query", 
                 "Return the query results of the given SQL query to the SQLite database.",
                 db_interface_lambda_function,
+                provider=LLMProviderEnum.ANTHROPIC,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -186,8 +188,9 @@ class SQLAgentStack(Stack):
             ),
             Tool(
                 "execute_python", 
-                "Execute python code in a Jupyter notebook cell and URL of the image that was created.",
+                "Execute python code in a Jupyter notebook cell and return the URL of the image that was created.",
                 code_interpreter_lambda_function,
+                provider=LLMProviderEnum.ANTHROPIC,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -207,6 +210,7 @@ class SQLAgentStack(Stack):
         You are an expert business analyst with deep knowledge of SQL and visualization code in Python. 
         Your job is to help users understand and analyze their internal baseball data. 
         You have access to a set of tools, but only use them when needed.
+        Please don't assume to know the schema of the database, and use the get_db_schema tool to learn table and column names and types before using it.
         Please prefer to use the print_output tool to format the reply, instead of ending the turn. 
         You also have access to a tool that allows execution of python code. 
         Use it to generate the visualizations in your analysis. 
@@ -217,13 +221,90 @@ class SQLAgentStack(Stack):
         - you can run any python code you want, everything is running in a secure sandbox environment.
         """
 
-        agent_flow = ConfigurableStepFunctionsConstruct(
+        claude_agent_flow = ConfigurableStepFunctionsConstruct(
             self, 
-            "AIStateMachine",
-            state_machine_name="SQLAgentWithToolsFlow",
+            "ClaudeAIStateMachine",
+            state_machine_name="SQLAgentWithToolsFlowAndClaude",
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
             llm_caller=call_llm_lambda_function, 
-            tools=tools,
+            provider=LLMProviderEnum.ANTHROPIC,
+            tools=claude_tools,
+            system_prompt=system_prompt,
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "answer": {
+                        "type": "string",
+                        "description": "The answer to the question"
+                    },
+                    "chart": {
+                        "type": "string",
+                        "description": "The URL of the chart"
+                    }
+                },
+                "required": [
+                    "answer",
+                    "chart"
+                ]
+            }
+        )
+
+        # Create gpt tools
+        gpt_tools = [
+            Tool(
+                "get_db_schema", 
+                "Describe the schema of the SQLite database, including table names, and column names and types.",
+                db_interface_lambda_function,
+                provider=LLMProviderEnum.OPENAI,
+            ),
+            Tool(
+                "execute_sql_query", 
+                "Return the query results of the given SQL query to the SQLite database.",
+                db_interface_lambda_function,
+                provider=LLMProviderEnum.OPENAI,
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "sql_query": {
+                            "type": "string",
+                            "description": "The sql query to execute against the SQLite database."
+                        }
+                    },
+                    "required": [
+                        "sql_query"
+                    ]
+                }
+            ),
+            Tool(
+                "execute_python", 
+                "Execute python code in a Jupyter notebook cell and return the URL of the image that was created.",
+                code_interpreter_lambda_function,
+                provider=LLMProviderEnum.OPENAI,
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "code": {
+                            "type": "string",
+                            "description": "The python code to execute in a single cell."
+                        }
+                    },
+                    "required": [
+                        "code"
+                    ]
+                }
+            )
+        ]
+
+
+
+        gpt_agent_flow = ConfigurableStepFunctionsConstruct(
+            self, 
+            "GPTAIStateMachine",
+            state_machine_name="SQLAgentWithToolsFlowAndGPT",
+            state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
+            llm_caller=call_llm_lambda_function, 
+            provider=LLMProviderEnum.OPENAI,
+            tools=gpt_tools,
             system_prompt=system_prompt,
             output_schema={
                 "type": "object",
