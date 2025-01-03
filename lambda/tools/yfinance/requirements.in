@@ -1,3 +1,3 @@
-anthropic==0.35.0 
-openai
+yfinance==0.2.51
+pandas
 aws-lambda-powertools>=2.30.2  # AWS Lambda Powertools for Python
