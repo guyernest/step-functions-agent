@@ -93,7 +93,7 @@ class SQLAgentStack(Stack):
         db_interface_lambda_function = _lambda_python.PythonFunction(
             self, "DBInterfaceLambda",
             function_name="DBInterface",
-            entry="lambda/db-interface",
+            entry="lambda/tools/db-interface",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(90),
             memory_size=512,
@@ -145,7 +145,7 @@ class SQLAgentStack(Stack):
         code_interpreter_lambda_function = _lambda_python.PythonFunction(
             self, "CodeInterpreterLambda",
             function_name="CodeInterpreter",
-            entry="lambda/code-interpreter",
+            entry="lambda/tools/code-interpreter",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(300),  # 5 minutes timeout for code execution
             memory_size=256,
@@ -157,6 +157,34 @@ class SQLAgentStack(Stack):
             architecture=_lambda.Architecture.X86_64,  # Using x86_64 for better compatibility with dependencies
             role=code_interpreter_lambda_role,
         )
+
+        # yfiance tools
+
+        yfinance_lambda_role = iam.Role(
+            self, "YFinanceLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_managed_policy_arn(
+                    self,
+                    "YFinanceLambdaPolicy",
+                    managed_policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                )
+            ]
+        )
+
+        yfinance_lambda_function = _lambda_python.PythonFunction(
+            self, "YFinanceLambda",
+            function_name="YFinance",
+            entry="lambda/tools/yfinance",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            timeout=Duration.seconds(90),
+            memory_size=512,
+            index="index.py",
+            handler="lambda_handler",
+            architecture=_lambda.Architecture.ARM_64,
+            role=yfinance_lambda_role,
+        )
+
 
         # Define the Step Functions state machine
 
@@ -295,8 +323,6 @@ class SQLAgentStack(Stack):
             )
         ]
 
-
-
         gpt_agent_flow = ConfigurableStepFunctionsConstruct(
             self, 
             "GPTAIStateMachine",
@@ -305,6 +331,96 @@ class SQLAgentStack(Stack):
             llm_caller=call_llm_lambda_function, 
             provider=LLMProviderEnum.OPENAI,
             tools=gpt_tools,
+            system_prompt=system_prompt,
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "answer": {
+                        "type": "string",
+                        "description": "The answer to the question"
+                    },
+                    "chart": {
+                        "type": "string",
+                        "description": "The URL of the chart"
+                    }
+                },
+                "required": [
+                    "answer",
+                    "chart"
+                ]
+            }
+        )
+
+        # Create yfinance tools
+        yfinance_tools = [
+            Tool(
+                "get_ticker_data",
+                "Return the stock price of the given ticker symbol from Yahoo Finance.",
+                yfinance_lambda_function,
+                provider=LLMProviderEnum.ANTHROPIC,
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "ticker": {
+                            "type": "string",
+                            "description": "The ticker symbol of the stock."
+                        },
+                        "start_date": {
+                            "type": "string",
+                            "description": "The start date of the stock price."
+                        },
+                        "end_date": {
+                            "type": "string",
+                            "description": "The end date of the stock price."
+                        }
+                    },
+                    "required": [
+                        "ticker"
+                    ]
+                }
+            ),
+            Tool(
+                "execute_python", 
+                "Execute python code in a Jupyter notebook cell and return the URL of the image that was created.",
+                code_interpreter_lambda_function,
+                provider=LLMProviderEnum.ANTHROPIC,
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "code": {
+                            "type": "string",
+                            "description": "The python code to execute in a single cell."
+                        }
+                    },
+                    "required": [
+                        "code"
+                    ]
+                }
+            )
+        ]
+
+        system_prompt="""
+        You are an expert business analyst with deep knowledge financial data. 
+        Your job is to help users understand and analyze stock prices. 
+        You have access to a set of tools, but only use them when needed.
+        Please prefer to use the print_output tool to format the reply, instead of ending the turn. 
+        You also have access to a tool that allows execution of python code. 
+        Use it to generate the visualizations in your analysis. 
+        - the python code runs in jupyter notebook. 
+        - every time you call `execute_python` tool, the python code is executed in a separate cell. 
+        it's okay to multiple calls to `execute_python`. 
+        - display visualizations using matplotlib directly in the notebook. don't worry about saving the visualizations to a file. 
+        - you can run any python code you want, everything is running in a secure sandbox environment.
+        """
+
+        yfinance_agent_flow = ConfigurableStepFunctionsConstruct(
+            self, 
+            "YFinanceAIStateMachine",
+            state_machine_name="FiancialAgentWithToolsAndClaude",
+            state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
+            llm_caller=call_llm_lambda_function, 
+            provider=LLMProviderEnum.ANTHROPIC,
+            tools=yfinance_tools,
             system_prompt=system_prompt,
             output_schema={
                 "type": "object",

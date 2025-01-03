@@ -206,6 +206,7 @@ In the CDK stack we define the tools by following the following steps:
             account=self.account,
             state_machine_path="step-functions/agent-with-tools-flow-template.json", 
             llm_caller=call_llm_lambda_function, 
+            provider=LLMProviderEnum.ANTHROPIC,
             tools=tools,
             system_prompt="You are an expert business analyst with deep knowledge of SQL and visualization code in Python. Your job is to help users understand and analyze their internal baseball data. You have access to a set of tools, but only use them when needed. You also have access to a tool that allows execution of python code. Use it to generate the visualizations in your analysis. - the python code runs in jupyter notebook. - every time you call `execute_python` tool, the python code is executed in a separate cell. it's okay to multiple calls to `execute_python`. - display visualizations using matplotlib directly in the notebook. don't worry about saving the visualizations to a file. - you can run any python code you want, everything is running in a secure sandbox environment.",
             output_schema={
@@ -226,6 +227,66 @@ In the CDK stack we define the tools by following the following steps:
                 ]
             }
         )
+```
+
+## Create a new tool
+
+To create a new tool, you need to:
+1. create a new Lambda function code in the `lambda` directory, 
+
+```bash
+mkdir lambda/tools/new-tool
+touch lambda/tools/new-tool/index.py
+```
+2. create dependencies in the `requirements.txt` file,
+
+```bash
+touch lambda/tools/new-tool/requirements.in
+echo "yfinance" >> lambda/tools/new-tool/requirements.in
+uv pip compile lambda/tools/new-tool/requirements.in --output-file lambda/tools/new-tool/requirements.txt
+```
+
+3. add the Lambda function code to the stack,
+
+```python
+        new_tool_lambda_role = iam.Role(
+            self, "NewToolLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_managed_policy_arn(
+                    self,
+                    "NewToolLambdaPolicy",
+                    managed_policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                )
+            ]
+        )
+
+        new_tool_lambda_function = _lambda_python.PythonFunction(
+            self, "NewToolLambda",
+            function_name="NewTool",
+            entry="lambda/tools/new-tool",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            timeout=Duration.seconds(90),
+            memory_size=512,
+            index="index.py",
+            handler="lambda_handler",
+            architecture=_lambda.Architecture.ARM_64,
+            role=new_tool_lambda_role,
+        )
+
+```
+
+4. create a new tool in the tools list for the AI Agent, 
+
+```python
+tools = [
+        Tool(
+            "new_tool", 
+            "new tool description",
+            new_tool_lambda_function,
+            provider=LLMProviderEnum.ANTHROPIC
+        )
+    ]
 ```
 
 ## uv Set up

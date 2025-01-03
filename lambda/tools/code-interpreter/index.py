@@ -40,9 +40,10 @@ def lambda_handler(event, context):
         if not code:
             logger.error("No code provided in the event")
             return {
-                'statusCode': 400,
-                'body': json.dumps({
-                    'error': 'No code provided in the event'
+                "type": "tool_result",
+                "tool_use_id": tool_use["id"],
+                "content": json.dumps({
+                    'error': 'No code provided.'
                 })
             }
                 
