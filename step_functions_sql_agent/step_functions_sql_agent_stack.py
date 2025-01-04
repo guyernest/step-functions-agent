@@ -158,49 +158,23 @@ class SQLAgentStack(Stack):
             role=code_interpreter_lambda_role,
         )
 
-        # yfiance tools
-
-        yfinance_lambda_role = iam.Role(
-            self, "YFinanceLambdaRole",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_managed_policy_arn(
-                    self,
-                    "YFinanceLambdaPolicy",
-                    managed_policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-                )
-            ]
-        )
-
-        yfinance_lambda_function = _lambda_python.PythonFunction(
-            self, "YFinanceLambda",
-            function_name="YFinance",
-            entry="lambda/tools/yfinance",
-            runtime=_lambda.Runtime.PYTHON_3_12,
-            timeout=Duration.seconds(90),
-            memory_size=512,
-            index="index.py",
-            handler="lambda_handler",
-            architecture=_lambda.Architecture.ARM_64,
-            role=yfinance_lambda_role,
-        )
-
-
         # Define the Step Functions state machine
 
         # Create claude tools
+        anthropic = LLMProviderEnum.ANTHROPIC
+
         claude_tools = [
             Tool(
                 "get_db_schema", 
                 "Describe the schema of the SQLite database, including table names, and column names and types.",
                 db_interface_lambda_function,
-                provider=LLMProviderEnum.ANTHROPIC
+                provider=anthropic
             ),
             Tool(
                 "execute_sql_query", 
                 "Return the query results of the given SQL query to the SQLite database.",
                 db_interface_lambda_function,
-                provider=LLMProviderEnum.ANTHROPIC,
+                provider=anthropic,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -218,7 +192,7 @@ class SQLAgentStack(Stack):
                 "execute_python", 
                 "Execute python code in a Jupyter notebook cell and return the URL of the image that was created.",
                 code_interpreter_lambda_function,
-                provider=LLMProviderEnum.ANTHROPIC,
+                provider=anthropic,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -255,7 +229,7 @@ class SQLAgentStack(Stack):
             state_machine_name="SQLAgentWithToolsFlowAndClaude",
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
             llm_caller=call_llm_lambda_function, 
-            provider=LLMProviderEnum.ANTHROPIC,
+            provider=anthropic,
             tools=claude_tools,
             system_prompt=system_prompt,
             output_schema={
@@ -278,18 +252,20 @@ class SQLAgentStack(Stack):
         )
 
         # Create gpt tools
+        openai = LLMProviderEnum.OPENAI
+
         gpt_tools = [
             Tool(
                 "get_db_schema", 
                 "Describe the schema of the SQLite database, including table names, and column names and types.",
                 db_interface_lambda_function,
-                provider=LLMProviderEnum.OPENAI,
+                provider=openai,
             ),
             Tool(
                 "execute_sql_query", 
                 "Return the query results of the given SQL query to the SQLite database.",
                 db_interface_lambda_function,
-                provider=LLMProviderEnum.OPENAI,
+                provider=openai,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -307,7 +283,7 @@ class SQLAgentStack(Stack):
                 "execute_python", 
                 "Execute python code in a Jupyter notebook cell and return the URL of the image that was created.",
                 code_interpreter_lambda_function,
-                provider=LLMProviderEnum.OPENAI,
+                provider=openai,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -329,7 +305,7 @@ class SQLAgentStack(Stack):
             state_machine_name="SQLAgentWithToolsFlowAndGPT",
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
             llm_caller=call_llm_lambda_function, 
-            provider=LLMProviderEnum.OPENAI,
+            provider=openai,
             tools=gpt_tools,
             system_prompt=system_prompt,
             output_schema={
@@ -351,174 +327,3 @@ class SQLAgentStack(Stack):
             }
         )
 
-        provider = LLMProviderEnum.ANTHROPIC
-
-        # Create yfinance tools
-        yfinance_tools = [
-            Tool(
-                "get_ticker_data",
-                "Return the stock price of the given ticker symbol from Yahoo Finance.",
-                yfinance_lambda_function,
-                provider=provider,
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "ticker": {
-                            "type": "string",
-                            "description": "The ticker symbol of the stock."
-                        },
-                        "start_date": {
-                            "type": "string",
-                            "description": "The start date of the stock price."
-                        },
-                        "end_date": {
-                            "type": "string",
-                            "description": "The end date of the stock price."
-                        }
-                    },
-                    "required": [
-                        "ticker"
-                    ]
-                }
-            ),
-            Tool(
-                "get_ticker_recent_history",
-                "Get the recent history for a given ticker symbol over a given period and interval.",
-                yfinance_lambda_function,
-                provider=provider,
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "ticker": {
-                            "type": "string",
-                            "description": "The ticker symbol of the stock."
-                        },
-                        "period": {
-                            "type": "string",
-                            "description": "The period to get the data for. Defaults to '1mo'. Valid periods: 1d,5d,1mo,3mo,6mo,1y,2y,5y,10y,ytd,max Either Use period parameter or use start and end date."
-                        },
-                        "interval": {
-                            "type": "string",
-                            "description": "The interval to get the data for. Defaults to '1d'. Valid intervals: 1m,2m,5m,15m,30m,60m,90m,1h,1d,5d,1wk,1mo,3mo Intraday data cannot extend last 60 days."
-                        }
-                    },
-                    "required": [
-                        "ticker"
-                    ]
-                }
-            ),
-            Tool(
-                "list_industries",
-                "List the industries for a given sector key.",
-                yfinance_lambda_function,
-                provider=provider,
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "sector_key": {
-                            "type": "string",
-                            "description": "The sector key of the industry. Valid sectors: real-estate, healthcare, financial-services, technology, consumer-cyclical, consumer-defensive, basic-materials, industrials, energy, utilities, communication-services"
-                        }
-                    },
-                    "required": [
-                        "sector_key"
-                    ]
-                }
-            ),
-            Tool(
-                "top_industry_companies",
-                "Get the top companies for a given industry key.",
-                yfinance_lambda_function,
-                provider=provider,
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "industry_key": {
-                            "type": "string",
-                            "description": "The industry key of the industry."
-                        }
-                    },
-                    "required": [
-                        "industry_key"
-                    ]
-                }
-            ),
-            Tool(
-                "top_sector_companies",
-                "Get the top companies for a given sector key.",
-                yfinance_lambda_function,
-                provider=provider,
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "sector_key": {
-                            "type": "string",
-                            "description": "The sector key of the industry."
-                        }
-                    },
-                    "required": [
-                        "sector_key"
-                    ]
-                }
-            ),
-            Tool(
-                "execute_python", 
-                "Execute python code in a Jupyter notebook cell and return the URL of the image that was created.",
-                code_interpreter_lambda_function,
-                provider=provider,
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "code": {
-                            "type": "string",
-                            "description": "The python code to execute in a single cell."
-                        }
-                    },
-                    "required": [
-                        "code"
-                    ]
-                }
-            )
-        ]
-
-        system_prompt="""
-        You are an expert business analyst with deep knowledge financial data. 
-        Your job is to help users understand and analyze stock prices. 
-        You have access to a set of tools, but only use them when needed.
-        Please prefer to use the print_output tool to format the reply, instead of ending the turn. 
-        You also have access to a tool that allows execution of python code. 
-        Use it to generate the visualizations in your analysis. 
-        - the python code runs in jupyter notebook. 
-        - every time you call `execute_python` tool, the python code is executed in a separate cell. 
-        it's okay to multiple calls to `execute_python`. 
-        - display visualizations using matplotlib directly in the notebook. don't worry about saving the visualizations to a file. 
-        - you can run any python code you want, everything is running in a secure sandbox environment.
-        """
-
-        yfinance_agent_flow = ConfigurableStepFunctionsConstruct(
-            self, 
-            "YFinanceAIStateMachine",
-            state_machine_name="FiancialAgentWithToolsAndClaude",
-            state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
-            llm_caller=call_llm_lambda_function, 
-            provider=provider,
-            tools=yfinance_tools,
-            system_prompt=system_prompt,
-            output_schema={
-                "type": "object",
-                "properties": {
-                    "answer": {
-                        "type": "string",
-                        "description": "The answer to the question"
-                    },
-                    "chart": {
-                        "type": "string",
-                        "description": "The URL of the chart"
-                    }
-                },
-                "required": [
-                    "answer",
-                    "chart"
-                ]
-            }
-        )

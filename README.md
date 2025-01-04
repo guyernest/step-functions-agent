@@ -306,5 +306,15 @@ The `CDK` stack will use Docker to build the Lambda functions, and it will use t
 The CDK Stack defines all the necessary resources to deploy the AI Agent Step Function, including the IAM roles, Secrets Manager secrets (for API keys), Lambda functions (tools and LLM caller), and Step Functions.
 
 ```shell
-cdk deploy
+cdk deploy --all
+```
+
+### Other CDK commands
+
+```shell
+cdk list
+cdk synth SQLAgentStack
+cdk synth FinancialAgentStack
+cdk diff SQLAgentStack
+cdk diff FinancialAgentStack
 ```

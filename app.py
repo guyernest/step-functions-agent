@@ -5,27 +5,15 @@ import aws_cdk as cdk
 from aws_cdk import Tags
 
 from step_functions_sql_agent.step_functions_sql_agent_stack import SQLAgentStack
-
+from step_functions_sql_agent.step_functions_financial_agent_stack import FinancialAgentStack
 
 app = cdk.App()
-AIAgentStack = SQLAgentStack(app, "SQLAgentStack",
-    # If you don't specify 'env', this stack will be environment-agnostic.
-    # Account/Region-dependent features and context lookups will not work,
-    # but a single synthesized template can be deployed anywhere.
+sqlAgentStack = SQLAgentStack(app, "SQLAgentStack")
+financialAgentStack = FinancialAgentStack(app, "FinancialAgentStack")
 
-    # Uncomment the next line to specialize this stack for the AWS Account
-    # and Region that are implied by the current CLI configuration.
-
-    #env=cdk.Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region=os.getenv('CDK_DEFAULT_REGION')),
-
-    # Uncomment the next line if you know exactly what Account and Region you
-    # want to deploy the stack to. */
-
-    #env=cdk.Environment(account='123456789012', region='us-east-1'),
-
-    # For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
-    )
-
-Tags.of(AIAgentStack).add("project", "sql-ai-agent")
+Tags.of(sqlAgentStack).add("project", "sql-ai-agent")
+Tags.of(sqlAgentStack).add("application", "ai-agents")
+Tags.of(financialAgentStack).add("project", "financial-ai-agent")
+Tags.of(financialAgentStack).add("application", "ai-agents")
 
 app.synth()
