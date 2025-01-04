@@ -78,7 +78,7 @@ class ConfigurableStepFunctionsConstruct(Construct):
             state_machine_def = json.load(f)
 
         # print the call_llm state definition before configuration
-        print(json.dumps(state_machine_def["States"]["Call LLM"], indent=4))
+        # print(json.dumps(state_machine_def["States"]["Call LLM"], indent=4))
         # Configure the state machine definition with the provided LLM caller
         self._configure_llm_call(
             state_machine_def, 
@@ -94,7 +94,7 @@ class ConfigurableStepFunctionsConstruct(Construct):
             output_schema
         )
         # print the call_llm state definition after configuration
-        print(json.dumps(state_machine_def["States"]["Call LLM"], indent=4))
+        # print(json.dumps(state_machine_def["States"]["Call LLM"], indent=4))
 
         # Create the state machine role with permissions for all tool Lambda functions
         role = self._create_state_machine_role(
