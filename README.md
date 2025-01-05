@@ -20,13 +20,14 @@ There are a few frameworks for MLOps of AI Agents, such as: LangGraph, Crew.ai, 
 
 The AI Agent implementation in AWS Step Functions is based on the following steps:
 
-1. Develop Lambda functions which are the tools for the AI Agent. These functions can be used to perform complex tasks, such as calling APIs, querying databases, etc.
+1. Develop Lambda functions which are the tools for the AI Agent. These functions can be used to perform complex tasks, such as calling APIs, querying databases, etc. The functions can be implemented using any programming language, such as Python, TypeScript, Java, Rust, etc.
 2. Develop Lambda function which calls your preferred LLM for the AI Agent. 
 3. Create a Step Function which orchestrate the AI Agent. This Step Function calls the LLM and passes the results to the tools.
 
-This repository contains an example of some tools that are used to build a SQL Agent. Each Lambda function is implemented under the `lambda` directory. The `CDK` stack integrates all the Lambda functions into the Step Function flow to build the AI Agent.
+This repository contains an example of some tools that are used to build SQL, Financial, and Google Maps Agents. Each Lambda function is implemented under the `lambda` directory. The `CDK` stack integrates all the Lambda functions into the Step Function flow to build the AI Agent.
 
-Please note that each Lambda function is implemented in a dedicated directory and has its own requirements.txt file. The requirements.txt file is used to install the required Python packages for the Lambda function, by the `CDK` stack.
+Please note that each Lambda function is implemented in a dedicated directory and has its own requirements.txt file. The requirements.txt file is used to install the required Python packages for the Lambda function, by the `CDK` stack. You can see an example of a Lambda function for Python in the [lambda/tools/db-interface](lambda/tools/db-interface) directory.
+The same simplicity is available for other programming languages, such as TypeScript. You can see an example of a Lambda function for TypeScript in the [lambda/tools/google-maps](lambda/tools/google-maps) directory.
 
 ## Pre-requisites
 
@@ -38,7 +39,7 @@ Please note that each Lambda function is implemented in a dedicated directory an
 
 Each tool is implemented using a Lambda function in a dedicated directory, and has its own requirements.txt file. The requirements.txt file is used to install the required Python packages for the tool, by the `CDK` stack.
 
-A tool should know how to parse the tool input, and return the tool output. The tool input is passed to the tool as a JSON object, and the tool output is returned as a JSON object. For example, the following [Lambda function](lambda/db-interface/index.py) implements two tools: `get_db_schema` and `execute_sql_query`:
+A tool should know how to parse the tool input, and return the tool output. The tool input is passed to the tool as a JSON object, and the tool output is returned as a JSON object. For example, the following [Lambda function](lambda/tools/db-interface/index.py) implements two tools: `get_db_schema` and `execute_sql_query`:
 
 ```python
 def lambda_handler(event, context):
@@ -229,7 +230,7 @@ In the CDK stack we define the tools by following the following steps:
         )
 ```
 
-## Create a new tool
+## Create a new Python tool
 
 To create a new tool, you need to:
 1. create a new Lambda function code in the `lambda` directory, 
