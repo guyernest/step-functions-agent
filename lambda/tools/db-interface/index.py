@@ -84,6 +84,8 @@ class SQLDatabase:
 def lambda_handler(event, context):
     # Get the tool name from the input event
     tool_use = event
+    tool_name = tool_use['name']
+    tool_input = tool_use['input']
 
     db = SQLDatabase(db_name)
     # Check if the db exists in the /tmp directory
@@ -93,16 +95,21 @@ def lambda_handler(event, context):
         db.create_database_from_csv(db_files)
 
     # Once the db is ready, execute the requested method on the db
-    if tool_use["name"] == 'get_db_schema':
-        result = db.get_db_schema()
-    elif tool_use["name"] == 'execute_sql_query':        
-        # The SQL provided might cause ad error. We need to return the error message to the LLM
-        # so it can fix the SQL and try again.
-        try:
-            result = db.execute_sql_query(tool_use['input']['sql_query'])
-        except sqlite3.OperationalError as e:
+    match tool_name:
+        case 'get_db_schema':
+            result = db.get_db_schema()
+        case 'execute_sql_query':
+            # The SQL provided might cause ad error. We need to return the error message to the LLM
+            # so it can fix the SQL and try again.
+            try:
+                result = db.execute_sql_query(tool_input['sql_query'])
+            except sqlite3.OperationalError as e:
+                result = json.dumps({
+                    'error': str(e)
+                })
+        case _:
             result = json.dumps({
-                'error': str(e)
+                'error': f"Unknown tool name: {tool_name}"
             })
 
     return {
