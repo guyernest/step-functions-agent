@@ -31,70 +31,78 @@ def code_interpret(code):
             return exec.results    
 
 def lambda_handler(event, context):
-        # Get the tool name from the input event
+    # Get the tool name from the input event
     tool_use = event
+    tool_name = tool_use.get('name')
+    tool_input = tool_use.get('input')
 
     try:
-        # Extract the Python code from the event
-        code = tool_use.get('input').get('code')
-        if not code:
-            logger.error("No code provided in the event")
-            return {
-                "type": "tool_result",
-                "tool_use_id": tool_use["id"],
-                "content": json.dumps({
-                    'error': 'No code provided.'
-                })
-            }
+        match tool_name:
+            case "execute_python":
+                code = tool_input.get('code')
+                if not code:
+                    logger.error("No code provided in the event")
+                    return {
+                        "type": "tool_result",
+                        "tool_use_id": tool_use["id"],
+                        "content": json.dumps({
+                            'error': 'No code provided.'
+                        })
+                    }
                 
-        # Execute the code
-        result = code_interpret(code)
-        logger.info("Code execution successful", extra={"result": result})
-        
-        if result and result[0].png is None:
-            return {
-                "type": "tool_result",
-                "tool_use_id": tool_use["id"],
-                "content": result[0].text
-            }
-        # To avoid the max token limit of moving large base64 images, we can create write the image to S3
-        # and return the S3 URL. We also need to generate a presigned URL for the S3 object.
-        # We can use the S3 SDK to generate the presigned URL.
-        s3 = boto3.client('s3')
-        uuid_str = str(uuid.uuid4())
-        object_name = f'images/code_interpreter_{uuid_str}.html'
-        html_content = f"""
-        <html>
-        <head>
-        </head>
-        <body>
-            <img src="data:image/png;base64,{result[0].png}" />
-        </body>
-        </html>
-        """
+                # Execute the code
+                result = code_interpret(code)
+                logger.info("Code execution successful", extra={"result": result})
+                
+                if result and result[0].png is None:
+                    return {
+                        "type": "tool_result",
+                        "tool_use_id": tool_use["id"],
+                        "content": result[0].text
+                    }
+                # To avoid the max token limit of moving large base64 images, we can create write the image to S3
+                # and return the S3 URL. We also need to generate a presigned URL for the S3 object.
+                # We can use the S3 SDK to generate the presigned URL.
+                s3 = boto3.client('s3')
+                uuid_str = str(uuid.uuid4())
+                object_name = f'images/code_interpreter_{uuid_str}.html'
+                html_content = f"""
+                <html>
+                <head>
+                </head>
+                <body>
+                    <img src="data:image/png;base64,{result[0].png}" />
+                </body>
+                </html>
+                """
 
-        s3.put_object(
-            Body=html_content, 
-            Bucket=IMAGE_BUCKET_NAME, 
-            Key=object_name, 
-            ContentType='text/html'
-        )
+                s3.put_object(
+                    Body=html_content, 
+                    Bucket=IMAGE_BUCKET_NAME, 
+                    Key=object_name, 
+                    ContentType='text/html'
+                )
 
-        # We can use the S3 SDK to generate the presigned URL.
-        presigned_url = s3.generate_presigned_url(
-            'get_object',
-            Params={
-                'Bucket': IMAGE_BUCKET_NAME,
-                'Key': object_name
-            },
-            ExpiresIn=3600
-        )
+                # We can use the S3 SDK to generate the presigned URL.
+                result = s3.generate_presigned_url(
+                    'get_object',
+                    Params={
+                        'Bucket': IMAGE_BUCKET_NAME,
+                        'Key': object_name
+                    },
+                    ExpiresIn=3600
+                )
+            case _:  # Default case
+                logger.error(f"Unknown tool name: {tool_name}")
+                result = json.dumps({
+                    'error': f"Unknown tool name: {tool_name}"
+                })
 
         # Return the execution results
         return {
             "type": "tool_result",
             "tool_use_id": tool_use["id"],
-            "content": presigned_url
+            "content": result
         }
         
     except Exception as e:
@@ -108,7 +116,7 @@ def lambda_handler(event, context):
 if __name__ == "__main__":
     # Test event with a simple Python code
     test_event = {
-        "name": "code_interpreter",
+        "name": "execute_python",
         "id": "code_interpreter_unique_id",
         "input": {
             "code": "print('Hello, World!')\nx = 5 + 3\nprint(f'Result: {x}')\nx"
@@ -161,7 +169,14 @@ plt.show()
     """   
 
     # Call the lambda handler with the test event and None as context
-    result = lambda_handler({"name": "code_interpreter", "id": "code_interpreter_unique_id", "input": {"code": chart_code}}, None)
+    result = lambda_handler(
+        {
+            "name": "execute_python", 
+            "id": "code_interpreter_unique_id", 
+            "input": {"code": chart_code}
+        }, 
+        None
+    )
 
     # Print the result
     print("Lambda Response:")
