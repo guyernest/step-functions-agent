@@ -26,7 +26,7 @@ The AI Agent implementation in AWS Step Functions is based on the following step
 
 This repository contains an example of some tools that are used to build SQL, Financial, and Google Maps Agents. Each Lambda function is implemented under the `lambda` directory. The `CDK` stack integrates all the Lambda functions into the Step Function flow to build the AI Agent.
 
-Please note that each Lambda function is implemented in a dedicated directory and has its own requirements.txt file. The requirements.txt file is used to install the required Python packages for the Lambda function, by the `CDK` stack. You can see an example of a Lambda function for Python in the [lambda/tools/db-interface](lambda/tools/db-interface) directory.
+Please note that each Lambda function is implemented in a dedicated directory and has its own requirements.txt file. The requirements.txt file is used to install the required Python packages for the Lambda function, by the `CDK` stack. You can see an example of a Lambda function for Python in the [lambda/tools/code-interpreter](lambda/tools/code-interpreter) directory.
 The same simplicity is available for other programming languages, such as TypeScript. You can see an example of a Lambda function for TypeScript in the [lambda/tools/google-maps](lambda/tools/google-maps) directory.
 
 ## Pre-requisites
