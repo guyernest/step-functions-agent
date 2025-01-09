@@ -171,7 +171,12 @@ class ConfigurableStepFunctionsConstruct(Construct):
                 "description": "Print the output of the previous steps",
                 "input_schema": output_schema if output_schema else {
                     "type": "object", 
-                    "properties": {},
+                    "properties": {
+                        "answer": {
+                            "type": "string",
+                            "description": "The abswer to users question"
+                        }
+                    },
                 },
             }
 

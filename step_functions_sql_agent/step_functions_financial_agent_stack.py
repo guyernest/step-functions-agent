@@ -1,10 +1,9 @@
 from aws_cdk import (
     Duration,
+    RemovalPolicy,
     Stack,
-    SecretValue,
     aws_iam as iam,
     aws_lambda as _lambda,
-    aws_secretsmanager as secretsmanager,
     aws_s3 as s3,
     aws_lambda_python_alpha as _lambda_python,
 )
@@ -35,8 +34,6 @@ class FinancialAgentStack(Stack):
         #### Code Interpreter Tools
 
         # Create the code interpreter lambda function from the name of the function
-
-
         code_interpreter_lambda_function = _lambda.Function.from_function_name(
             self, 
             "CodeInterpreter", 
@@ -44,6 +41,15 @@ class FinancialAgentStack(Stack):
         )
 
         # yfiance tools
+
+        # Create the bucket for yfinance data
+        yfinance_bucket = s3.Bucket(
+            self, "YFinanceBucket",
+            bucket_name=f"yfinance-data-{self.account}-{self.region}",
+            removal_policy=RemovalPolicy.DESTROY
+        )
+
+        # Create the yfinance lambda function
 
         yfinance_lambda_role = iam.Role(
             self, "YFinanceLambdaRole",
@@ -56,6 +62,7 @@ class FinancialAgentStack(Stack):
                 )
             ]
         )
+        yfinance_bucket.grant_read_write(yfinance_lambda_role)
 
         yfinance_lambda_function = _lambda_python.PythonFunction(
             self, "YFinanceLambda",
@@ -67,9 +74,11 @@ class FinancialAgentStack(Stack):
             index="index.py",
             handler="lambda_handler",
             architecture=_lambda.Architecture.ARM_64,
+            environment={
+                "DATA_BUCKET_NAME": yfinance_bucket.bucket_name,
+            },
             role=yfinance_lambda_role,
         )
-
 
         # Define the Step Functions state machine
 
