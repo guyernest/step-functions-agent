@@ -169,7 +169,11 @@ def download_tickers_data(
         # Normalize to percentage changes from first day
         normalized[ticker] = (series / series.iloc[0] - 1) * 100
 
-    data = pd.DataFrame(normalized)
+    data = (
+        pd
+        .DataFrame(normalized)
+        .fillna(0.0)
+    )
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     csv_key = f'stock_vectors/stock_data_{timestamp}.csv'
