@@ -1,4 +1,4 @@
-# Python Example: Code Interpreter Tools
+# <img height="48" width="48" src="https://cdn.simpleicons.org/python" /> Python Example: Code Interpreter Tools
 
 This directory contains the implementation of the tools for Code Interpreter AI Agent in **Python**, based on the MCP implementation in https://github.com/modelcontextprotocol/servers/tree/main/src/code-interpreter.
 

@@ -5,12 +5,12 @@
 AI Agents are a combination of LLMs and Tools. Each tool is used to perform a specific task, and the LLM orchestrates them to perform complex tasks, requested by the user. AI Agents are a powerful tool for automating complex tasks in the cloud, and they are a great way to reduce the cost of building and maintaining complex systems. However, the deployment and operation of AI Agents can be a complex process. 
 
 This repository provides a robust implementation of AI Agents in AWS Step Functions, which is a serverless computing platform for building and deploying serverless applications. The repository contains the implementation of a few AI Agents:
-- SQL AI Agent, which can analyze a SQL database with multiple tables, and answer business questions about the data, including visualization and reporting, in **Python**. 
-- Financial AI Agent, which can analyze a financial dataset with multiple tables, and answer business questions about the data, including visualization and reporting, in Python, using YFinance library.
-- Google Maps AI Agent, which can analyze a Google Maps dataset with multiple tables, and answer business questions about the data, including visualization and reporting, in **TypeScript**.
-- Time Series Clustering AI Agent, which can analyze a time series dataset with multiple tables, and answer business questions about the data, including visualization and reporting, in **Rust**.
-- Time Series Analysis AI Agent, which can analyze a large set of time series, and answer business questions about the data, including visualization and reporting, in **Java**.
-- Web Research AI Agent, which uses Perplexity to analyze web pages, and answer business questions about companies, in **Go**.
+- SQL AI Agent, which can analyze a SQL database with multiple tables, and answer business questions about the data, including visualization and reporting, in **Python** <img height="16" width="16" src="https://cdn.simpleicons.org/python" />.
+- Financial AI Agent, which can analyze a financial dataset with multiple tables, and answer business questions about the data, including visualization and reporting, in Python <img height="16" width="16" src="https://cdn.simpleicons.org/python" />, using YFinance library.
+- Google Maps AI Agent, which can analyze a Google Maps dataset with multiple tables, and answer business questions about the data, including visualization and reporting, in **TypeScript** <img height="16" width="16" src="https://cdn.simpleicons.org/typescript" />.
+- Time Series Clustering AI Agent, which can analyze a time series dataset with multiple tables, and answer business questions about the data, including visualization and reporting, in **Rust** <img height="16" width="16" src="https://cdn.simpleicons.org/rust/gray" />.
+- Time Series Analysis AI Agent, which can analyze a large set of time series, and answer business questions about the data, including visualization and reporting, in **Java** <img height="16" width="16" src="https://img.icons8.com/?size=100&id=13679&format=png&color=000000" />.
+- Web Research AI Agent, which uses Perplexity to analyze web pages, and answer business questions about companies, in **Go** <img height="16" width="16" src="https://cdn.simpleicons.org/go" />.
 
 The implementation should be used as a template for building a custom AI Agent for any specific use case.
 
@@ -36,11 +36,11 @@ This repository contains an example of some tools that are used to build SQL, Fi
 
 Please note that each Lambda function is implemented in a dedicated directory and has its own dependencies file. The examples for the different programming languages are:
 
-* Python: [lambda/tools/code-interpreter](lambda/tools/code-interpreter) - using [uv](https://github.com/astral-sh/uv) to build the requirements.txt file from the requirements.in file.
-* TypeScript: [lambda/tools/google-maps](lambda/tools/google-maps) - using tsconfig.json for dependencies.
-* Rust: [lambda/tools/rust-clustering](lambda/tools/rust-clustering) - using Cargo.toml for dependencies.
-* Java: [lambda/tools/stock-analyzer](lambda/tools/stock-analyzer) - using Maven to build the jar based on the pom.xml.
-* Go: [lambda/tools/web-research](lambda/tools/web-research) - using `go mod` to build the the function based on mod.go.
+* <img height="16" width="16" src="https://cdn.simpleicons.org/python" /> Python: [lambda/tools/code-interpreter](lambda/tools/code-interpreter) - using [uv](https://github.com/astral-sh/uv) to build the requirements.txt file from the requirements.in file.
+* <img height="16" width="16" src="https://cdn.simpleicons.org/typescript" /> TypeScript: [lambda/tools/google-maps](lambda/tools/google-maps) - using tsconfig.json for dependencies.
+* <img height="16" width="16" src="https://cdn.simpleicons.org/rust/gray" /> Rust: [lambda/tools/rust-clustering](lambda/tools/rust-clustering) - using Cargo.toml for dependencies.
+* <img height="16" width="16" src="https://img.icons8.com/?size=100&id=13679&format=png&color=000000" /> Java: [lambda/tools/stock-analyzer](lambda/tools/stock-analyzer) - using Maven to build the jar based on the pom.xml.
+* <img height="16" width="16" src="https://cdn.simpleicons.org/go" /> Go: [lambda/tools/web-research](lambda/tools/web-research) - using mod.go for dependencies.
 
 ## Pre-requisites
 

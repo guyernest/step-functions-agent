@@ -1,4 +1,4 @@
-# Java Example: Time Series Tools
+# <img height="48" width="48" src="https://img.icons8.com/?size=100&id=13679&format=png&color=000000" /> Java Example: Time Series Tools
 
 This directory contains the implementation of the tools for time series analysis AI Agent in **Java**, using Fork/Join Framework.
 
