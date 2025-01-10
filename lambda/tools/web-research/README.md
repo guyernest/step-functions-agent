@@ -131,17 +131,18 @@ sam local invoke WebResearchFunction -e events/test_event.json
 
 ## Deployment
 
-The deployment is done using a CDK stack, which is implemented in the [step_functions_analysis_agent_stack.py](../../../step_functions_sql_agent/step_functions_analysis_agent_stack.py) file.
+The deployment is done using a CDK stack, which is implemented in the [step_functions_analysis_agent_stack.py](../../../step_functions_sql_agent/step_functions_research_agent_stack.py) file.
 
 ```python
-analysis_lambda = _lambda.Function(
-    self, 
-    "AnalysisLambda",
-    function_name="AnalysisTools",
-    code=_lambda.Code.from_asset("lambda/tools/web-research/..."), 
-    handler="tools.StockAnalyzerLambda::handleRequest",
-    runtime=_lambda.Runtime.PROVIDED_AL2023,
-    architecture=_lambda.Architecture.ARM_64,
-    role=web_research_lambda_role
-)
+    research_lambda = _lambda_go.GoFunction(
+        self, 
+        "ResearchLambda",
+        function_name="ResearchTools",
+        description="Stock market stock research tools using Go and Perplexity.",
+        entry="lambda/tools/web-research/", 
+        runtime=_lambda.Runtime.PROVIDED_AL2023,
+        architecture=_lambda.Architecture.ARM_64,
+        timeout=Duration.seconds(120),
+        role=research_lambda_role
+    )
 ```
