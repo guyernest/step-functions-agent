@@ -1,5 +1,6 @@
 from aws_cdk import (
     Stack,
+    Duration,
     aws_iam as iam,
     aws_s3 as s3,
     aws_lambda as _lambda,
@@ -82,6 +83,8 @@ class AnalysisAgentStack(Stack):
             handler="tools.StockAnalyzerLambda::handleRequest",
             runtime=_lambda.Runtime.JAVA_17,
             architecture=_lambda.Architecture.ARM_64,
+            timeout=Duration.seconds(30), 
+            memory_size=512,
             role=analysis_lambda_role
         )
 
