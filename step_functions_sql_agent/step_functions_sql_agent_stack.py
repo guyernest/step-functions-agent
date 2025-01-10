@@ -64,6 +64,7 @@ class SQLAgentStack(Stack):
         call_llm_lambda_function = _lambda_python.PythonFunction(
             self, "CallLLMLambda",
             function_name="CallLLM",
+            description="Lambda function to Call LLM (Anthropic or OpenAI) with messages history and tools.",
             entry="lambda/call-llm",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(90),
@@ -93,6 +94,7 @@ class SQLAgentStack(Stack):
         db_interface_lambda_function = _lambda_python.PythonFunction(
             self, "DBInterfaceLambda",
             function_name="DBInterface",
+            description="Lambda function to interface with the SQLite database.",
             entry="lambda/tools/db-interface",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(90),
@@ -145,6 +147,7 @@ class SQLAgentStack(Stack):
         code_interpreter_lambda_function = _lambda_python.PythonFunction(
             self, "CodeInterpreterLambda",
             function_name="CodeInterpreter",
+            description="Lambda function to execute visualization code in a Jupyter notebook and return the URL of the image that was created.",
             entry="lambda/tools/code-interpreter",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(300),  # 5 minutes timeout for code execution

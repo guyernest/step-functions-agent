@@ -62,6 +62,7 @@ class GoogleMapAgentStack(Stack):
             self, 
             "GoogleMapsLambda",
             function_name="GoogleMaps",
+            description="Lambda function to execute Google Maps API calls.",
             timeout=Duration.seconds(30),
             entry="lambda/tools/google-maps/src/index.ts", 
             handler="handler",  # Name of the exported function

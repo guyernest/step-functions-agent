@@ -63,6 +63,7 @@ class ClusteringAgentStack(Stack):
             self, 
             "ClusteringLambda",
             function_name="ClusteringTools",
+            description="Time Series Clustering tools using Rust.",
             code=_lambda.Code.from_asset("lambda/tools/rust-clustering/target/lambda/rust-clustering"), 
             handler="main",
             runtime=_lambda.Runtime.PROVIDED_AL2023,

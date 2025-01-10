@@ -67,6 +67,7 @@ class FinancialAgentStack(Stack):
         yfinance_lambda_function = _lambda_python.PythonFunction(
             self, "YFinanceLambda",
             function_name="YFinance",
+            description="Get stock data from Yahoo Finance, using Yfinance library.",
             entry="lambda/tools/yfinance",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(90),
