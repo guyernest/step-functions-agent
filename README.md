@@ -10,6 +10,7 @@ This repository provides a robust implementation of AI Agents in AWS Step Functi
 - Google Maps AI Agent, which can analyze a Google Maps dataset with multiple tables, and answer business questions about the data, including visualization and reporting, in **TypeScript**.
 - Time Series Clustering AI Agent, which can analyze a time series dataset with multiple tables, and answer business questions about the data, including visualization and reporting, in **Rust**.
 - Time Series Analysis AI Agent, which can analyze a large set of time series, and answer business questions about the data, including visualization and reporting, in **Java**.
+- Web Research AI Agent, which uses Perplexity to analyze web pages, and answer business questions about companies, in **Go**.
 
 The implementation should be used as a template for building a custom AI Agent for any specific use case.
 
@@ -39,6 +40,7 @@ Please note that each Lambda function is implemented in a dedicated directory an
 * TypeScript: [lambda/tools/google-maps](lambda/tools/google-maps) - using tsconfig.json for dependencies.
 * Rust: [lambda/tools/rust-clustering](lambda/tools/rust-clustering) - using Cargo.toml for dependencies.
 * Java: [lambda/tools/stock-analyzer](lambda/tools/stock-analyzer) - using Maven to build the jar based on the pom.xml.
+* Go: [lambda/tools/web-research](lambda/tools/web-research) - using `go mod` to build the the function based on mod.go.
 
 ## Pre-requisites
 
