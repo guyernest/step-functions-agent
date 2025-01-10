@@ -2,9 +2,9 @@
 
 ## AI Agent Overview
 
-AI Agents are a combination of LLMs and Tools. Each tool can perform a specific task, and the LLM can use them to perform complex tasks, requested by the user. AI Agents are a powerful tool for automating complex tasks in the cloud, and they are a great way to reduce the cost of building and maintaining complex systems. However, the deployment and operation of AI Agents can be a complex process. 
+AI Agents are a combination of LLMs and Tools. Each tool is used to perform a specific task, and the LLM orchestrates them to perform complex tasks, requested by the user. AI Agents are a powerful tool for automating complex tasks in the cloud, and they are a great way to reduce the cost of building and maintaining complex systems. However, the deployment and operation of AI Agents can be a complex process. 
 
-This repository provides a simple implementation of AI Agents in AWS Step Functions, which is a serverless computing platform for building and deploying serverless applications. The repository contains the implementation of a few AI Agents:
+This repository provides a robust implementation of AI Agents in AWS Step Functions, which is a serverless computing platform for building and deploying serverless applications. The repository contains the implementation of a few AI Agents:
 - SQL AI Agent, which can analyze a SQL database with multiple tables, and answer business questions about the data, including visualization and reporting, in **Python**. 
 - Financial AI Agent, which can analyze a financial dataset with multiple tables, and answer business questions about the data, including visualization and reporting, in Python, using YFinance library.
 - Google Maps AI Agent, which can analyze a Google Maps dataset with multiple tables, and answer business questions about the data, including visualization and reporting, in **TypeScript**.
@@ -59,7 +59,7 @@ def lambda_handler(event, context):
     tool_name = tool_use['name']
     tool_input = tool_use['input']
 
-    db = SQLDatabase(db_name)
+    db = SQLDatabase(DB_NAME)
 
     # Once the db is ready, execute the requested method on the db
     match tool_name:
@@ -175,6 +175,7 @@ In the CDK stack we define the tools by following the following steps:
         tool_1_lambda_function = _lambda_python.PythonFunction(
             self, "Tool1Lambda",
             function_name="Tool1Lambda",
+            description="Tool 1 lambda function",
             entry="lambda/tool1",
             runtime=_lambda.Runtime.PYTHON_3_12,
             # analyze using aws-lambda-power-tuning to find the best memory size
@@ -360,6 +361,7 @@ uv pip compile lambda/tools/new-tool/requirements.in --output-file lambda/tools/
         new_tool_lambda_function = _lambda_python.PythonFunction(
             self, "NewToolLambda",
             function_name="NewTool",
+            description="New tool lambda function",
             entry="lambda/tools/new-tool",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(90),
