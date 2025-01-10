@@ -1,4 +1,4 @@
-# TypeScript Example: Google Maps Tools
+# <img height="48" width="48" src="https://cdn.simpleicons.org/typescript" /> TypeScript Example: Google Maps Tools
 
 This directory contains the implementation of the tools for Google Maps AI Agent in **TypeScript**, based on the MCP implementation in https://github.com/modelcontextprotocol/servers/tree/main/src/google-maps.
 

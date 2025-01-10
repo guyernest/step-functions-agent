@@ -1,4 +1,4 @@
-# Rust Example: Clustering Tools
+# <img height="48" width="48" src="https://cdn.simpleicons.org/rust/gray" /> Rust Example: Clustering Tools
 
 This directory contains the implementation of the tools for Time Series Clustering AI Agent in **Rust**.
 
