@@ -248,6 +248,83 @@ In the CDK stack we define the tools by following the following steps:
         )
 ```
 
+## Data Communication
+
+Most of the data communication between the AI Agent and the tools is done using JSON objects, within the message history. However, some raw data such as large images (for example, stock charts), or large datasets (for example, time series data) should be transferred using S3 files. Especially, when the LLM doesn't need to "see" the raw data, the messages to and from the tools can only include a link to the data files in S3, in the form of bucket name and object key.
+
+The following examples of writing CSV files into S3 in Python, and reading CSV files from S3 in Java also demonstrate the flexibility of using different programming languages to build the AI Agent.
+
+### Save data to S3 as tool output
+
+```python
+    # Creating a unique file name
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    csv_key = f'stock_vectors/stock_data_{timestamp}.csv'
+
+    # Save as CSV (for example, other formats can be supported)
+    csv_str = '\n'.join(csv_data)
+
+    # Uploading the file to S3
+    s3.put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=csv_str
+    )
+
+    return json.dumps({
+        'bucket': bucket,
+        'key': key
+    })
+```
+
+### Read data from S3 as tool input
+
+```java
+    public static class ToolInput {
+        @JsonProperty("bucket")
+        private String bucket;
+
+        @JsonProperty("key")
+        private String key;
+
+        public String getBucket() { return bucket; }
+
+        public void setBucket(String bucket) { this.bucket = bucket; }
+
+        public String getKey() { return key; }
+
+        public void setKey(String key) { this.key = key; }
+    }
+
+    // Utility Method to read CSV data from S3
+    protected Map<String, List<Double>> readStockDataFromS3(String bucket, String key) {
+        Map<String, List<Double>> stockData = new HashMap<>();
+
+        try (S3Object s3Object = s3Client.getObject(bucket, key);
+                BufferedReader reader = new BufferedReader(new InputStreamReader(s3Object.getObjectContent()))) {
+
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] values = line.split(",");
+                if (values.length > 1) {
+                    String ticker = values[0];
+                    List<Double> prices = Arrays.stream(values)
+                            .skip(1)
+                            .map(String::trim)
+                            .filter(s -> !s.isEmpty())
+                            .map(Double::parseDouble)
+                            .collect(Collectors.toList());
+                    stockData.put(ticker, prices);
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Error reading from S3: " + e.getMessage(), e);
+        }
+
+        return stockData;
+    }
+```
+
 ## Create a new Python tool
 
 To create a new tool, you need to:
