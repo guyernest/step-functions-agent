@@ -9,7 +9,7 @@ This repository provides a simple implementation of AI Agents in AWS Step Functi
 - Financial AI Agent, which can analyze a financial dataset with multiple tables, and answer business questions about the data, including visualization and reporting, in Python, using YFinance library.
 - Google Maps AI Agent, which can analyze a Google Maps dataset with multiple tables, and answer business questions about the data, including visualization and reporting, in **TypeScript**.
 - Time Series Clustering AI Agent, which can analyze a time series dataset with multiple tables, and answer business questions about the data, including visualization and reporting, in **Rust**.
-
+- Time Series Analysis AI Agent, which can analyze a large set of time series, and answer business questions about the data, including visualization and reporting, in **Java**.
 
 The implementation should be used as a template for building a custom AI Agent for any specific use case.
 
@@ -38,6 +38,7 @@ Please note that each Lambda function is implemented in a dedicated directory an
 * Python: [lambda/tools/code-interpreter](lambda/tools/code-interpreter) - using [uv](https://github.com/astral-sh/uv) to build the requirements.txt file from the requirements.in file.
 * TypeScript: [lambda/tools/google-maps](lambda/tools/google-maps) - using tsconfig.json for dependencies.
 * Rust: [lambda/tools/rust-clustering](lambda/tools/rust-clustering) - using Cargo.toml for dependencies.
+* Java: [lambda/tools/stock-analyzer](lambda/tools/stock-analyzer) - using Maven to build the jar based on the pom.xml.
 
 ## Pre-requisites
 

@@ -159,19 +159,10 @@ def download_tickers_data(
     else:
         closes = data['Close']
 
-    # Forward fill missing values
-    closes = closes.fillna(method='ffill')
-
-    # Normalize each stock's prices
-    normalized = {}
-    for ticker in closes.columns:
-        series = closes[ticker]
-        # Normalize to percentage changes from first day
-        normalized[ticker] = (series / series.iloc[0] - 1) * 100
-
     data = (
         pd
-        .DataFrame(normalized)
+        .DataFrame(closes)
+        .ffill()
         .fillna(0.0)
     )
 

@@ -146,4 +146,29 @@ For generic events, where you define the event data structure, you can create a 
 }
 ```
 
-Then, run `cargo lambda invoke --data-file ./data.json` to invoke the function with the data in `data.json`.
+Then, run 
+
+```bash
+cargo lambda invoke --data-file ./data.json
+``` 
+
+to invoke the function with the data in `data.json`.
+
+## Deployment
+
+The deployment is done using a CDK stack, which is implemented in the [step_functions_clustering_agent_stack.py](../../../step_functions_sql_agent/step_functions_clustering_agent_stack.py) file.
+
+```python
+## Forecasting Tools in Rust
+# Rust Lambda
+clustering_lambda = _lambda.Function(
+    self, 
+    "ClusteringLambda",
+    function_name="ClusteringTools",
+    code=_lambda.Code.from_asset("lambda/tools/rust-clustering/target/lambda/rust-clustering"), 
+    handler="main",
+    runtime=_lambda.Runtime.PROVIDED_AL2023,
+    architecture=_lambda.Architecture.ARM_64,
+    role=clustering_lambda_role
+)
+```
