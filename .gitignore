@@ -21,3 +21,4 @@ cdk.out/
 .DS_Store
 .env
 lambda/tools/google-maps/node_modules
+lambda/tools/stock-analyzer/target
