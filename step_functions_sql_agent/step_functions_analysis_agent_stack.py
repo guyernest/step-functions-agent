@@ -77,6 +77,7 @@ class AnalysisAgentStack(Stack):
             self, 
             "AnalysisLambda",
             function_name="AnalysisTools",
+            description="Time series analysis tools using Java.",
             code=_lambda.Code.from_asset("lambda/tools/stock-analyzer/target/stock-analyzer-lambda-1.0-SNAPSHOT.jar"), 
             handler="tools.StockAnalyzerLambda::handleRequest",
             runtime=_lambda.Runtime.JAVA_17,
