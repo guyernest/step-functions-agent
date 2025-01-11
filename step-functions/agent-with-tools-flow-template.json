@@ -114,10 +114,7 @@
     "Print Output": {
       "Type": "Pass",
       "End": true,
-      "Output": {
-        "messages": "{% $messages %}",
-        "output": "{% $provider = \"anthropic\" ? $states.input.messages[-1].content[**.name = \"print_output\"].input : $parse($states.input.messages[-1].tool_calls[**.name = \"print_output\"].function.arguments) %}"
-      }
+      "Output": "{% \n(\n  $printMessage := \"anthropic\" ? $states.input.messages[-1].content[**.name = \"print_output\"] : $states.input.messages[-1].tool_calls[**.name = \"print_output\"] ;\n  $printOutput := \"anthropic\" ? $printMessage.input : $parse($printMessage.function.arguments);\n  \n  $newMessage := $printOutput.{\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"tool_result\",\n          \"tool_use_id\": $printMessage.id,\n          \"content\":  $map($keys($), function($key) { $string($[$key]) })\n        }\n      ]\n  };\n\n  {      \n    \"messages\": $append($messages, $newMessage),\n    \"output\": $printOutput \n  }\n)\n %}"
     }
   }
 }

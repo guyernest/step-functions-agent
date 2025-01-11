@@ -10,6 +10,7 @@ from step_functions_agent.step_functions_googlemap_agent_stack import GoogleMapA
 from step_functions_agent.step_functions_clustering_agent_stack import ClusteringAgentStack
 from step_functions_agent.step_functions_analysis_agent_stack import AnalysisAgentStack
 from step_functions_agent.step_functions_research_agent_stack import ResearchAgentStack
+from step_functions_agent.step_functions_supervisor_agent_stack import SupervisorAgentStack
 
 app = cdk.App()
 sqlAgentStack = SQLAgentStack(app, "SQLAgentStack")
@@ -19,6 +20,8 @@ clusteringAgentStack = ClusteringAgentStack(app, "ClusteringAgentStack")
 analyzerAgentStack = AnalysisAgentStack(app, "AnalyzerAgentStack")
 researchAgentStack = ResearchAgentStack(app, "ResearchAgentStack")
 
+superviserAgentStack = SupervisorAgentStack(app, "SuperviserAgentStack")
+
 Tags.of(app).add("application", "ai-agents")
 
 Tags.of(sqlAgentStack).add("project", "sql-ai-agent")
@@ -27,5 +30,7 @@ Tags.of(googlemapAgentStack).add("project", "googlemap-ai-agent")
 Tags.of(clusteringAgentStack).add("project", "clustering-ai-agent")
 Tags.of(analyzerAgentStack).add("project", "analysis-ai-agent")
 Tags.of(researchAgentStack).add("project", "research-ai-agent")
+
+Tags.of(superviserAgentStack).add("project", "supervisor-ai-agent")
 
 app.synth()

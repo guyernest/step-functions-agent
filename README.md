@@ -224,8 +224,6 @@ In the CDK stack we define the tools by following the following steps:
         agent_flow = ConfigurableStepFunctionsConstruct(
             self, 
             "AIStateMachine",
-            region=self.region,
-            account=self.account,
             state_machine_path="step-functions/agent-with-tools-flow-template.json", 
             llm_caller=call_llm_lambda_function, 
             provider=LLMProviderEnum.ANTHROPIC,
