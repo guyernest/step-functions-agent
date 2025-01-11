@@ -26,7 +26,6 @@ The tools are:
 The Lambda function for the tools receive the input as a JSON object, and return the output as a JSON object.
 
 ```go
-
 type ToolEvent struct {
     Id string `json:"id"`
     Input ToolInput `json:"input"`
@@ -47,37 +46,32 @@ type ToolOutput struct {
     Content string `json:"content"`
 }
 
-func handleRequest(event ToolEvent) (ToolOutput, error) {
+// handler is our lambda handler invoked by the `lambda.Start` function
+func handler(ctx context.Context, event ToolEvent) (ToolResponse, error) {
+	response := ToolResponse{
+		Type:      "tool_result",
+		ToolUseID: event.ID,
+    }
     ...
-    return ToolOutput{
-        Type: "tool_result",
-        ToolUseId: event.Id,
-        Content: result,
-    }, nil  
-}
-```
+    switch event.Name {
+	case "research_company":
+		var input ResearchInput
+		if err := json.Unmarshal(event.Input, &input); err != nil {
+			response.Content = fmt.Sprintf("Error parsing input: %v", err)
+			return response, nil
+		}
 
-The tools return the output as a JSON object, with the result in the `content` field as a string.
-
-```go
-        try {
-            var result string
-            switch event.Name {
-            case "calculate_moving_average":
-                result = calculateMovingAverage(event.Input)
-                break
-            case "calculate_volatility":
-                result = calculateVolatility(event.Input)
-                break
-            default:
-                result = fmt.Sprintf("no such tool %s", event.Name)
-}
+		result, err := researchCompany(ctx, secretData.PPLX_API_KEY, input)
+		if err != nil {
+			response.Content = fmt.Sprintf("Error performing research: %v", err)
+			return response, nil
+		}
         ...
-        return ToolOutput{
-            Type: "tool_result",
-            ToolUseId: event.Id,
-            Content: result,
-        }, nil  
+    default:
+		response.Content = fmt.Sprintf("Unknown tool: %s", event.Name)
+	}
+
+	return response, nil
 }
 ```
 
@@ -88,9 +82,34 @@ Tools often need to make requests to external APIs, such as Google Maps API. Thi
 The following code snippet shows how to initialize the API key.
 
 ```go
+import (
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+)
 
 
+	// Get API key from AWS Secrets Manager
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return response, fmt.Errorf("unable to load SDK config: %v", err)
+	}
 
+	// Create Secrets Manager client
+	svc := secretsmanager.NewFromConfig(cfg)
+	secret, err := svc.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{
+		SecretId: aws.String("/ai-agent/PPLX_API_KEY"),
+	})
+	if err != nil {
+		return response, fmt.Errorf("unable to get secret: %v", err)
+	}
+
+	// Parse secret JSON
+	var secretData struct {
+		PPLX_API_KEY string `json:"PPLX_API_KEY"`
+	}
+	if err := json.Unmarshal([]byte(*secret.SecretString), &secretData); err != nil {
+		return response, fmt.Errorf("unable to parse secret: %v", err)
+	}
 ```
 
 ## Setup
