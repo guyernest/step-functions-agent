@@ -24,6 +24,33 @@ You can read more in [this blog post](https://medium.com/@guyernest/building-sca
 
 There are a few frameworks for MLOps of AI Agents, such as: LangGraph, Crew.ai, Pydanic AI, etc. There are also some cloud platforms that can be used to build and deploy AI Agents, such as Amazon Bedrock, Google Vertex AI, and Azure OpenAI. There are cons and pros for each of these frameworks and platforms. The proposed implementation of AI Agents in AWS Step Functions is solving most of the problems with the existing frameworks and platforms.
 
+## Comparison with Other AI-Agent Frameworks
+
+The following table compares the proposed implementation of AI Agents in AWS Step Functions with other MLOps frameworks on the aspects of scalability, multi language support, observability, and cost:
+
+| Framework | Scalability | Multi Language Support | Observability | Cost |
+| --- | --- | --- | --- | --- |
+| AI Agents in AWS Step Functions | High | High | High | Low |
+| Amazon Bedrock | Medium | Medium | Medium | High |
+| LangGraph | Medium | Medium | Low | High |
+| Crew.ai | High | Medium | Medium | High |
+| Pydanic AI | Medium | Medium | Low | High |
+
+The proposed implementation of AI Agents in AWS Step Functions has many advantages, such as:
+
+* Scalability: High scalability, as the number of tasks that can be executed is limited only by the resources of the AWS account. 
+* Multi Language Support: The tools can be implemented in any programming language, allowing for the use of the best language for each task.
+* Observability: High observability, as the state of each task is stored in the Step Function, and can be queried at any time, as well as built-in integration with CloudWatch and X-Ray.
+* Cost: Low cost, as the cost of using Serverless Lambda and Step Functions is much lower than using other AI-Agent frameworks.
+
+The other frameworks have some limitations, such as:
+
+* Amazon Bedrock: Limited scalability, as the number of tasks that can be executed is limited by the resources of the Bedrock cluster. 
+* LangGraph: Limited scalability, as the number of tasks that can be executed is limited by the resources of the LangGraph cluster. 
+* Crew.ai: Limited scalability, as the number of tasks that can be executed is limited by the resources of the Crew.ai cluster. 
+* Pydanic AI: Limited scalability, as the number of tasks that can be executed is limited by the resources of the Pydanic AI cluster. 
+
+
 ## AI Agent Implementation
 
 The AI Agent implementation in AWS Step Functions is based on the following steps:
@@ -41,12 +68,6 @@ Please note that each Lambda function is implemented in a dedicated directory an
 * <img height="16" width="16" src="https://cdn.simpleicons.org/rust/gray" /> Rust: [lambda/tools/rust-clustering](lambda/tools/rust-clustering) - using Cargo.toml for dependencies.
 * <img height="16" width="16" src="https://img.icons8.com/?size=100&id=13679&format=png&color=000000" /> Java: [lambda/tools/stock-analyzer](lambda/tools/stock-analyzer) - using Maven to build the jar based on the pom.xml.
 * <img height="16" width="16" src="https://cdn.simpleicons.org/go" /> Go: [lambda/tools/web-research](lambda/tools/web-research) - using mod.go for dependencies.
-
-## Pre-requisites
-
-1. uv (https://github.com/astral-sh/uv)
-2. AWS CLI (https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
-3. AWS CDK (https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html)
 
 ## Building Tools
 
@@ -386,6 +407,11 @@ tools = [
         )
     ]
 ```
+## Pre-requisites
+
+1. uv (https://github.com/astral-sh/uv)
+2. AWS CLI (https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+3. AWS CDK (https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html)
 
 ## uv Set up
 
