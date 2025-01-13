@@ -1,6 +1,6 @@
-# <img height="48" width="48" src="https://cdn.simpleicons.org/python" /> Python Example: Code Interpreter Tools
+# ![Python Logo](https://cdn.simpleicons.org/python?size=48) Python Example: Code Interpreter Tools
 
-This directory contains the implementation of the tools for Code Interpreter AI Agent in **Python**, based on the MCP implementation in https://github.com/modelcontextprotocol/servers/tree/main/src/code-interpreter.
+This directory contains the implementation of the tools for Code Interpreter AI Agent in **Python**, based on [E2B service](https://e2b.dev/).
 
 ## Folder structure
 

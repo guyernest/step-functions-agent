@@ -1,10 +1,10 @@
-# <img height="48" width="48" src="https://cdn.simpleicons.org/typescript" /> TypeScript Example: Google Maps Tools
+# ![TypeScript Logo](https://cdn.simpleicons.org/typescript?size=48) TypeScript Example: Google Maps Tools
 
-This directory contains the implementation of the tools for Google Maps AI Agent in **TypeScript**, based on the MCP implementation in https://github.com/modelcontextprotocol/servers/tree/main/src/google-maps.
+This directory contains the implementation of the tools for Google Maps AI Agent in **TypeScript**, based on the MCP implementation in [this MCP server](https://github.com/modelcontextprotocol/servers/tree/main/src/google-maps).
 
 The AI Agent that is created using these tools is implemented in the [step_functions_googlemap_agent_stack.py](../../../step_functions_sql_agent/step_functions_googlemap_agent_stack.py) file.
 
-<img src="../../../images/GoogleMaps-agent-step-functions.svg" width="100%"/>
+![Google Maps Agent Step Functions](../../../images/GoogleMaps-agent-step-functions.svg)
 
 ## Folder structure
 
@@ -111,4 +111,48 @@ export const handler: Handler = async (event, context) => {
     }
     ...
 }
+```
+
+## Building
+
+To build the TypeScript code, run the following command:
+
+```bash
+npm install
+npm run build
+```
+
+## Testing
+
+To test the Lambda function locally, run the following command:
+
+```bash
+npm run test
+```
+
+## Deployment
+
+### Using CDK
+
+```python
+
+       ## Google Maps Tools in Typescript
+        # TypeScript Lambda
+        google_maps_lambda = nodejs_lambda.NodejsFunction(
+            self, 
+            "GoogleMapsLambda",
+            function_name="GoogleMaps",
+            description="Lambda function to execute Google Maps API calls.",
+            timeout=Duration.seconds(30),
+            entry="lambda/tools/google-maps/src/index.ts", 
+            handler="handler",  # Name of the exported function
+            runtime=_lambda.Runtime.NODEJS_18_X,
+            architecture=_lambda.Architecture.ARM_64,
+            # Optional: Bundle settings
+            bundling=nodejs_lambda.BundlingOptions(
+                minify=True,
+                source_map=True,
+            ),
+            role=google_maps_lambda_role
+        )
 ```
