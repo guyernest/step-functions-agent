@@ -1,4 +1,4 @@
-# <img height="48" width="48" src="https://cdn.simpleicons.org/go" /> Go Example: Web Research Tools using Perplexity
+# ![Go logo](https://cdn.simpleicons.org/go?size=48) Go Example: Web Research Tools using Perplexity
 
 This directory contains the implementation of the tools for Web Research AI Agent in **Go**, using Perplexity.
 
