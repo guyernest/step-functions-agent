@@ -1,0 +1,11 @@
+version: 1.0
+runtime: python312
+build:
+  commands:
+    build: 
+      - pip3 install -r requirements.txt
+run:
+  runtime-version: 3.12
+  command: python3 call_agent.py
+  network: 
+    port: 8080

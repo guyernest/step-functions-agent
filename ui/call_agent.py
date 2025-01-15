@@ -37,6 +37,7 @@ def ChatMessage(msg):
                 if item.get('type') == 'text':
                     rendered_content.append(P(item['text'], cls="break-words"))
                 elif item.get('type') == 'tool_use':
+                  
                     rendered_content.append(
                         Div(
                             P("🔧 Using tool: " + item['name'], cls="font-semibold"),
@@ -47,12 +48,114 @@ def ChatMessage(msg):
                     )
                 elif item.get('type') == 'tool_result':
                     try:
-                        # If content is already a list or dict, use it directly
-                        if isinstance(item['content'], (dict, list)):
-                            result = item['content']
+                        content = item['content']
+                        
+                        # Check if content is a string and looks like a URL
+                        if isinstance(content, str) and (content.startswith('http://') or content.startswith('https://')):
+                            # For URLs that likely point to HTML content
+                            if '.html' in content:
+                                rendered_content.append(
+                                    Iframe(
+                                        src=content,
+                                        cls="w-full h-96 border-0 rounded",
+                                    )
+                                )
+                                continue
+                        
+                        # Handle other cases as before
+                        if isinstance(content, (dict, list)):
+                            result = content
                         else:
-                            result = json.loads(item['content'])
+                            result = json.loads(content)
                             
+                        # Check if content is a schema definition (dict with lists of column definitions)
+                        if (isinstance(result, dict) and 
+                            all(isinstance(v, list) and 
+                                all(isinstance(col, list) and len(col) >= 3 
+                                    for col in v) 
+                                for v in result.values())):
+                            
+                            table_sections = []
+                            
+                            # Create a table for each schema
+                            for table_name, columns in result.items():
+                                # Create table header
+                                header_row = Tr(
+                                    Th("Column Name", cls="px-4 py-2 bg-gray-700 text-white"),
+                                    Th("Type", cls="px-4 py-2 bg-gray-700 text-white"),
+                                    Th("Nullable", cls="px-4 py-2 bg-gray-700 text-white"),
+                                    Th("Default", cls="px-4 py-2 bg-gray-700 text-white"),
+                                )
+                            
+                                # Create table rows
+                                rows = []
+                                for col in columns:
+                                    # col format: [index, name, type, nullable, default, ...]
+                                    nullable = "NULL" if col[3] == 0 else "NOT NULL"
+                                    default = str(col[4]) if col[4] is not None else "None"
+                                    
+                                    row = Tr(
+                                        Td(col[1], cls="px-4 py-2 border-t font-medium text-gray-900"),
+                                        Td(col[2], cls="px-4 py-2 border-t font-mono text-sm text-gray-900"),
+                                        Td(nullable, cls="px-4 py-2 border-t text-sm text-gray-900"),
+                                        Td(default, cls="px-4 py-2 border-t text-sm text-gray-900"),
+                                    )
+                                    rows.append(row)
+                                
+                                # Create table with title
+                                table_section = Div(
+                                    H3(f"Table: {table_name}", 
+                                       cls="text-lg font-semibold mb-2 text-gray-900"),
+                                    Table(
+                                        header_row,
+                                        *rows,
+                                        cls="min-w-full bg-white rounded shadow-md overflow-hidden"
+                                    ),
+                                    cls="bg-gray-100 p-4 rounded"
+                                )
+                                table_sections.append(table_section)
+                            
+                            # Add all table sections to a container div
+                            rendered_content.append(
+                                Div(
+                                    *table_sections,
+                                    cls="space-y-6"
+                                )
+                            )
+                            continue
+                            
+                        # Check if content is a list of dictionaries (table-like data)
+                        if (isinstance(result, list) and 
+                            len(result) > 0 and 
+                            isinstance(result[0], dict)):
+                            
+                            # Get headers from the first object's keys
+                            headers = list(result[0].keys())
+                            
+                            # Create table header
+                            header_row = Tr(*[Th(header.replace('_', ' ').title(), 
+                                              cls="px-4 py-2") 
+                                           for header in headers])
+                            
+                            # Create table rows
+                            rows = []
+                            for item in result:
+                                row = Tr(*[Td(str(item.get(header, '')), 
+                                           cls="px-4 py-2 border-t") 
+                                         for header in headers])
+                                rows.append(row)
+                            
+                            # Combine into table
+                            rendered_content.append(
+                                Table(
+                                    header_row,
+                                    *rows,
+                                    cls="min-w-full bg-gray rounded shadow overflow-hidden"
+                                )
+                            )
+                            continue
+
+
                         if isinstance(result, dict) and 'answer' in result:
                             answer_lines = result['answer'].split('\n')
                             rendered_content.append(
@@ -89,23 +192,61 @@ def ChatMessage(msg):
         cls="w-full"
     )
 
+
 # Define the conversation data
 messages = []
 
+def list_tagged_step_functions():
+    """
+    List Step Functions that have the tag application=ai-agents
+    """
+    paginator = stepfunctions.get_paginator('list_state_machines')
+    tagged_state_machines = []
+
+    # Iterate through all pages of state machines
+    for page in paginator.paginate():
+        for state_machine in page['stateMachines']:
+            # Get tags for each state machine
+            tags_response = stepfunctions.list_tags_for_resource(
+                resourceArn=state_machine['stateMachineArn']
+            )
+            # print(tags_response)
+            # Check if the required tag exists
+            tags = tags_response.get('tags', [])
+            for tag in tags:
+                if tag.get('key') == 'application' and tag.get('value') == 'ai-agents':
+                    tagged_state_machines.append({
+                        'name': state_machine['name'],
+                        'arn': state_machine['stateMachineArn'],
+                        'creationDate': state_machine['creationDate'].isoformat(),
+                        'tags': tags
+                    })
+                    break
+
+    return tagged_state_machines
+
 # Add a form to start state machine execution
 def ExecutionForm():
+    step_functions = list_tagged_step_functions()
+    # print(step_functions)
+    state_machine_options = [Option(sf['name'], value=sf['arn'] ) for sf in step_functions]
+    state_machine_options.insert(0, Option("Select a state machine", value=""))
+    print(state_machine_options)
     return Form(
         Group(
-            Input(id="state_machine_arn", name="state_machine_arn", 
-                  placeholder="State Machine ARN",
-                  cls="w-full p-2 border rounded"),
+            Select(
+                *state_machine_options,
+                id="state_machine_arn", 
+                name="state_machine_arn",
+                cls="w-full p-2 border rounded"
+            ),
             Input(id="execution_name", name="execution_name",
                   placeholder="Execution Name (optional)",
                   cls="w-full p-2 border rounded mt-2"),
-            Textarea(id="input", name="input",
-                    placeholder="Input JSON (optional)",
+            Input(id="input", name="input",
+                  placeholder="User Input",
                     cls="w-full p-2 border rounded mt-2",
-                    rows=4),
+                  type="text"),
             Button("Start Execution", 
                    cls="bg-green-500 text-white px-4 py-2 rounded mt-2 hover:bg-green-600"),
         ),
@@ -191,10 +332,17 @@ def get_execution_status(execution_arn: str):
     return ExecutionStatus(execution_arn)
 
 @app.route("/start-execution")
-def post(state_machine_arn: str, execution_name: str = None, input: str = "{}"):
+def post(state_machine_arn: str, execution_name: str = None, input: str = "What can you do?"):
     try:
         # Validate input JSON
-        input_dict = json.loads(input) if input.strip() else {}
+        input_dict = {
+            "messages": [
+                {
+                "role": "user",
+                "content": input
+                }
+            ]
+        }
         
         # Start execution
         kwargs = {

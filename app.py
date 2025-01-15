@@ -11,6 +11,7 @@ from step_functions_agent.step_functions_clustering_agent_stack import Clusterin
 from step_functions_agent.step_functions_analysis_agent_stack import AnalysisAgentStack
 from step_functions_agent.step_functions_research_agent_stack import ResearchAgentStack
 from step_functions_agent.step_functions_supervisor_agent_stack import SupervisorAgentStack
+from step_functions_agent.agent_ui_stack import AgentUIStack
 
 app = cdk.App()
 sqlAgentStack = SQLAgentStack(app, "SQLAgentStack")
@@ -21,6 +22,8 @@ analyzerAgentStack = AnalysisAgentStack(app, "AnalyzerAgentStack")
 researchAgentStack = ResearchAgentStack(app, "ResearchAgentStack")
 
 superviserAgentStack = SupervisorAgentStack(app, "SuperviserAgentStack")
+
+uiStack = AgentUIStack(app, "AgentUIStack")
 
 Tags.of(app).add("application", "ai-agents")
 

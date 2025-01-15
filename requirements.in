@@ -7,5 +7,6 @@ aws-cdk-lib==2.171.0
 constructs>=10.0.0,<11.0.0
 aws_cdk.aws_lambda_python_alpha
 aws_cdk.aws_lambda_go_alpha
+aws_cdk.aws_apprunner_alpha
 aws-lambda-powertools
 boto3

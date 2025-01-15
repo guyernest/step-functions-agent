@@ -136,6 +136,12 @@ npm run test
 
 ```python
 
+from aws_cdk import (
+    ...
+    aws_lambda as _lambda,
+    aws_lambda_nodejs as nodejs_lambda,
+)
+
        ## Google Maps Tools in Typescript
         # TypeScript Lambda
         google_maps_lambda = nodejs_lambda.NodejsFunction(
