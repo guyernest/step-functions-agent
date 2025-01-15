@@ -3,7 +3,7 @@ import json
 import boto3
 
 # Set up AWS Step Functions client
-stepfunctions = boto3.client('stepfunctions')
+stepfunctions = boto3.client('stepfunctions', region_name='us-west-2')
 
 # Set up the app with Tailwind CSS for styling
 tlink = Script(src="https://cdn.tailwindcss.com")
@@ -383,4 +383,4 @@ def get():
         )
     )
 
-serve()
+serve(port=8080)
