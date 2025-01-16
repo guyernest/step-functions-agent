@@ -1,24 +1,47 @@
 # Executing AI Agents in AWS Step Functions
 
+## Table of Contents
+
+- [AI Agent Overview](#ai-agent-overview)
+  - [Step Functions Graph for SQL AI Agent](#step-functions-graph-for-sql-ai-agent)
+- [MLOps of AI Agents](#mlops-of-ai-agents)
+- [Comparison with Other AI-Agent Frameworks](#comparison-with-other-ai-agent-frameworks)
+- [AI Agent Implementation](#ai-agent-implementation)
+- [Building Tools using AWS Lambda](#building-tools)
+- [Building the LLM caller](#building-the-llm-caller)
+- [Building the AI Agent using Step Function](#building-the-ai-agent-step-function)
+  - [Defining the tools](#defining-the-tools)
+- [Create the AI Agent Step Function](#create-the-ai-agent-step-function)
+- [Data Communication](#data-communication)
+  - [Save data to S3 as tool output](#save-data-to-s3-as-tool-output)
+  - [Read data from S3 as tool input](#read-data-from-s3-as-tool-input)
+- [UI for the AI Agent](#ui-for-the-ai-agent)
+- [Create a new Python tool](#create-a-new-python-tool)
+- [Pre-requisites](#pre-requisites)
+- [uv Set up](#uv-set-up)
+- [Deploying the AI Agent Step Function using CDK](#deploying-the-ai-agent-step-function-using-cdk)
+  - [Other CDK commands](#other-cdk-commands)
+
 ## AI Agent Overview
 
-AI Agents are a combination of LLMs and Tools. Each tool is used to perform a specific task, and the LLM orchestrates them to perform complex tasks, requested by the user. AI Agents are a powerful tool for automating complex tasks in the cloud, and they are a great way to reduce the cost of building and maintaining complex systems. However, the deployment and operation of AI Agents can be a complex process. 
+AI Agents are a combination of LLMs and Tools. Each tool is used to perform a specific task, and the LLM orchestrates them to perform complex tasks, requested by the user. AI Agents are a powerful tool for automating complex tasks in the cloud, and they are a great way to reduce the cost of building and maintaining complex systems. However, the deployment and operation of AI Agents can be a complex process.
 
 This repository provides a robust implementation of AI Agents in AWS Step Functions, which is a serverless computing platform for building and deploying serverless applications. The repository contains the implementation of a few AI Agents:
-- SQL AI Agent, which can analyze a SQL database with multiple tables, and answer business questions about the data, including visualization and reporting, in **Python** <img height="16" width="16" src="https://cdn.simpleicons.org/python" />.
-- Financial AI Agent, which can analyze a financial dataset with multiple tables, and answer business questions about the data, including visualization and reporting, in Python <img height="16" width="16" src="https://cdn.simpleicons.org/python" />, using YFinance library.
-- Google Maps AI Agent, which can analyze a Google Maps dataset with multiple tables, and answer business questions about the data, including visualization and reporting, in **TypeScript** <img height="16" width="16" src="https://cdn.simpleicons.org/typescript" />.
-- Time Series Clustering AI Agent, which can analyze a time series dataset with multiple tables, and answer business questions about the data, including visualization and reporting, in **Rust** <img height="16" width="16" src="https://cdn.simpleicons.org/rust/gray" />.
-- Time Series Analysis AI Agent, which can analyze a large set of time series, and answer business questions about the data, including visualization and reporting, in **Java** <img height="16" width="16" src="https://img.icons8.com/?size=100&id=13679&format=png&color=000000" />.
-- Web Research AI Agent, which uses Perplexity to analyze web pages, and answer business questions about companies, in **Go** <img height="16" width="16" src="https://cdn.simpleicons.org/go" />.
+
+- SQL AI Agent, which can analyze a SQL database with multiple tables, and answer business questions about the data, including visualization and reporting, in **Python** ![Python Logo](https://cdn.simpleicons.org/python?size=16).
+- Financial AI Agent, which can analyze a financial dataset with multiple tables, and answer business questions about the data, including visualization and reporting, in Python ![Python Logo](https://cdn.simpleicons.org/python?size=16), using YFinance library.
+- Google Maps AI Agent, which can analyze a Google Maps dataset with multiple tables, and answer business questions about the data, including visualization and reporting, in **TypeScript** ![TypeScript Logo](https://cdn.simpleicons.org/typescript?size=16).
+- Time Series Clustering AI Agent, which can analyze a time series dataset with multiple tables, and answer business questions about the data, including visualization and reporting, in **Rust** ![Rust logo](https://cdn.simpleicons.org/rust/gray?size=16).
+- Time Series Analysis AI Agent, which can analyze a large set of time series, and answer business questions about the data, including visualization and reporting, in **Java** ![Java Logo](https://img.icons8.com/?size=16&id=13679&format=png&color=000000).
+- Web Research AI Agent, which uses Perplexity to analyze web pages, and answer business questions about companies, in **Go** ![Go logo](https://cdn.simpleicons.org/go?size=16).
 
 The implementation should be used as a template for building a custom AI Agent for any specific use case.
 
 You can read more in [this blog post](https://medium.com/@guyernest/building-scalable-ai-agents-with-aws-step-functions-a-practical-guide-1e4f6dd19764).
 
-### Step Functions Graph for SQL AI Agent:
-<img src="images/agent_stepfunctions_graph.svg" width="100%"/>
+### Step Functions Graph for SQL AI Agent
 
+![Step Functions Graph for SQL AI Agent](images/agent_stepfunctions_graph.svg)
 
 ## MLOps of AI Agents
 
@@ -28,46 +51,46 @@ There are a few frameworks for MLOps of AI Agents, such as: LangGraph, Crew.ai, 
 
 The following table compares the proposed implementation of AI Agents in AWS Step Functions with other MLOps frameworks on the aspects of scalability, multi language support, observability, and cost:
 
-| Framework | Scalability | Multi Language Support | Observability | Cost |
-| --- | --- | --- | --- | --- |
-| AI Agents in AWS Step Functions | High | High | High | Low |
-| Amazon Bedrock | Medium | Medium | Medium | High |
-| LangGraph | Medium | Medium | Low | High |
-| Crew.ai | High | Medium | Medium | High |
-| Pydanic AI | Medium | Medium | Low | High |
+| Framework | Scalability | Multi<br/>Language<br/>Support | Multi-LLM<br/>Support | Observability | Cost |
+| --- | --- | --- | --- | --- | --- |
+| AI Agents in AWS<br/> Step Functions | High | High | High | High | Low |
+| Amazon Bedrock | Medium | Medium | Low | Medium | High |
+| LangGraph | Medium | Medium | Medium | Low | High |
+| Crew.ai | High | Medium | Medium | Medium | High |
+| Pydanic AI | Medium | Medium | Medium | Low | High |
 
 The proposed implementation of AI Agents in AWS Step Functions has many advantages, such as:
 
-* Scalability: High scalability, as the number of tasks that can be executed is limited only by the resources of the AWS account. 
-* Multi Language Support: The tools can be implemented in any programming language, allowing for the use of the best language for each task.
-* Observability: High observability, as the state of each task is stored in the Step Function, and can be queried at any time, as well as built-in integration with CloudWatch and X-Ray.
-* Cost: Low cost, as the cost of using Serverless Lambda and Step Functions is much lower than using other AI-Agent frameworks.
+- Scalability: High scalability, as the number of tasks that can be executed is limited only by the resources of the AWS account.
+- Multi Language Support: The tools can be implemented in any programming language, allowing for the use of the best language for each task.
+- Multi-LLM Support: High flexibility in LLM integration, allowing connection to any LLM provider (OpenAI, Anthropic, Gemini, Nova, Llama, etc.) through Lambda functions.
+- Observability: High observability, as the state of each task is stored in the Step Function, and can be queried at any time, as well as built-in integration with CloudWatch and X-Ray.
+- Cost: Low cost, as the cost of using Serverless Lambda and Step Functions is much lower than using other AI-Agent frameworks.
 
 The other frameworks have some limitations, such as:
 
-* Amazon Bedrock: Limited scalability, as the number of tasks that can be executed is limited by the resources of the Bedrock cluster. 
-* LangGraph: Limited scalability, as the number of tasks that can be executed is limited by the resources of the LangGraph cluster. 
-* Crew.ai: Limited scalability, as the number of tasks that can be executed is limited by the resources of the Crew.ai cluster. 
-* Pydanic AI: Limited scalability, as the number of tasks that can be executed is limited by the resources of the Pydanic AI cluster. 
-
+- Amazon Bedrock (or Azure AI/ Google AI and other vendor specific): Limited model support, as the number of LLM that can be used is limited (No OpenAI's GPT or Google's Gemini, for example).
+- LangGraph: Limited scalability, as the number of tasks that can be executed is limited by the resources of the LangGraph cluster.
+- Crew.ai: Great built-in support but limited flexibility for new tools and LLMs.
+- Pydanic AI: Limited scalability, as you have to manage the resources of the server where the AI Agent is running.
 
 ## AI Agent Implementation
 
 The AI Agent implementation in AWS Step Functions is based on the following steps:
 
 1. Develop Lambda functions which are the tools for the AI Agent. These functions can be used to perform complex tasks, such as calling APIs, querying databases, etc. The functions can be implemented using **any programming language**, such as Python, TypeScript, Java, Rust, etc.
-2. Develop Lambda function which calls **your preferred LLM** for the AI Agent. 
+2. Develop Lambda function which calls **your preferred LLM** for the AI Agent.
 3. Create a Step Function which orchestrate the AI Agent. This Step Function calls the LLM and passes the request to the tools, and returns the results to the LLM.
 
 This repository contains an example of some tools that are used to build SQL, Financial, Google Maps, and Time Series Clustering Agents. Each Lambda function is implemented under the `lambda` directory. The `CDK` stack integrates all the Lambda functions into the Step Function flow to build the AI Agent.
 
 Please note that each Lambda function is implemented in a dedicated directory and has its own dependencies file. The examples for the different programming languages are:
 
-* <img height="16" width="16" src="https://cdn.simpleicons.org/python" /> Python: [lambda/tools/code-interpreter](lambda/tools/code-interpreter) - using [uv](https://github.com/astral-sh/uv) to build the requirements.txt file from the requirements.in file.
-* <img height="16" width="16" src="https://cdn.simpleicons.org/typescript" /> TypeScript: [lambda/tools/google-maps](lambda/tools/google-maps) - using tsconfig.json for dependencies.
-* <img height="16" width="16" src="https://cdn.simpleicons.org/rust/gray" /> Rust: [lambda/tools/rust-clustering](lambda/tools/rust-clustering) - using Cargo.toml for dependencies.
-* <img height="16" width="16" src="https://img.icons8.com/?size=100&id=13679&format=png&color=000000" /> Java: [lambda/tools/stock-analyzer](lambda/tools/stock-analyzer) - using Maven to build the jar based on the pom.xml.
-* <img height="16" width="16" src="https://cdn.simpleicons.org/go" /> Go: [lambda/tools/web-research](lambda/tools/web-research) - using mod.go for dependencies.
+- ![Python Logo](https://cdn.simpleicons.org/python?size=16) Python: [lambda/tools/code-interpreter](lambda/tools/code-interpreter) - using [uv](https://github.com/astral-sh/uv) to build the requirements.txt file from the requirements.in file.
+- ![TypeScript Logo](https://cdn.simpleicons.org/typescript?size=16) TypeScript: [lambda/tools/google-maps](lambda/tools/google-maps) - using tsconfig.json for dependencies.
+- ![Rust logo](https://cdn.simpleicons.org/rust/gray?size=16) Rust: [lambda/tools/rust-clustering](lambda/tools/rust-clustering) - using Cargo.toml for dependencies.
+- ![Java Logo](https://img.icons8.com/?size=16&id=13679&format=png&color=000000) Java: [lambda/tools/stock-analyzer](lambda/tools/stock-analyzer) - using Maven to build the jar based on the pom.xml.
+- ![Go logo](https://cdn.simpleicons.org/go?size=16) Go: [lambda/tools/web-research](lambda/tools/web-research) - using mod.go for dependencies.
 
 ## Building Tools
 
@@ -170,76 +193,76 @@ In the CDK stack we define the tools by following the following steps:
 
 1. Define the IAM role for the Lambda function.
 
-```python
-    tool_1_role = iam.Role(
-        self, "ToolRole",
-        assumed_by=iam.ServicePrincipal("lambda.amazonaws.com")
-    )
-    # Add relevant permissions to the tool role, such as SSM and Secrets Manager access
-    tool_1_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=[
-                    "ssm:GetParameter",
-                    "secretsmanager:GetSecretValue"
-                ],
-                resources=[
-                    f"arn:aws:ssm:{self.region}:{self.account}:parameter/ai-agent/*",
-                    f"arn:aws:secretsmanager:{self.region}:{self.account}:secret:/ai-agent/*"
-                ]
-            )
+    ```python
+        tool_1_role = iam.Role(
+            self, "ToolRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com")
         )
-```
+        # Add relevant permissions to the tool role, such as SSM and Secrets Manager access
+        tool_1_role.add_to_policy(
+                iam.PolicyStatement(
+                    effect=iam.Effect.ALLOW,
+                    actions=[
+                        "ssm:GetParameter",
+                        "secretsmanager:GetSecretValue"
+                    ],
+                    resources=[
+                        f"arn:aws:ssm:{self.region}:{self.account}:parameter/ai-agent/*",
+                        f"arn:aws:secretsmanager:{self.region}:{self.account}:secret:/ai-agent/*"
+                    ]
+                )
+            )
+    ```
 
 2. Create the Lambda function.
 
-```python
-        # Create the tool lambda function
-        tool_1_lambda_function = _lambda_python.PythonFunction(
-            self, "Tool1Lambda",
-            function_name="Tool1Lambda",
-            description="Tool 1 lambda function",
-            entry="lambda/tool1",
-            runtime=_lambda.Runtime.PYTHON_3_12,
-            # analyze using aws-lambda-power-tuning to find the best memory size
-            memory_size=256,
-            index="index.py",
-            handler="lambda_handler",
-            role=tool_1_role,
-        )
-```
+    ```python
+            # Create the tool lambda function
+            tool_1_lambda_function = _lambda_python.PythonFunction(
+                self, "Tool1Lambda",
+                function_name="Tool1Lambda",
+                description="Tool 1 lambda function",
+                entry="lambda/tool1",
+                runtime=_lambda.Runtime.PYTHON_3_12,
+                # analyze using aws-lambda-power-tuning to find the best memory size
+                memory_size=256,
+                index="index.py",
+                handler="lambda_handler",
+                role=tool_1_role,
+            )
+    ```
 
 3. Add the Lambda function as tool for the AI Agent.
 
-```python
-# Create test tools
-        tools = [
-            Tool(
-                "get_db_schema", 
-                "Describe the schema of the SQLite database, including table names, and column names and types.",
-                tool_1_lambda_function
-            ),
-            Tool(
-                "execute_sql_query", 
-                "Return the query results of the given SQL query to the SQLite database.",
-                tool_2_lambda_function,
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "sql_query": {
-                            "type": "string",
-                            "description": "The sql query to execute against the SQLite database."
-                        }
-                    },
-                    "required": [
-                        "sql_query"
-                    ]
-                }
-            ),
-        ]
-```
+    ```python
+    # Create test tools
+            tools = [
+                Tool(
+                    "get_db_schema", 
+                    "Describe the schema of the SQLite database, including table names, and column names and types.",
+                    tool_1_lambda_function
+                ),
+                Tool(
+                    "execute_sql_query", 
+                    "Return the query results of the given SQL query to the SQLite database.",
+                    tool_2_lambda_function,
+                    input_schema={
+                        "type": "object",
+                        "properties": {
+                            "sql_query": {
+                                "type": "string",
+                                "description": "The sql query to execute against the SQLite database."
+                            }
+                        },
+                        "required": [
+                            "sql_query"
+                        ]
+                    }
+                ),
+            ]
+    ```
 
-## Create the AI Agent Step Function.
+## Create the AI Agent Step Function
 
 ```python
         agent_flow = ConfigurableStepFunctionsConstruct(
@@ -347,71 +370,82 @@ The following examples of writing CSV files into S3 in Python, and reading CSV f
     }
 ```
 
+## UI for the AI Agent
+
+This repository includes a simple User Interface to the AI Agent, which is implemented using [FastHTML](https://www.fastht.ml/). The UI is a simple web page that allows users to choose the agent they want to use, send a request, and view the message flow and answer.The UI is hosted on AWS App Runner.
+
+![AI Agent UI](images/Agent-AI-UI.png)
+
+The UI is implemented in the [ui](ui) directory, and it is deployed using the [Agent UI](step_functions_agent/agent_ui_stack.py) CDK stack. The UI includes some specific rendering code for some of the tools, such as the visualization creation or the SQL query output. You are welcome to extend the UI to include more tools and more complex rendering.
+
 ## Create a new Python tool
 
 To create a new tool, you need to:
-1. create a new Lambda function code in the `lambda` directory, 
 
-```bash
-mkdir lambda/tools/new-tool
-touch lambda/tools/new-tool/index.py
-```
+1. create a new Lambda function code in the `lambda` directory,
+
+    ```bash
+    mkdir lambda/tools/new-tool
+    touch lambda/tools/new-tool/index.py
+    ```
+
 2. create dependencies in the `requirements.txt` file,
 
-```bash
-touch lambda/tools/new-tool/requirements.in
-echo "yfinance" >> lambda/tools/new-tool/requirements.in
-uv pip compile lambda/tools/new-tool/requirements.in --output-file lambda/tools/new-tool/requirements.txt
-```
+    ```bash
+    touch lambda/tools/new-tool/requirements.in
+    echo "yfinance" >> lambda/tools/new-tool/requirements.in
+    uv pip compile lambda/tools/new-tool/requirements.in --output-file lambda/tools/new-tool/requirements.txt
+    ```
 
 3. add the Lambda function code to the stack,
 
-```python
-        new_tool_lambda_role = iam.Role(
-            self, "NewToolLambdaRole",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_managed_policy_arn(
-                    self,
-                    "NewToolLambdaPolicy",
-                    managed_policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-                )
-            ]
-        )
+    ```python
+            new_tool_lambda_role = iam.Role(
+                self, "NewToolLambdaRole",
+                assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+                managed_policies=[
+                    iam.ManagedPolicy.from_managed_policy_arn(
+                        self,
+                        "NewToolLambdaPolicy",
+                        managed_policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                    )
+                ]
+            )
 
-        new_tool_lambda_function = _lambda_python.PythonFunction(
-            self, "NewToolLambda",
-            function_name="NewTool",
-            description="New tool lambda function",
-            entry="lambda/tools/new-tool",
-            runtime=_lambda.Runtime.PYTHON_3_12,
-            timeout=Duration.seconds(90),
-            memory_size=512,
-            index="index.py",
-            handler="lambda_handler",
-            architecture=_lambda.Architecture.ARM_64,
-            role=new_tool_lambda_role,
-        )
+            new_tool_lambda_function = _lambda_python.PythonFunction(
+                self, "NewToolLambda",
+                function_name="NewTool",
+                description="New tool lambda function",
+                entry="lambda/tools/new-tool",
+                runtime=_lambda.Runtime.PYTHON_3_12,
+                timeout=Duration.seconds(90),
+                memory_size=512,
+                index="index.py",
+                handler="lambda_handler",
+                architecture=_lambda.Architecture.ARM_64,
+                role=new_tool_lambda_role,
+            )
 
-```
+    ```
 
-4. create a new tool in the tools list for the AI Agent, 
+4. create a new tool in the tools list for the AI Agent,
 
-```python
-tools = [
-        Tool(
-            "new_tool", 
-            "new tool description",
-            new_tool_lambda_function,
-            provider=LLMProviderEnum.ANTHROPIC
-        )
-    ]
-```
+    ```python
+    tools = [
+            Tool(
+                "new_tool", 
+                "new tool description",
+                new_tool_lambda_function,
+                provider=LLMProviderEnum.ANTHROPIC
+            )
+        ]
+    ```
+
 ## Pre-requisites
 
-1. uv (https://github.com/astral-sh/uv)
-2. AWS CLI (https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
-3. AWS CDK (https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html)
+1. [uv](https://github.com/astral-sh/uv)
+2. [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+3. [AWS CDK](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html)
 
 ## uv Set up
 
