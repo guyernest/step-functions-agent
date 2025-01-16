@@ -1,13 +1,20 @@
 from aws_cdk import (
     Stack,
+    RemovalPolicy,
+    CfnOutput,
     aws_iam as iam,
     aws_ssm as ssm,
+    aws_ecr as ecr,
+    aws_ecr_assets as assets,
     aws_apprunner_alpha as apprunner,
     aws_logs as logs,
 )
+from aws_cdk.aws_ecr_assets import DockerImageAsset, Platform
+
 from constructs import Construct
 
 import json
+import os.path as path
 
 class AgentUIStack(Stack):
 
@@ -48,6 +55,7 @@ class AgentUIStack(Stack):
             effect=iam.Effect.ALLOW,
             actions=[
                 "states:ListStateMachines",
+                "states:ListTagsForResource",
                 "states:StartExecution",
                 "states:DescribeExecution",
             ],
@@ -74,34 +82,27 @@ class AgentUIStack(Stack):
             ]
         ))
 
-        github_connection_arn = ssm.StringParameter.value_for_string_parameter(
+        # Build and push the Docker image to ECR
+        ui_image_asset = assets.DockerImageAsset(
             self, 
-            "/step-function-agents/GitHubConnection"
+            "AgentUIImage",
+            asset_name="step-function-agents-chat-ui",
+            directory=path.join(path.dirname(__file__), "../ui"),
+            platform=Platform.LINUX_AMD64,
         )
 
-        repository_url = ssm.StringParameter.value_for_string_parameter(
-            self, 
-            "/step-function-agents/GitHubRepositoryURL"
-        )
-
-        # Create the UI backend using App Runner
+        # Create App Runner service using the pushed image
         ui_hosting_service = apprunner.Service(
             self, 
-            'Service', 
-            source=apprunner.Source.from_git_hub(
-                configuration_source= apprunner.ConfigurationSourceType.REPOSITORY,
-                repository_url= repository_url,
-                branch= 'main',
-                connection= apprunner.GitHubConnection.from_connection_arn(github_connection_arn),
+            'UIHostingService',
+            source=apprunner.Source.from_ecr(
+                image_configuration=apprunner.ImageConfiguration(
+                    port=8080
+                ),
+                repository=ui_image_asset.repository,
+                tag_or_digest=ui_image_asset.image_tag  # Use the tag from the built image
             ),
-            service_name= "step-function-agents-chat-ui",
-            auto_deployments_enabled= True,
+            auto_deployments_enabled=True,
+            service_name="step-function-agents-chat-ui",
             instance_role=ui_backend_role,
-        )
-
-        # Override the value of the SourceConfiguration.CodeRepository.SourceCodeVersion.
-        # to the right value of "ui"
-        ui_hosting_service.node.default_child.add_override(
-            "Properties.SourceConfiguration.CodeRepository.SourceDirectory", 
-            "ui"
         )
