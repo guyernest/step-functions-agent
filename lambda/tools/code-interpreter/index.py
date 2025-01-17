@@ -10,9 +10,9 @@ from e2b_code_interpreter import Sandbox
 logger = Logger()
 
 try:
-    E2B_API_KEY = json.loads(parameters.get_secret("/ai-agent/E2B_API_KEY"))["E2B_API_KEY"]
+    E2B_API_KEY = json.loads(parameters.get_secret("/ai-agent/api-keys"))["E2B_API_KEY"]
 except ValueError:
-    E2B_API_KEY = parameters.get_secret("/ai-agent/E2B_API_KEY")
+    raise ValueError("API keys not found in Secrets Manager")
 
 IMAGE_BUCKET_NAME = os.environ.get('IMAGE_BUCKET_NAME', 'mlguy-mlops-courses')
 

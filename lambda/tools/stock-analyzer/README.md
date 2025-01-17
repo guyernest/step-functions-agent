@@ -131,23 +131,27 @@ import software.amazon.lambda.powertools.parameters.ParamManager;
     SecretsProvider secretsProvider = ParamManager.getSecretsProvider();
 
     // Retrieve a single secret
-    String value = secretsProvider.get("/ai-agent/OPENAI_API_KEY");
+    String value = secretsProvider.get("/ai-agent/api-keys");
+    // Parse the JSON string into a map
+    Map<String, String> apiKeys = new Gson().fromJson(value, Map.class);
+    // Retrieve the API key for the tool
+    String apiKey = apiKeys.get("YOUR_API_KEY_NAME");
     ...
 ```
 
-## Building 
+## Building
 
-To build the Lambda function, run 
+To build the Lambda function, run
 
 ```bash
 mvn clean package
-``` 
+```
 
-in the root directory of the lambda tool (lambda/tools/stock-analyzer). 
+in the root directory of the lambda tool (lambda/tools/stock-analyzer).
 
 ## Testing
 
-You can test it locally using [AWS SAM](https://docs.aws.amazon.com/lambda/latest/dg/sam-cli-local.html) by running 
+You can test it locally using [AWS SAM](https://docs.aws.amazon.com/lambda/latest/dg/sam-cli-local.html) by running
 
 ```bash
 sam local invoke StockAnalyzerFunction -e events/test_event.json

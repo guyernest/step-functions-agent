@@ -20,16 +20,17 @@ class SQLAgentStack(Stack):
 
         # Reading the API KEYs for the LLM and related services for each line in the .env file
         with open(".env", "r") as f:
+            secret_values = {}
             for line in f:
                 if line.startswith("#") or line.strip() == "":
                     continue
                 key, value = line.strip().split("=", 1)
-                secretsmanager.Secret(self, f"Secret-{key}", 
-                    secret_name=f"/ai-agent/{key}", 
-                    secret_object_value={
-                        f"{key}": SecretValue.unsafe_plain_text(value),
-                    }
-                )
+                secret_values[key] = SecretValue.unsafe_plain_text(value)
+            
+            secretsmanager.Secret(self, "APIKeysSecret", 
+                secret_name="/ai-agent/api-keys",
+                secret_object_value=secret_values
+            )
 
         ####### Call LLM Lambda   ######
 
@@ -55,7 +56,7 @@ class SQLAgentStack(Stack):
                 ],
                 resources=[
                     f"arn:aws:ssm:{self.region}:{self.account}:parameter/ai-agent/*",
-                    f"arn:aws:secretsmanager:{self.region}:{self.account}:secret:/ai-agent/*"
+                    f"arn:aws:secretsmanager:{self.region}:{self.account}:secret:/ai-agent/api-keys*"
                 ]
             )
         )
@@ -135,7 +136,7 @@ class SQLAgentStack(Stack):
                     "secretsmanager:GetSecretValue"
                 ],
                 resources=[
-                    f"arn:aws:secretsmanager:{self.region}:{self.account}:secret:/ai-agent/E2B_API_KEY*"
+                    f"arn:aws:secretsmanager:{self.region}:{self.account}:secret:/ai-agent/api-keys*"
                 ]
             )
         )

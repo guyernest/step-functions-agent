@@ -59,7 +59,7 @@ class ResearchAgentStack(Stack):
                 ],
                 resources=[
                     f"arn:aws:ssm:{self.region}:{self.account}:parameter/ai-agent/*",
-                    f"arn:aws:secretsmanager:{self.region}:{self.account}:secret:/ai-agent/*"
+                    f"arn:aws:secretsmanager:{self.region}:{self.account}:secret:/ai-agent/api-keys*"
                 ]
             )
         )
