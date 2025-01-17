@@ -88,19 +88,22 @@ The following code snippet shows how to initialize the API key.
 
 ```rust
 let client = aws_sdk_secretsmanager::Client::new(&shared_config);
-let name: &str = "/ai-agent/XXX_API_KEY";
+let name: &str = "/ai-agent/api-keys";
 let resp = client.get_secret_value().secret_id(name).send().await?;
 let api_key_secret: String = resp.secret_string().unwrap_or("No value!".to_string());
-  ```
+let secret_json: serde_json::Value = serde_json::from_str(&resp.secret_string().unwrap_or_default()).expect("Failed to parse JSON");
+let api_key_secret: String = secret_json["API_KEY_XXX"].as_str().unwrap_or("No value!").to_string();
+```
 
 ## Prerequisites
 
-- [Rust](https://www.rust-lang.org/tools/install)
-- [Cargo Lambda](https://www.cargo-lambda.info/guide/installation.html)
+* [Rust](https://www.rust-lang.org/tools/install)
+* [Cargo Lambda](https://www.cargo-lambda.info/guide/installation.html)
 
 ## Setup
 
 To set up the project, run:
+
 ```bash
 cargo lambda new rust-clustering 
 # When prompted, choose No for the HTTP question
@@ -117,6 +120,7 @@ cargo add aws_sdk_s3
 ## Building
 
 To build the project for production, run:
+
 ```bash
 cargo lambda build --arm64 --release
 ```
@@ -146,11 +150,11 @@ For generic events, where you define the event data structure, you can create a 
 }
 ```
 
-Then, run 
+Then, run
 
 ```bash
 cargo lambda invoke --data-file ./data.json
-``` 
+```
 
 to invoke the function with the data in `data.json`.
 

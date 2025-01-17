@@ -8,13 +8,10 @@ logger = Logger(level="INFO")
 
 # Loading the API KEYs for the LLM and related services
 try:
-    ANTHROPIC_API_KEY = json.loads(parameters.get_secret("/ai-agent/ANTHROPIC_API_KEY"))["ANTHROPIC_API_KEY"]
+    ANTHROPIC_API_KEY = json.loads(parameters.get_secret("/ai-agent/api-keys"))["ANTHROPIC_API_KEY"]
+    OPENAI_API_KEY = json.loads(parameters.get_secret("/ai-agent/api-keys"))["OPENAI_API_KEY"]
 except ValueError:
-    ANTHROPIC_API_KEY = parameters.get_secret("/ai-agent/ANTHROPIC_API_KEY")
-try:
-    OPENAI_API_KEY = json.loads(parameters.get_secret("/ai-agent/OPENAI_API_KEY"))["OPENAI_API_KEY"]
-except ValueError:
-    OPENAI_API_KEY = parameters.get_secret("/ai-agent/OPENAI_API_KEY")
+    raise ValueError("API keys not found in Secrets Manager")
 
 anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
