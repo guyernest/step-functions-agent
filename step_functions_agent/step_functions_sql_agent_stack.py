@@ -61,6 +61,20 @@ class SQLAgentStack(Stack):
             )
         )
 
+        # Grant the lambda access to the Bedrock invoke model API for all foundational models.
+        # This is needed for the AI21 Jambda models, and can be extended to other models as needed.
+        call_llm_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "bedrock:InvokeModel"
+                ],
+                resources=[
+                    "arn:aws:bedrock:*::foundation-model/*"
+                ]
+            )
+        )
+
         # Define the Lambda function
         call_llm_lambda_function = _lambda_python.PythonFunction(
             self, "CallLLMLambda",
@@ -255,7 +269,8 @@ class SQLAgentStack(Stack):
             }
         )
 
-        # Create gpt tools
+        # Using OpenAI as the LLM provider
+        ## Create gpt tools
         openai = LLMProviderEnum.OPENAI
 
         gpt_tools = [
@@ -303,6 +318,7 @@ class SQLAgentStack(Stack):
             )
         ]
 
+        ## Create gpt agent flow
         gpt_agent_flow = ConfigurableStepFunctionsConstruct(
             self, 
             "GPTAIStateMachine",
@@ -331,3 +347,80 @@ class SQLAgentStack(Stack):
             }
         )
 
+        # Using Jambda through Bedrock
+        ## Create Jambda tools
+        jamba = LLMProviderEnum.AI21
+
+        jamba_tools = [
+            Tool(
+                "get_db_schema", 
+                "Describe the schema of the SQLite database, including table names, and column names and types.",
+                db_interface_lambda_function,
+                provider=jamba,
+            ),
+            Tool(
+                "execute_sql_query", 
+                "Return the query results of the given SQL query to the SQLite database.",
+                db_interface_lambda_function,
+                provider=jamba,
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "sql_query": {
+                            "type": "string",
+                            "description": "The sql query to execute against the SQLite database."
+                        }
+                    },
+                    "required": [
+                        "sql_query"
+                    ]
+                }
+            ),
+            Tool(
+                "execute_python", 
+                "Execute python code in a Jupyter notebook cell and return the URL of the image that was created.",
+                code_interpreter_lambda_function,
+                provider=jamba,
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "code": {
+                            "type": "string",
+                            "description": "The python code to execute in a single cell."
+                        }
+                    },
+                    "required": [
+                        "code"
+                    ]
+                }
+            )
+        ]
+
+        ## Create Jambda agent flow
+        jamba_agent_flow = ConfigurableStepFunctionsConstruct(
+            self, 
+            "AI21StateMachine",
+            state_machine_name="SQLAgentWithToolsFlowAndJamba",
+            state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
+            llm_caller=call_llm_lambda_function, 
+            provider=jamba,
+            tools=jamba_tools,
+            system_prompt=system_prompt,
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "answer": {
+                        "type": "string",
+                        "description": "The answer to the question"
+                    },
+                    "chart": {
+                        "type": "string",
+                        "description": "The URL of the chart"
+                    }
+                },
+                "required": [
+                    "answer",
+                    "chart"
+                ]
+            }
+        )

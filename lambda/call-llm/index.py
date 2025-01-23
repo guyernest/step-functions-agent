@@ -1,8 +1,10 @@
 import json
 from aws_lambda_powertools import Logger
 from aws_lambda_powertools.utilities import parameters
+# TODO Split to separate files for each LLM
 import anthropic
 from openai import OpenAI
+import boto3
 
 logger = Logger(level="INFO")
 
@@ -16,6 +18,7 @@ except ValueError:
 anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
+# To translate between JSON and the LLM message format
 from anthropic.types import Message, TextBlock, ToolUseBlock
 
 def convert_claude_message_to_json(message):
@@ -91,6 +94,47 @@ def convert_gpt4_message_to_json(completion):
 
     return message_dict
 
+def convert_bedrock_message_to_json(completion):
+    logger.info(f"Converting Bedrock message to JSON: {completion}")
+    completion = json.loads(completion['body'].read().decode('utf-8'))
+    first_choice = completion['choices'][0]
+    message = first_choice['message']
+    logger.info(f"Processing Bedrock message: {message}")
+
+    message_dict = {
+        "message" : {
+            "role": "assistant",
+            "tool_calls": []
+        },
+        "metadata" : {
+            "stop_reason": first_choice["finish_reason"],
+            "usage": {
+                "input_tokens": completion["usage"]["prompt_tokens"],
+                "output_tokens": completion["usage"]["completion_tokens"]
+            }
+        }
+    }
+    if message["tool_calls"]:
+        for tool_call in message["tool_calls"]:
+            message_dict["message"]["tool_calls"].append({
+                "id": tool_call["id"],
+                "function": {
+                    "arguments": tool_call["function"]["arguments"],
+                    "name": tool_call["function"]["name"],
+                },
+                "type": tool_call["type"]
+            })
+    if message["content"]:
+        if not "content" in message_dict["message"]:
+            message_dict["message"]["content"] = []
+        message_dict["message"]["content"].append({
+            "text": message["content"],
+            "type": "text"
+        })
+
+    return message_dict
+
+
 def lambda_handler(event, context):
     # Get system, messages, and model from event
     system = event.get('system')
@@ -118,10 +162,9 @@ def lambda_handler(event, context):
             logger.info(f"Claude result: {assistant_message}")
             
         elif 'gpt-4' in model:
-
- 
+            #Send a request to GPT-4
             completion = openai_client.chat.completions.create(
-                model="gpt-4",
+                model=model,
                 tools=tools,
                 messages=messages
             )            
@@ -131,6 +174,39 @@ def lambda_handler(event, context):
             messages.append(assistant_message["message"])
             
             logger.info(f"GPT-4 result: {assistant_message}")
+           
+        elif 'jamba' in model:
+            #Send a request to Jamba
+            print("Jamba was called through Bedrock")
+            # The Jamba models are only available in us-east-1, currently.
+            bedrock_client = boto3.client('bedrock-runtime', region_name='us-east-1')
+
+            # Handle the system message by appending it to the first user message
+            if system and messages and messages[0]['role'] == 'user':
+                # prepend the system message to the first user message
+                messages.insert(
+                    0, 
+                    {
+                        "role": "system",
+                        "content": system
+                    }
+                )
+           
+            print(f"Messages: {messages}")
+
+            response = bedrock_client.invoke_model( 
+                modelId=model, 
+                body=json.dumps({
+                    'messages': messages,
+                    'max_tokens': 4096,
+                    'tools': tools
+                }) 
+            ) 
+            assistant_message = convert_bedrock_message_to_json(response)
+
+            # Update messages to include Jamba's response
+            messages.append(assistant_message["message"])
+            logger.info(f"AI21 result: {assistant_message}")
             
         else:
             raise ValueError(f"Unsupported model: {model}")
@@ -156,15 +232,15 @@ def lambda_handler(event, context):
 if __name__ == "__main__":
     # Test event for Claude 3
     test_event_claude = {
-        'model': 'claude-3-5-sonnet-20241022',
-        'system': "You are chatbot, who is helping people with answers to their questions.",
-        'messages': [
+        "model": "claude-3-5-sonnet-20241022",
+        "system": "You are chatbot, who is helping people with answers to their questions.",
+        "messages": [
             {
                 "role": "user", 
                 "content": "What is 2+2?"
             }
         ],
-        'tools': [
+        "tools": [
             {
                 "name": "get_db_schema",
                 "description": "Describe the schema of the SQLite database, including table names, and column names and types.",
@@ -177,17 +253,17 @@ if __name__ == "__main__":
     }
     
     # Call lambda handler with test events
-    # print("\nTesting Claude 3:")
+    print("\nTesting Claude 3:")
     # response_claude = lambda_handler(test_event_claude, None)
     # print(response_claude)
 
     # Test event for GPT-4
     test_event_gpt4 = {
-        'model': 'gpt-4',
-        'messages': [
-            {"role": "user", "content": "What is 25*4?"}
+        "model": "gpt-4o",
+        "messages": [
+            {"role": "user", "content": "What is 25*4+64*3?"}
         ],
-        'tools': [
+        "tools": [
             {
                 "type": "function",
                 "function": {
@@ -206,6 +282,15 @@ if __name__ == "__main__":
     
     
     print("\nTesting GPT-4:")
-    response_gpt4 = lambda_handler(test_event_gpt4, None)
-    print(response_gpt4)
+    # response_gpt4 = lambda_handler(test_event_gpt4, None)
+    # print(response_gpt4)
+
+
+    print("\nTesting AI21:")
+    test_event_ai21 = test_event_gpt4.copy()
+    test_event_ai21["model"] = "ai21.jamba-1-5-large-v1:0"
+    test_event_ai21["system"] = "You are chatbot, who is helping people with answers to their questions."
+
+    response_ai21 = lambda_handler(test_event_ai21, None)
+    print(response_ai21)
 
