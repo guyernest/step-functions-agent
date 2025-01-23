@@ -17,6 +17,7 @@
   - [Read data from S3 as tool input](#read-data-from-s3-as-tool-input)
 - [UI for the AI Agent](#ui-for-the-ai-agent)
 - [Create a new Python tool](#create-a-new-python-tool)
+- [Security](#security)
 - [Pre-requisites](#pre-requisites)
 - [uv Set up](#uv-set-up)
 - [Deploying the AI Agent Step Function using CDK](#deploying-the-ai-agent-step-function-using-cdk)
@@ -138,7 +139,13 @@ return {
 
 ## Building the LLM caller
 
-The LLM caller is implemented using a Lambda function. The LLM caller is called by the `CDK` stack, and it calls the LLM API, with the tools option ("function calling"), and returns the LLM response. Please note that the code below (and in [this repo implementation](lambda/call-llm/index.py)) is the format for [Claude](https://docs.anthropic.com/en/docs/build-with-claude/tool-use) models from Anthropic. However, the tool usage is very similar to other LLM, such as [OpenAI](https://platform.openai.com/docs/guides/function-calling), FAIR [Llama]([https](https://github.com/meta-llama/llama-models/blob/main/models/llama3_3/prompt_format.md#json-based-tool-calling)], Amazon [Nova](https://docs.aws.amazon.com/nova/latest/userguide/prompting-tools-function.html), etc.
+The LLM caller is implemented using a Lambda function. The LLM caller is called by the `CDK` stack, and it calls the LLM API, with the tools option ("function calling"), and returns the LLM response. Please note that the code below (and in [this repo implementation](lambda/call-llm/index.py)) is the format for:
+
+- [Claude](https://docs.anthropic.com/en/docs/build-with-claude/tool-use) models from Anthropic.
+- [GPT](https://platform.openai.com/docs/guides/function-calling) models from OpenAI.
+- [Jamba](https://docs.ai21.com/reference/jamba-15-api-ref) models from AI21, through [AWS Bedrock InvokeModel API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_InvokeModel.html#API_runtime_InvokeModel_RequestBody).
+
+However, the tool usage is very similar to other LLM, such as FAIR [Llama](https://github.com/meta-llama/llama-models/blob/main/models/llama3_3/prompt_format.md#json-based-tool-calling), Amazon [Nova](https://docs.aws.amazon.com/nova/latest/userguide/prompting-tools-function.html), etc.
 
 ```python
 ANTHROPIC_API_KEY = json.loads(parameters.get_secret("/ai-agent/ANTHROPIC_API_KEY"))["ANTHROPIC_API_KEY"]
@@ -440,6 +447,13 @@ To create a new tool, you need to:
             )
         ]
     ```
+
+## Security
+
+The security of the AI Agent is a critical aspect of the implementation. The following security measures are implemented in tis AI Agent implementation:
+
+1. **IAM Roles and Policies**: The AI Agent uses IAM roles and policies to control access to AWS resources. Using the CDK each lambda function has a specific IAM role that is granted all and only the permissions needed to access the necessary AWS resources, such as S3, Secrets Manager, CloudWatch, etc. The Step Function also has an IAM role that is granted the necessary permissions to execute the Lambda functions, or other Step Functions (other AI Agents).s
+2. **Secrets Manager**: The AI Agent uses AWS Secrets Manager to store sensitive information, such as API keys. The AI Agent retrieves the API keys from Secrets Manager at runtime, and uses them to access external services. Please note that using the Secrets Manager is a more secure way for the API keys than hardcoding them in the code, or passing them as environment variables, which are more visible for Lambda functions operators.
 
 ## Pre-requisites
 

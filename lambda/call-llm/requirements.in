@@ -1,3 +1,4 @@
 anthropic==0.35.0 
 openai
+ai21>=2.13.0
 aws-lambda-powertools>=2.30.2  # AWS Lambda Powertools for Python

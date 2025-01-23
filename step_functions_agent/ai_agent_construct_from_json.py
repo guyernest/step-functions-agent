@@ -11,6 +11,7 @@ from constructs import Construct
 class LLMProviderEnum:
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
+    AI21 = "ai21"
 
 class Tool:
     def __init__(
@@ -34,7 +35,7 @@ class Tool:
 
     def to_tool_definition(self) -> Dict[str, Any]:
         """Convert tool to the format expected in the LLM system message"""
-        if self.provider == LLMProviderEnum.OPENAI:
+        if self.provider == LLMProviderEnum.OPENAI or self.provider == LLMProviderEnum.AI21:
             return {
                 "type": "function",
                 "function": {
@@ -134,10 +135,13 @@ class ConfigurableStepFunctionsConstruct(Construct):
         if system_prompt:
             payload["system"] = system_prompt
 
-        if provider == LLMProviderEnum.OPENAI:
-            payload["model"] = "gpt-4o"
-        elif provider == LLMProviderEnum.ANTHROPIC:
-            payload["model"] = "claude-3-5-sonnet-20241022"
+        match provider:
+            case LLMProviderEnum.OPENAI:
+                payload["model"] = "gpt-4o"
+            case LLMProviderEnum.AI21:
+                payload["model"] = "ai21.jamba-1-5-large-v1:0"
+            case LLMProviderEnum.ANTHROPIC:
+                payload["model"] = "claude-3-5-sonnet-20241022"
 
     def _configure_tools(
         self, 
@@ -153,7 +157,7 @@ class ConfigurableStepFunctionsConstruct(Construct):
         # Update tools list
         payload["tools"] = [tool.to_tool_definition() for tool in tools]
 
-        if self.provider == LLMProviderEnum.OPENAI:
+        if self.provider == LLMProviderEnum.OPENAI or self.provider == LLMProviderEnum.AI21:
             print_output_tool = {
                 "type": "function", 
                 "function": {
@@ -224,7 +228,7 @@ class ConfigurableStepFunctionsConstruct(Construct):
                 }],
                 "End": True,
                 "Comment": f"Call the tool (Lambda function) {tool.name}.",
-                "Output": "{% \n  $provider = \"anthropic\" ? $states.result.Payload :  {\n    \"tool_call_id\": $states.result.Payload.tool_use_id,\n    \"role\": \"tool\",\n    \"content\": [{ \"content\": $states.result.Payload.content, \"type\": \"text\" }]\n \n} %}"
+                "Output": "{% \n  $provider = \"anthropic\" ? $states.result.Payload :  {\n    \"tool_call_id\": $states.result.Payload.tool_use_id,\n    \"role\": \"tool\",\n    \"content\": $states.result.Payload.content \n} %}"
             }
 
         # Update the choice state with new choices
