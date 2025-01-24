@@ -54,12 +54,19 @@ def lambda_handler(event, context):
                 result = code_interpret(code)
                 logger.info("Code execution successful", extra={"result": result})
                 
-                if result and result[0].png is None:
+                png_result = None
+                has_png = any(r.png is not None for r in result)
+
+                if result and not has_png:
                     return {
                         "type": "tool_result",
                         "tool_use_id": tool_use["id"],
                         "content": result[0].text
                     }
+                elif result and has_png:
+                    # Find the first result with PNG content
+                    png_result = next(r for r in result if r.png is not None)
+
                 # To avoid the max token limit of moving large base64 images, we can create write the image to S3
                 # and return the S3 URL. We also need to generate a presigned URL for the S3 object.
                 # We can use the S3 SDK to generate the presigned URL.
@@ -71,7 +78,7 @@ def lambda_handler(event, context):
                 <head>
                 </head>
                 <body>
-                    <img src="data:image/png;base64,{result[0].png}" />
+                    <img src="data:image/png;base64,{png_result.png}" />
                 </body>
                 </html>
                 """
@@ -174,6 +181,55 @@ plt.show()
             "name": "execute_python", 
             "id": "code_interpreter_unique_id", 
             "input": {"code": chart_code}
+        }, 
+        None
+    )
+
+    # Print the result
+    print("Lambda Response:")
+    print(result)
+
+    multiple_results_chart_code = """
+import matplotlib.pyplot as plt
+import pandas as pd
+
+# Create data for visualization
+birth_years = [1985, 1985, 1985, 1986, 1986, 1987, 1987, 1987, 1988, 1988, 1988, 
+               1989, 1989, 1989, 1990, 1990, 1991, 1991, 1993, 1993]
+
+# Create a histogram
+plt.figure(figsize=(10, 6))
+plt.hist(birth_years, bins=range(1985, 1997, 1), edgecolor='black', color='skyblue')
+plt.title('Distribution of Washington-Born Players (1985-1995)')
+plt.xlabel('Birth Year')
+plt.ylabel('Number of Players')
+plt.grid(True, alpha=0.3)
+plt.xticks(range(1985, 1996))
+
+# Add value labels on top of each bar
+counts, bins, _ = plt.hist(birth_years, bins=range(1985, 1997, 1), edgecolor='black', color='skyblue')
+plt.clf()  # Clear the figure
+
+plt.figure(figsize=(10, 6))
+plt.hist(birth_years, bins=range(1985, 1997, 1), edgecolor='black', color='skyblue')
+for i in range(len(counts)):
+    if counts[i] > 0:
+        plt.text(bins[i] + 0.5, counts[i], int(counts[i]), ha='center', va='bottom')
+
+plt.title('Distribution of Washington-Born Players (1985-1995)')
+plt.xlabel('Birth Year')
+plt.ylabel('Number of Players')
+plt.grid(True, alpha=0.3)
+plt.xticks(range(1985, 1996))
+plt.show()
+"""   
+
+    # Call the lambda handler with the test event and None as context
+    result = lambda_handler(
+        {
+            "name": "execute_python", 
+            "id": "code_interpreter_unique_id", 
+            "input": {"code": multiple_results_chart_code}
         }, 
         None
     )

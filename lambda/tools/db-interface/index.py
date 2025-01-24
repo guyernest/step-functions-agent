@@ -71,7 +71,8 @@ class SQLDatabase:
         
         # Convert results to list of dicts
         results_list = []
-        for row in results:
+        # Limit to 50 results
+        for row in results[:50]:
             row_dict = dict(zip(column_names, row))
             results_list.append(row_dict)
             
@@ -145,4 +146,18 @@ if __name__ == "__main__":
     
     print("\nTesting execute_sql_query:")
     response_execute_sql_query = lambda_handler(test_event_execute_sql_query, None)
+    print(response_execute_sql_query)
+
+    # Test event for execute_sql_query
+    test_event_with_long_output_execute_sql_query = {
+        "name": "execute_sql_query",
+        "id": "execute_sql_query_unique_id",
+        "input": {
+            "sql_query": "SELECT player_id, salary, year FROM salary WHERE year IN (2000, 2005)"
+        },
+        "type": "tool_use"
+    }
+
+    print("\nTesting execute_sql_query with long output:")
+    response_execute_sql_query = lambda_handler(test_event_with_long_output_execute_sql_query, None)
     print(response_execute_sql_query)
