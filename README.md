@@ -139,7 +139,7 @@ return {
 
 ## Building the LLM caller
 
-The LLM caller is implemented using a Lambda function. The LLM caller is called by the `CDK` stack, and it calls the LLM API, with the tools option ("function calling"), and returns the LLM response. Please note that the code below (and in [this repo implementation](lambda/call-llm/index.py)) is the format for:
+The LLM caller is implemented using a Lambda function. The LLM caller is called by the `CDK` stack, and it calls the LLM API, with the tools option ("function calling"), and returns the LLM response. Please note that the code below (and in [this repo implementation](lambda/call_llm/README.md)) is the format for:
 
 - [Claude](https://docs.anthropic.com/en/docs/build-with-claude/tool-use) models from Anthropic.
 - [GPT](https://platform.openai.com/docs/guides/function-calling) models from OpenAI.

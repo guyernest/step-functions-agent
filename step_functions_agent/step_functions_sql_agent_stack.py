@@ -80,13 +80,61 @@ class SQLAgentStack(Stack):
             self, "CallLLMLambda",
             function_name="CallLLM",
             description="Lambda function to Call LLM (Anthropic or OpenAI) with messages history and tools.",
-            entry="lambda/call-llm",
+            entry="lambda/call_llm",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(90),
             memory_size=256,
             index="index.py",
             handler="lambda_handler",
             architecture=_lambda.Architecture.ARM_64,       
+            role=call_llm_lambda_role,
+        )
+
+        # Creating the Call LLM lambda function for Claude only 
+        call_llm_lambda_function_claude = _lambda_python.PythonFunction(
+            self, "CallLLMLambdaClaude",
+            function_name="CallClaudeLLM",
+            # Name of the Lambda function that will be used by the agents to find the function.
+            description="Lambda function to Call LLM (Anthropic) with messages history and tools.",
+            entry="lambda/call_llm",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            timeout=Duration.seconds(90),
+            memory_size=256,
+            index="handlers/claude_lambda.py",
+            handler="lambda_handler",
+            architecture=_lambda.Architecture.ARM_64,
+            role=call_llm_lambda_role,
+        )
+
+        # Creating the Call LLM lambda function for GPT from OpenAI only 
+        call_llm_lambda_function_openai = _lambda_python.PythonFunction(
+            self, "CallLLMLambdaOpenAI",
+            function_name="CallOpenAILLM",
+            # Name of the Lambda function that will be used by the agents to find the function.
+            description="Lambda function to Call LLM (GPT from OpenAI) with messages history and tools.",
+            entry="lambda/call_llm",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            timeout=Duration.seconds(90),
+            memory_size=256,
+            index="handlers/openai_lambda.py",
+            handler="lambda_handler",
+            architecture=_lambda.Architecture.ARM_64,
+            role=call_llm_lambda_role,
+        )
+
+        # Creating the Call LLM lambda function for GPT from OpenAI only 
+        call_llm_lambda_function_ai21 = _lambda_python.PythonFunction(
+            self, "CallLLMLambdaAI21",
+            function_name="CallAI21LLM",
+            # Name of the Lambda function that will be used by the agents to find the function.
+            description="Lambda function to Call LLM (Jambda from AI21) with messages history and tools.",
+            entry="lambda/call_llm",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            timeout=Duration.seconds(90),
+            memory_size=256,
+            index="handlers/bedrock_lambda.py",
+            handler="lambda_handler",
+            architecture=_lambda.Architecture.ARM_64,
             role=call_llm_lambda_role,
         )
 
@@ -246,7 +294,7 @@ class SQLAgentStack(Stack):
             "ClaudeAIStateMachine",
             state_machine_name="SQLAgentWithToolsFlowAndClaude",
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
-            llm_caller=call_llm_lambda_function, 
+            llm_caller=call_llm_lambda_function_claude, 
             provider=anthropic,
             tools=claude_tools,
             system_prompt=system_prompt,
@@ -324,7 +372,7 @@ class SQLAgentStack(Stack):
             "GPTAIStateMachine",
             state_machine_name="SQLAgentWithToolsFlowAndGPT",
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
-            llm_caller=call_llm_lambda_function, 
+            llm_caller=call_llm_lambda_function_openai, 
             provider=openai,
             tools=gpt_tools,
             system_prompt=system_prompt,
@@ -402,7 +450,7 @@ class SQLAgentStack(Stack):
             "AI21StateMachine",
             state_machine_name="SQLAgentWithToolsFlowAndJamba",
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
-            llm_caller=call_llm_lambda_function, 
+            llm_caller=call_llm_lambda_function_ai21, 
             provider=jamba,
             tools=jamba_tools,
             system_prompt=system_prompt,
