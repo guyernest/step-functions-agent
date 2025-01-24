@@ -1,0 +1,21 @@
+{
+  "model": "gpt-4o",
+  "messages": [
+      {"role": "user", "content": "What is 25*4+64*3?"}
+  ],
+  "tools": [
+      {
+          "type": "function",
+          "function": {
+              "name": "calculator",
+              "parameters": {
+                  "type": "object",
+                  "properties": {
+                      "a": {"type": "number"},
+                      "b": {"type": "number"}
+                  }
+              }
+          }
+      }
+  ]
+}

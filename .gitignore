@@ -24,3 +24,4 @@ lambda/tools/google-maps/node_modules
 lambda/tools/stock-analyzer/target
 lambda/tools/web-research/.aws-sam
 uv.lock
+.aws-sam
