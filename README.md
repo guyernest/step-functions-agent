@@ -1,11 +1,14 @@
 # Executing AI Agents in AWS Step Functions
 
+Extreme flexibility and scalability for enterprise grade AI Agents. Supporting all LLMs and tools in any programming language. Including human approval and observability. All in a single framework.
+
 ## Table of Contents
 
 - [AI Agent Overview](#ai-agent-overview)
   - [Step Functions Graph for SQL AI Agent](#step-functions-graph-for-sql-ai-agent)
 - [MLOps of AI Agents](#mlops-of-ai-agents)
 - [Comparison with Other AI-Agent Frameworks](#comparison-with-other-ai-agent-frameworks)
+- [Project Folder Structure](#project-folder-structure)
 - [AI Agent Implementation](#ai-agent-implementation)
 - [Building Tools using AWS Lambda](#building-tools)
 - [Building the LLM caller](#building-the-llm-caller)
@@ -75,6 +78,68 @@ The other frameworks have some limitations, such as:
 - LangGraph: Limited scalability, as the number of tasks that can be executed is limited by the resources of the LangGraph cluster.
 - Crew.ai: Great built-in support but limited flexibility for new tools and LLMs.
 - Pydanic AI: Limited scalability, as you have to manage the resources of the server where the AI Agent is running.
+
+## Project Folder Structure
+
+### Lambda
+
+- **lambda/call_llm/** *(Lambda functions to call the various LLM)*
+  - [`README.md`](lambda/call_llm/README.md) *(Documentation on building the LLM callers)*
+  - `common/`
+  - `llms/`
+  - `handlers/`
+- **lambda/tools/** *(Lambda functions for the tools in various programming languages)*
+  - [`README.md`](lambda/tools/README.md) *(Documentation on building the tools)*
+  - `code-interpreter/`
+  - `db-interface/`
+  - `google-maps/`
+  - `rust-clustering/`
+  - `stock-analyzer/`
+  - `web-research/`
+
+### Step Functions Agent
+
+- **step_functions_agent/** *(CDK stacks and constructs for the various AI Agents)*
+  - [`README.md`](step_functions_agent/README.md) *(Documentation on building the AI Agents in AWS Step Functions)*
+  - `ai_agent_construct_from_json.py`
+  - `ai_supervisor_agent_construct_from_json.py`
+  - `step_functions_sql_agent_stack.py`
+  - `step_functions_analysis_agent_stack.py`
+  - `step_functions_clustering_agent_stack.py`
+
+### Step Functions
+
+- **step-functions/** *(Step Functions JSON templates)*
+  - `agent-with-tools-flow-template.json`
+  - `supervisor-agent-flow-template.json`
+
+### UI
+
+- **ui/** *(User Interface for the AI Agent using FastHTML)*
+  - `call_agent.py`
+  - `requirements.txt`
+  - `test_chat_display.py`
+
+### Tests
+
+- **tests/**
+  - `conftest.py`
+  - `requirements-test.txt`
+  - `test_claude_handler.py`
+
+### Events
+
+- **events/**
+  - `claude-event.json`
+  - `openai-event.json`
+
+### Root Files
+
+- [`README.md`](README.md) *(This file)*
+- `app.py` *(Main CDK application file)*
+- `cdk.json`
+- `requirements.txt`
+- `template.yaml`
 
 ## AI Agent Implementation
 
@@ -157,7 +222,7 @@ def lambda_handler(event, context):
     system = event.get('system')
     messages = event.get('messages')
     tools = event.get('tools', [])
-    
+
     try:
         response = anthropic_client.messages.create(
             system = system,
@@ -246,12 +311,12 @@ In the CDK stack we define the tools by following the following steps:
     # Create test tools
             tools = [
                 Tool(
-                    "get_db_schema", 
+                    "get_db_schema",
                     "Describe the schema of the SQLite database, including table names, and column names and types.",
                     tool_1_lambda_function
                 ),
                 Tool(
-                    "execute_sql_query", 
+                    "execute_sql_query",
                     "Return the query results of the given SQL query to the SQLite database.",
                     tool_2_lambda_function,
                     input_schema={
@@ -274,10 +339,10 @@ In the CDK stack we define the tools by following the following steps:
 
 ```python
         agent_flow = ConfigurableStepFunctionsConstruct(
-            self, 
+            self,
             "AIStateMachine",
-            state_machine_path="step-functions/agent-with-tools-flow-template.json", 
-            llm_caller=call_llm_lambda_function, 
+            state_machine_path="step-functions/agent-with-tools-flow-template.json",
+            llm_caller=call_llm_lambda_function,
             provider=LLMProviderEnum.ANTHROPIC,
             tools=tools,
             system_prompt="You are an expert business analyst with deep knowledge of SQL and visualization code in Python. Your job is to help users understand and analyze their internal baseball data. You have access to a set of tools, but only use them when needed. You also have access to a tool that allows execution of python code. Use it to generate the visualizations in your analysis. - the python code runs in jupyter notebook. - every time you call `execute_python` tool, the python code is executed in a separate cell. it's okay to multiple calls to `execute_python`. - display visualizations using matplotlib directly in the notebook. don't worry about saving the visualizations to a file. - you can run any python code you want, everything is running in a secure sandbox environment.",
@@ -405,7 +470,7 @@ The activity is then used in the Step Functions state machine to require human a
 
 ```python
     Tool(
-        "execute_sql_query", 
+        "execute_sql_query",
         "Return the query results of the given SQL query to the SQLite database.",
         db_interface_lambda_function,
         provider=anthropic,
@@ -499,7 +564,7 @@ To create a new tool, you need to:
     ```python
     tools = [
             Tool(
-                "new_tool", 
+                "new_tool",
                 "new tool description",
                 new_tool_lambda_function,
                 provider=LLMProviderEnum.ANTHROPIC
@@ -526,8 +591,8 @@ An easy way to deploy Lambda functions is to have a requirements.txt file in the
 
 ```shell
 uv venv
-source .venv/bin/activate 
-uv pip compile lambda/db-interface/requirements.in --output-file lambda/db-interface/requirements.txt 
+source .venv/bin/activate
+uv pip compile lambda/db-interface/requirements.in --output-file lambda/db-interface/requirements.txt
 ```
 
 The `CDK` stack will use Docker to build the Lambda functions, and it will use the requirements.txt file to install the required Python packages, into the format of zip file, and deploy it to the Cloud.
@@ -549,3 +614,4 @@ cdk synth FinancialAgentStack
 cdk diff SQLAgentStack
 cdk diff FinancialAgentStack
 ```
+
