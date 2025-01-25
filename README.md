@@ -15,6 +15,7 @@
 - [Data Communication](#data-communication)
   - [Save data to S3 as tool output](#save-data-to-s3-as-tool-output)
   - [Read data from S3 as tool input](#read-data-from-s3-as-tool-input)
+- [Human Approval](#human-approval)
 - [UI for the AI Agent](#ui-for-the-ai-agent)
 - [Create a new Python tool](#create-a-new-python-tool)
 - [Security](#security)
@@ -442,7 +443,6 @@ The UI is implemented in the [ui](ui) directory, and it is deployed using the [A
 The human approval UI is implemented in the [ui](ui) directory. The UI is a simple web page that allows the human operator to review the SQL query and approve or reject it.
 
 ![Human Approval UI](images/Human-Approval-UI.png)
-
 
 ## Create a new Python tool
 
