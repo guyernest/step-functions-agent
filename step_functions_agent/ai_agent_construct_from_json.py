@@ -20,13 +20,15 @@ class Tool:
         description: str,
         lambda_function: lambda_.Function,
         provider: str = LLMProviderEnum.ANTHROPIC,
-        input_schema: Dict[str, Any] = None
+        input_schema: Dict[str, Any] = None,
+        human_approval_activity: sfn.Activity = None,
     ):
         self.name = name
         self.description = description
         self.lambda_function = lambda_function
         self.provider = provider
         self.input_schema = input_schema or {"type": "object", "properties": {}}
+        self.human_approval_activity = human_approval_activity
 
     
     def get_lambda_function(self) -> lambda_.Function:
@@ -157,6 +159,7 @@ class ConfigurableStepFunctionsConstruct(Construct):
         # Update tools list
         payload["tools"] = [tool.to_tool_definition() for tool in tools]
 
+        # Defining the print_output tool to meet the LLM provider's format
         if self.provider == LLMProviderEnum.OPENAI or self.provider == LLMProviderEnum.AI21:
             print_output_tool = {
                 "type": "function", 
@@ -193,14 +196,54 @@ class ConfigurableStepFunctionsConstruct(Construct):
         
         # Create a choice for each tool
         for tool in tools:
+            # Define the choice condition for the tool
+
+            # We have two options for the choice condition:, one for direct call and one through the human approval activity
+            if tool.human_approval_activity:
+                next_state = f"Approve {tool.name}"
+            else:
+                next_state = f"Execute {tool.name}"
+
             choice = {
                 "Condition": (
                     "{% ($states.input.type in [\"function\",\"tool_use\"]) and "
                     f"($states.input.**.name = \"{tool.name}\") %}}"
                 ),
-                "Next": f"Execute {tool.name}"
+                "Next": next_state,
             }
             choices.append(choice)
+
+            tool_input_jsonata = "{% $provider = \"anthropic\" ? $states.input.input : $parse($states.input.function.arguments) %}"
+            # Add the tool approval states
+            if tool.human_approval_activity:
+                # Call the human approval activity
+                tool_processor_states[f"Approve {tool.name}"] = {
+                    "Type": "Task",
+                    "Resource": tool.human_approval_activity.activity_arn,
+                    "Next": f"Process Approval {tool.name}",
+                }
+                # Check the approval result
+                tool_processor_states[f"Process Approval {tool.name}"] = {
+                    "Type": "Choice",
+                    "Choices": [
+                        {
+                            "Condition": (
+                                "{% $states.input.approved  %}"
+                            ),
+                            "Next": f"Execute {tool.name}"
+                        }
+                    ],
+                    ## TODO add a pass state to send the rejection reason to the LLM
+                    "Default": f"Handle Rejection {tool.name}"
+                }
+                # Handle the rejection
+                tool_processor_states[f"Handle Rejection {tool.name}"] = {
+                    "Type": "Pass",
+                    "End": True,
+                    "Comment": "The tool usage was rejected by the user."
+                }
+                # The approval process returns a simpler input format
+                tool_input_jsonata = "{% $states.input.input %}"
             
             # Add the tool execution state
             tool_processor_states[f"Execute {tool.name}"] = {
@@ -211,7 +254,7 @@ class ConfigurableStepFunctionsConstruct(Construct):
                     "Payload": {
                         "name": "{% $states.input.**.name %}",
                         "id": "{% $states.input.id %}",
-                        "input": "{% $provider = \"anthropic\" ? $states.input.input : $parse($states.input.function.arguments) %}"
+                        "input": tool_input_jsonata,
                     }
                 },
                 "Retry": [{

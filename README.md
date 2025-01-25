@@ -377,6 +377,58 @@ The following examples of writing CSV files into S3 in Python, and reading CSV f
     }
 ```
 
+## Human Approval
+
+One of the main risks of using AI Agents is the potential for the AI to make mistakes. To mitigate this risk, the AI Agent can be configured to require human approval for certain tasks. The AI Agent can be configured to send a message to a human operator, who can review the results of the AI Agent, and approve or reject the results. The AI Agent can then proceed based on the operator's decision.
+
+### Step Functions Graph for SQL AI Agent with Human Approval
+
+![Step Functions Graph for SQL AI Agent](images/agent_with_human_approval.svg)
+
+In this example, the AI Agent is configured to require human approval for the execution of SQL queries. The AI Agent sends a message to the human operator, who can review the SQL query and approve or reject it. The AI Agent then proceeds based on the operator's decision.
+The human approval is implemented using a Step Functions activity. The activity is defined in the [SQL Agent Stack](step_functions_agent/step_functions_sql_agent_stack.py) CDK stack.
+
+### Defining the human approval activity
+
+```python
+    # Adding human approval to the usage of the tools
+    human_approval_activity = sfn.Activity(
+        self, "HumanApprovalActivity",
+        activity_name="HumanApprovalActivityForSQLQueryExecution",
+    )
+```
+
+### Adding human approval to the tool definition
+
+The activity is then used in the Step Functions state machine to require human approval for the execution of SQL queries tool:
+
+```python
+    Tool(
+        "execute_sql_query", 
+        "Return the query results of the given SQL query to the SQLite database.",
+        db_interface_lambda_function,
+        provider=anthropic,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "sql_query": {
+                    "type": "string",
+                    "description": "The sql query to execute against the SQLite database."
+                }
+            },
+            "required": [
+                "sql_query"
+            ]
+        },
+        ## Adding human approval to the tool definition
+        human_approval_activity=human_approval_activity
+    ),
+```
+
+### Implementing the human approval UI
+
+Step Functions activities should be polled by a worker process. The simple worker process is implemented in the UI below. You can read more about the implementation in the [AWS Step Functions documentation](https://docs.aws.amazon.com/step-functions/latest/dg/tutorial-creating-activity-state-machine.html).
+
 ## UI for the AI Agent
 
 This repository includes a simple User Interface to the AI Agent, which is implemented using [FastHTML](https://www.fastht.ml/). The UI is a simple web page that allows users to choose the agent they want to use, send a request, and view the message flow and answer.The UI is hosted on AWS App Runner.
@@ -384,6 +436,13 @@ This repository includes a simple User Interface to the AI Agent, which is imple
 ![AI Agent UI](images/Agent-AI-UI.png)
 
 The UI is implemented in the [ui](ui) directory, and it is deployed using the [Agent UI](step_functions_agent/agent_ui_stack.py) CDK stack. The UI includes some specific rendering code for some of the tools, such as the visualization creation or the SQL query output. You are welcome to extend the UI to include more tools and more complex rendering.
+
+### Human Approval UI
+
+The human approval UI is implemented in the [ui](ui) directory. The UI is a simple web page that allows the human operator to review the SQL query and approve or reject it.
+
+![Human Approval UI](images/Human-Approval-UI.png)
+
 
 ## Create a new Python tool
 
