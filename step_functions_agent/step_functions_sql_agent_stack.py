@@ -7,6 +7,7 @@ from aws_cdk import (
     aws_secretsmanager as secretsmanager,
     aws_s3 as s3,
     aws_lambda_python_alpha as _lambda_python,
+    aws_stepfunctions as sfn,
 )
 from constructs import Construct
 from .ai_agent_construct_from_json import ConfigurableStepFunctionsConstruct, Tool, LLMProviderEnum
@@ -224,6 +225,12 @@ class SQLAgentStack(Stack):
             role=code_interpreter_lambda_role,
         )
 
+        # Adding human approval to the usage of the tools
+        human_approval_activity = sfn.Activity(
+            self, "HumanApprovalActivity",
+            activity_name="HumanApprovalActivityForSQLQueryExecution",
+        )
+
         # Define the Step Functions state machine
 
         # Create claude tools
@@ -252,7 +259,8 @@ class SQLAgentStack(Stack):
                     "required": [
                         "sql_query"
                     ]
-                }
+                },
+                human_approval_activity=human_approval_activity
             ),
             Tool(
                 "execute_python", 

@@ -3,7 +3,9 @@ import json
 import boto3
 
 # Set up AWS Step Functions client
-stepfunctions = boto3.client('stepfunctions', region_name='us-west-2')
+region = 'us-west-2'
+account_id = boto3.client('sts').get_caller_identity()['Account']
+stepfunctions = boto3.client('stepfunctions', region_name=region)
 
 # Set up the app with Tailwind CSS for styling
 tlink = Script(src="https://cdn.tailwindcss.com")
@@ -196,6 +198,7 @@ def ChatMessage(msg):
 # Define the conversation data
 messages = []
 
+# Find the list of agents and their corresponding state machines
 def list_tagged_step_functions():
     """
     List Step Functions that have the tag application=ai-agents
@@ -368,6 +371,130 @@ def post(state_machine_arn: str, execution_name: str = None, input: str = "What 
             cls="p-4 bg-red-50 rounded"
         )
 
+# Handling Human approval activities
+ACTIVITY_ARN = f'arn:aws:states:{region}:{account_id}:activity:HumanApprovalActivityForSQLQueryExecution'
+
+def ActivityApprovalComponent():
+    return Div(
+        H2("Activity Approval Dashboard", cls="text-xl font-bold mb-4"),
+        Div(
+            RenderTask(),
+            id="activity-task",
+            hx_get="/poll-activity",
+            hx_trigger="every 5s",
+            cls="mt-4",
+            hx_swap="innerHTML"  # Important: swap inner HTML only
+        )
+    )
+
+def RenderTask(task=None):
+    if not task:
+        return P("No pending approvals", cls="text-gray-600")
+
+    try:
+        input_data = json.loads(task['input'])
+        tool_input = input_data.get('input', {})
+        sql_query  = tool_input.get('sql_query', "No Query Found")
+        
+        return Div(
+            H3("SQL Query Approval Required", cls="text-lg font-bold mb-4"),
+            Div(
+                Form(
+                    # We need to send back to the state machine the task token, the tool use id and name and the approval status
+                    # We will put as hidden fields in the form
+                    Input(type="hidden", name="task_token", value=task['taskToken']),
+                    Input(type="hidden", name="tool_use_id", value=input_data['id']),
+                    Input(type="hidden", name="tool_name", value=input_data['name']),
+                    Div(
+                        Label("Query:", cls="block text-sm font-medium text-gray-700"),
+                        P(
+                            Textarea(
+                                sql_query,
+                                cls="mt-1 w-full p-2 border border-gray-300 rounded-md font-mono text-sm",
+                                name="modified_sql_query",
+                                id="modified_sql_query",
+                                rows="4"
+                            ),
+                            cls="mt-1"
+                        ),
+                    ),
+                    Div(
+                        Button(
+                            "Reject",
+                            name="approved",
+                            value="false",
+                            cls="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 mr-4"
+                        ),
+                        Button(
+                            "Approve",
+                            name="approved",
+                            value="true",
+                            cls="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+                        ),
+                        cls="flex justify-end"
+                    ),
+                    hx_post="/approve-task",
+                    hx_target="#activity-task"
+                ),
+                cls="bg-white rounded-lg shadow p-4"
+            )
+        )
+    except Exception as e:
+        return P(f"Error processing task: {str(e)}", cls="text-red-600")
+
+@app.route("/poll-activity")
+def get():
+    try:
+        print("Polling for activity tasks...")
+        response = stepfunctions.get_activity_task(
+            activityArn=ACTIVITY_ARN,
+            workerName='sql-approval-worker'  # Updated worker name
+        )
+        
+        print(f"Activity task response: {json.dumps(response, default=str)}")
+        if 'taskToken' in response:
+            print("Found task, rendering...")
+            return RenderTask(response)
+        print("No task found")
+        return RenderTask()
+        
+    except Exception as e:
+        print(f"Error in poll-activity: {str(e)}")
+        return P(f"Error polling for tasks: {str(e)}", cls="text-red-600")
+
+@app.route("/approve-task")
+def post(
+        task_token: str, 
+        approved: str, 
+        tool_use_id: str, 
+        tool_name: str, 
+        modified_sql_query: str
+    ):
+    try:
+        is_approved = approved.lower() == 'true'
+        if is_approved:
+            stepfunctions.send_task_success(
+                taskToken=task_token,
+                output=json.dumps({
+                        'approved': True, 
+                        'name': tool_name,
+                        'id': tool_use_id,
+                        'input' : {
+                            'sql_query': modified_sql_query
+                        }
+                    }
+                )
+            )
+        else:
+            stepfunctions.send_task_failure(
+                taskToken=task_token,
+                error='NotApproved',
+                cause='Human rejected the sql query'
+            )
+        return RenderTask()
+    except Exception as e:
+        return P(f"Error processing approval: {str(e)}", cls="text-red-600")
+
 @app.route("/")
 def get():
     return Titled("State Machine Execution",
@@ -375,6 +502,8 @@ def get():
             H1("AWS Step Functions Execution", cls="text-2xl font-bold mb-6"),
             ExecutionForm(),
             Div(id="execution-result", cls="mt-4"),
+            # Activity approval form
+            ActivityApprovalComponent(),  
             # Chat display below
             Div(
                 *[ChatMessage(msg) for msg in messages],
