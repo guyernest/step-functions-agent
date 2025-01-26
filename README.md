@@ -1,6 +1,9 @@
 # Executing AI Agents in AWS Step Functions
 
-Extreme flexibility and scalability for enterprise grade AI Agents. Supporting all LLMs and tools in any programming language. Including human approval and observability. All in a single framework.
+> 📦 **Enterprise AI Agent Framework**
+> 
+> Extreme flexibility and scalability for enterprise grade AI Agents. Supporting all LLMs and tools in any programming language. Including human approval and observability. All in a single framework.
+> ___
 
 ## Table of Contents
 
