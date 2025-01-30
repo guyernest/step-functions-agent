@@ -7,6 +7,7 @@ from aws_cdk import (
     aws_secretsmanager as secretsmanager,
     aws_s3 as s3,
     aws_lambda_python_alpha as _lambda_python,
+    aws_logs as logs,
     aws_stepfunctions as sfn,
 )
 from constructs import Construct
@@ -87,7 +88,8 @@ class SQLAgentStack(Stack):
             memory_size=256,
             index="index.py",
             handler="lambda_handler",
-            architecture=_lambda.Architecture.ARM_64,       
+            architecture=_lambda.Architecture.ARM_64,  
+            log_retention=logs.RetentionDays.ONE_WEEK,     
             role=call_llm_lambda_role,
         )
 
@@ -104,6 +106,7 @@ class SQLAgentStack(Stack):
             index="handlers/claude_lambda.py",
             handler="lambda_handler",
             architecture=_lambda.Architecture.ARM_64,
+            log_retention=logs.RetentionDays.ONE_WEEK,
             role=call_llm_lambda_role,
         )
 
@@ -120,6 +123,7 @@ class SQLAgentStack(Stack):
             index="handlers/openai_lambda.py",
             handler="lambda_handler",
             architecture=_lambda.Architecture.ARM_64,
+            log_retention=logs.RetentionDays.ONE_WEEK,
             role=call_llm_lambda_role,
         )
 
@@ -136,6 +140,7 @@ class SQLAgentStack(Stack):
             index="handlers/bedrock_lambda.py",
             handler="lambda_handler",
             architecture=_lambda.Architecture.ARM_64,
+            log_retention=logs.RetentionDays.ONE_WEEK,
             role=call_llm_lambda_role,
         )
 
@@ -152,6 +157,7 @@ class SQLAgentStack(Stack):
             index="handlers/gemini_lambda.py",
             handler="lambda_handler",
             architecture=_lambda.Architecture.ARM_64,
+            log_retention=logs.RetentionDays.ONE_WEEK,
             role=call_llm_lambda_role,
         )
 
@@ -182,6 +188,7 @@ class SQLAgentStack(Stack):
             index="index.py",
             handler="lambda_handler",
             architecture=_lambda.Architecture.ARM_64,
+            log_retention=logs.RetentionDays.ONE_WEEK,
             role=db_interface_lambda_role,
         )
 
@@ -238,6 +245,7 @@ class SQLAgentStack(Stack):
                 "IMAGE_BUCKET_NAME": code_interpreter_output_bucket.bucket_name,
             },
             architecture=_lambda.Architecture.X86_64,  # Using x86_64 for better compatibility with dependencies
+            log_retention=logs.RetentionDays.ONE_WEEK,
             role=code_interpreter_lambda_role,
         )
 
@@ -257,13 +265,11 @@ class SQLAgentStack(Stack):
                 "get_db_schema", 
                 "Describe the schema of the SQLite database, including table names, and column names and types.",
                 db_interface_lambda_function,
-                # provider=anthropic
             ),
             Tool(
                 "execute_sql_query", 
                 "Return the query results of the given SQL query to the SQLite database.",
                 db_interface_lambda_function,
-                # provider=anthropic,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -282,7 +288,6 @@ class SQLAgentStack(Stack):
                 "execute_python", 
                 "Execute python code in a Jupyter notebook cell and return the URL of the image that was created.",
                 code_interpreter_lambda_function,
-                # provider=anthropic,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -350,13 +355,11 @@ class SQLAgentStack(Stack):
                 "get_db_schema", 
                 "Describe the schema of the SQLite database, including table names, and column names and types.",
                 db_interface_lambda_function,
-                # provider=openai,
             ),
             Tool(
                 "execute_sql_query", 
                 "Return the query results of the given SQL query to the SQLite database.",
                 db_interface_lambda_function,
-                # provider=openai,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -374,7 +377,6 @@ class SQLAgentStack(Stack):
                 "execute_python", 
                 "Execute python code in a Jupyter notebook cell and return the URL of the image that was created.",
                 code_interpreter_lambda_function,
-                # provider=openai,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -428,13 +430,11 @@ class SQLAgentStack(Stack):
                 "get_db_schema", 
                 "Describe the schema of the SQLite database, including table names, and column names and types.",
                 db_interface_lambda_function,
-                # provider=jamba,
             ),
             Tool(
                 "execute_sql_query", 
                 "Return the query results of the given SQL query to the SQLite database.",
                 db_interface_lambda_function,
-                # provider=jamba,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -452,7 +452,6 @@ class SQLAgentStack(Stack):
                 "execute_python", 
                 "Execute python code in a Jupyter notebook cell and return the URL of the image that was created.",
                 code_interpreter_lambda_function,
-                # provider=jamba,
                 input_schema={
                     "type": "object",
                     "properties": {

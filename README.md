@@ -213,6 +213,7 @@ The LLM caller is implemented using a Lambda function. The LLM caller is called 
 - [Claude](https://docs.anthropic.com/en/docs/build-with-claude/tool-use) models from Anthropic.
 - [GPT](https://platform.openai.com/docs/guides/function-calling) models from OpenAI.
 - [Jamba](https://docs.ai21.com/reference/jamba-15-api-ref) models from AI21, through [AWS Bedrock InvokeModel API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_InvokeModel.html#API_runtime_InvokeModel_RequestBody).
+- [Gemini](https://gemini.google.com/) models from Google.
 
 However, the tool usage is very similar to other LLM, such as FAIR [Llama](https://github.com/meta-llama/llama-models/blob/main/models/llama3_3/prompt_format.md#json-based-tool-calling), Amazon [Nova](https://docs.aws.amazon.com/nova/latest/userguide/prompting-tools-function.html), etc.
 

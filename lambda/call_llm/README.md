@@ -16,22 +16,26 @@ This directory contains the implementation of the various lambda functions used 
 │       │   ├── __init__.py
 │       │   ├── claude_handler.py (implementation of the Claude LLM handler)
 │       │   ├── openai_handler.py
+│       │   ├── gemini_handler.py
 │       │   └── bedrock_handler.py (implementation of the Bedrock LLM handler, specifically for the AI21 API)
 │       ├── handlers/
 │       │   ├── __init__.py
 │       │   ├── claude_lambda.py (implementation of the Claude LLM Lambda function)
 │       │   ├── openai_lambda.py
+│       │   ├── gemini_lambda.py
 │       │   └── bedrock_lambda.py
 │       └── README.md (this file)
 ├── tests/
 │   ├── conftest.py
 │   ├── test_claude_handler.py (unit tests for the Claude LLM handler)
 │   ├── test_openai_handler.py
+│   ├── test_gemini_handler.py
 │   ├── test_bedrock_handler.py
 │   └── requirements-test.txt
 ├── events/
 │   └── claude-event.json (example event for the Claude LLM Lambda function for SAM local testing)
-│   └── openai-event.json 
+│   └── openai-event.json  
+│   └── gemini-event.json
 │   └── bedrock-event.json 
 └── template.yaml  (for SAM) (optional)
 ```
@@ -43,6 +47,7 @@ The LLM caller is implemented using a Lambda function. It calls the LLM API, wit
 - [Claude](https://docs.anthropic.com/en/docs/build-with-claude/tool-use) models from Anthropic.
 - [GPT](https://platform.openai.com/docs/guides/function-calling) models from OpenAI.
 - [Jamba](https://docs.ai21.com/reference/jamba-15-api-ref) models from AI21, through [AWS Bedrock InvokeModel API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_InvokeModel.html#API_runtime_InvokeModel_RequestBody).
+- [Gemini](https://gemini.google.com/) models from Google.
 
 However, the tool usage is very similar to other LLM, such as FAIR [Llama](https://github.com/meta-llama/llama-models/blob/main/models/llama3_3/prompt_format.md#json-based-tool-calling), Amazon [Nova](https://docs.aws.amazon.com/nova/latest/userguide/prompting-tools-function.html), etc.
 

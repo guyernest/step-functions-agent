@@ -12,6 +12,7 @@ class LLMProviderEnum:
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     AI21 = "ai21"
+    GEMINI = "gemini"
 
 class Tool:
     def __init__(
@@ -19,14 +20,12 @@ class Tool:
         name: str,
         description: str,
         lambda_function: lambda_.Function,
-        provider: str = LLMProviderEnum.ANTHROPIC,
         input_schema: Dict[str, Any] = None,
         human_approval_activity: sfn.Activity = None,
     ):
         self.name = name
         self.description = description
         self.lambda_function = lambda_function
-        self.provider = provider
         self.input_schema = input_schema or {"type": "object", "properties": {}}
         self.human_approval_activity = human_approval_activity
 
@@ -36,24 +35,11 @@ class Tool:
         return self.lambda_function
 
     def to_tool_definition(self) -> Dict[str, Any]:
-        """Convert tool to the format expected in the LLM system message"""
-        if self.provider == LLMProviderEnum.OPENAI or self.provider == LLMProviderEnum.AI21:
-            return {
-                "type": "function",
-                "function": {
-                    "name": self.name,
-                    "description": self.description,
-                    "parameters": self.input_schema,
-                }
-            } 
-        elif self.provider == LLMProviderEnum.ANTHROPIC:
-            return {
-                "name": self.name,
-                "description": self.description,
-                "input_schema": self.input_schema
-            }
-        else:
-            raise ValueError(f"Unsupported LLM provider: {self.provider}")
+        return {
+            "name": self.name,
+            "description": self.description,
+            "input_schema": self.input_schema
+        }
         
     def get_lambda_arn(self) -> str:
         return self.lambda_function.function_arn
@@ -336,7 +322,6 @@ if __name__ == "__main__":
             "calculator", 
             "Calculate the result of a mathematical expression.",
             tool_lambda_1,
-            provider
         )
     ]
 
