@@ -80,7 +80,7 @@ class GoogleMapAgentStack(Stack):
 
         provider = LLMProviderEnum.ANTHROPIC
 
-        # Create yfinance tools
+        # Create Google Maps tools
         google_maps_tools = [
             Tool(
                 "maps_geocode",

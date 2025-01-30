@@ -68,20 +68,20 @@ Each of the tools that are used by the AI agents are defined and AWS Lambda func
 #### Creating a new tool
 
 ```python
-        # Creating the Tool lambda function for the agent
-        tool_x_lambda_function = _lambda_python.PythonFunction(
-            self, "ToolXLambda",
-            function_name="ToolXLambda", 
-            description="Lambda function to Call tool X.",
-            entry="lambda/tools/tool_x",
-            runtime=_lambda.Runtime.PYTHON_3_12,
-            timeout=Duration.seconds(90),
-            memory_size=256,
-            index="index.py",
-            handler="lambda_handler",
-            architecture=_lambda.Architecture.ARM_64,
-            role=tool_x_lambda_role,
-        )
+    # Creating the Tool lambda function for the agent
+    tool_x_lambda_function = _lambda_python.PythonFunction(
+        self, "ToolXLambda",
+        function_name="ToolXLambda", 
+        description="Lambda function to Call tool X.",
+        entry="lambda/tools/tool_x",
+        runtime=_lambda.Runtime.PYTHON_3_12,
+        timeout=Duration.seconds(90),
+        memory_size=256,
+        index="index.py",
+        handler="lambda_handler",
+        architecture=_lambda.Architecture.ARM_64,
+        role=tool_x_lambda_role,
+    )
 ```
 
 #### Using an existing tool
@@ -102,125 +102,150 @@ Each of the tools that are used by the AI agents are defined and AWS Lambda func
 Once you have the tool defined you can use it in the AI agent. You can define it in the CDK stack as follows:
 
 ```python
-        provider = LLMProviderEnum.ANTHROPIC
+    provider = LLMProviderEnum.ANTHROPIC
 
-        # Create agent tools
-        agent_tools = [
-            Tool(
-                "maps_geocode",
-                "Convert an address into geographic coordinates.",
-                tool_x_lambda_function,
-                provider=provider,
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "address": {
-                            "type": "string",
-                            "description": "The address to geocode."
-                        }
+    # Create agent tools
+    agent_tools = [
+        Tool(
+            "maps_geocode",
+            "Convert an address into geographic coordinates.",
+            tool_x_lambda_function,
+            provider=provider,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "address": {
+                        "type": "string",
+                        "description": "The address to geocode."
+                    }
+                },
+                "required": [
+                    "address"
+                ]
+            }
+        ),
+        Tool(
+            "maps_reverse_geocode",
+            "Convert coordinates into an address.",
+            tool_x_lambda_function,
+            provider=provider,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "latitude": {
+                        "type": "number",
+                        "description": "The latitude coordinate."
                     },
-                    "required": [
-                        "address"
-                    ]
-                }
-            ),
-            Tool(
-                "maps_reverse_geocode",
-                "Convert coordinates into an address.",
-                tool_x_lambda_function,
-                provider=provider,
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "latitude": {
-                            "type": "number",
-                            "description": "The latitude coordinate."
-                        },
-                        "longitude": {
-                            "type": "number",
-                            "description": "The longitude coordinate."
-                        }
-                    },
-                    "required": [
-                        "latitude",
-                        "longitude"
-                    ]
-                }
-            )
-        ]
+                    "longitude": {
+                        "type": "number",
+                        "description": "The longitude coordinate."
+                    }
+                },
+                "required": [
+                    "latitude",
+                    "longitude"
+                ]
+            }
+        )
+    ]
 ```
 
-#### Defining a tool needed a human approval
+#### Defining a tool needed a human (or external system) approval
 
 Some of the tools might have side effects and need a human approval. In this case you can define the tool as follows:
 
 ```python
-        # Adding human approval to the usage of the tools
-        human_approval_activity = sfn.Activity(
-            self, 
-            "HumanApprovalActivityForToolX",
-            activity_name="HumanApprovalActivityForToolX",
-        )
+    # Adding human approval to the usage of the tools
+    human_approval_activity = sfn.Activity(
+        self, 
+        "HumanApprovalActivityForToolX",
+        activity_name="HumanApprovalActivityForToolX",
+    )
 
-        anthropic = LLMProviderEnum.ANTHROPIC
+    anthropic = LLMProviderEnum.ANTHROPIC
 
-        agent_tools = [
-            ...
-            Tool(
-                "execute_sql_query", 
-                "Return the query results of the given SQL query to the SQLite database.",
-                tool_x_lambda_function,
-                provider=anthropic,
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "sql_query": {
-                            "type": "string",
-                            "description": "The sql query to execute against the SQLite database."
-                        }
-                    },
-                    "required": [
-                        "sql_query"
-                    ]
+    agent_tools = [
+        ...
+        Tool(
+            "execute_sql_query", 
+            "Return the query results of the given SQL query to the SQLite database.",
+            tool_x_lambda_function,
+            provider=anthropic,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "sql_query": {
+                        "type": "string",
+                        "description": "The sql query to execute against the SQLite database."
+                    }
                 },
-                human_approval_activity=human_approval_activity
-            ),
-            ...
-        ]
+                "required": [
+                    "sql_query"
+                ]
+            },
+            human_approval_activity=human_approval_activity
+        ),
+        ...
+    ]
 ```
 
-## Deployment
+## Define the AI Agent State Machine
+
+### Define the System Prompt for the Agent
+
+The system prompt is the message that the agent will use to start the conversation. You can define it as follows:
+
+```python
+    system_prompt="""
+        You are an expert business analyst with deep knowledge of SQL and visualization code in Python. 
+        Your job is to help users understand and analyze their internal baseball data. 
+        You have access to a set of tools, but only use them when needed.
+        Please don't assume to know the schema of the database, and use the get_db_schema tool to learn table and column names and types before using it.
+        Please prefer to use the print_output tool to format the reply, instead of ending the turn. 
+        You also have access to a tool that allows execution of python code. 
+        Use it to generate the visualizations in your analysis. 
+        - the python code runs in jupyter notebook. 
+        - every time you call `execute_python` tool, the python code is executed in a separate cell. 
+        it's okay to multiple calls to `execute_python`. 
+        - display visualizations using matplotlib directly in the notebook. don't worry about saving the visualizations to a file. 
+        - you can run any python code you want, everything is running in a secure sandbox environment.
+        """
+```
+
+The above example is a multi-line string that defines the system prompt for the agent. It is specific for the baseball data analysis use case. It can mention the tools that the agent has access to, the job of the agent, and any other information that is relevant to the agent.
+
+### Define the Agent Step Functions State Machine
 
 Using CDK:
 
 ```python
-        agent_x_flow = ConfigurableStepFunctionsConstruct(
-            self, 
-            "AIAgentXStateMachine",
-            state_machine_name="AIAgentXStateMachine",
-            state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
-            llm_caller=call_llm_lambda_function, 
-            provider=anthropic,
-            tools=agent_tools,
-            system_prompt=system_prompt,
-            output_schema={
-                "type": "object",
-                "properties": {
-                    "answer": {
-                        "type": "string",
-                        "description": "The answer to the question"
-                    },
-                    "chart": {
-                        "type": "string",
-                        "description": "The URL of the chart"
-                    }
+    agent_x_flow = ConfigurableStepFunctionsConstruct(
+        self, 
+        "AIAgentXStateMachine",
+        state_machine_name="AIAgentXStateMachine",
+        state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
+        llm_caller=call_llm_lambda_function, 
+        provider=anthropic,
+        tools=agent_tools,
+        system_prompt=system_prompt,
+        output_schema={
+            "type": "object",
+            "properties": {
+                "answer": {
+                    "type": "string",
+                    "description": "The answer to the question"
                 },
-                "required": [
-                    "answer",
-                    "chart"
-                ]
-            }
-        )
+                "chart": {
+                    "type": "string",
+                    "description": "The URL of the chart"
+                }
+            },
+            "required": [
+                "answer",
+                "chart"
+            ]
+        }
+    )
 ```
 
 You also need to add it to the [App](../app.py) file.
@@ -233,6 +258,8 @@ app = cdk.App()
 # Add the agent flow to the stack
 agent_x_flow = AgentXStack(app, "AgentXStack")
 ```
+
+## Deployment
 
 The deployment to the AWS account is done using the following command:
 
