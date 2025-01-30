@@ -44,6 +44,7 @@ def lambda_handler(event, context):
                     logger.error("No code provided in the event")
                     return {
                         "type": "tool_result",
+                        "name": tool_name,
                         "tool_use_id": tool_use["id"],
                         "content": json.dumps({
                             'error': 'No code provided.'
@@ -60,6 +61,7 @@ def lambda_handler(event, context):
                 if result and not has_png:
                     return {
                         "type": "tool_result",
+                        "name": tool_name,
                         "tool_use_id": tool_use["id"],
                         "content": result[0].text
                     }
@@ -108,6 +110,7 @@ def lambda_handler(event, context):
         # Return the execution results
         return {
             "type": "tool_result",
+            "name": tool_name,
             "tool_use_id": tool_use["id"],
             "content": result
         }
@@ -116,6 +119,7 @@ def lambda_handler(event, context):
         logger.exception("Error executing code")
         return {
             "type": "tool_result",
+            "name": tool_name,
             "tool_use_id": tool_use["id"],
             "content": str(e)
         }

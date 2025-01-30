@@ -19,6 +19,17 @@ class ClaudeLLM(BaseLLM):
         self.client = anthropic.Anthropic(api_key=api_keys["ANTHROPIC_API_KEY"])
     
     def prepare_messages(self, system: str, messages: List[Dict], tools: List[Dict]) -> Dict:
+
+        # Convert messages to Claude format
+        last_message = messages[-1]
+        if last_message["role"] == "user":
+            if "content" in last_message:
+                if isinstance(last_message["content"], list):
+                    for part in last_message["content"]:
+                        if "type" in part and part["type"] == "tool_result":  # tool_use
+                            del part["name"]
+
+
         return {
             "system": system,
             "messages": messages,
@@ -32,6 +43,7 @@ class ClaudeLLM(BaseLLM):
                 "role": message.role,
                 "content": [],
             },
+            "function_calls": [],
             "metadata": {
                 "stop_reason": message.stop_reason,
                 "stop_sequence": message.stop_sequence,
@@ -55,6 +67,11 @@ class ClaudeLLM(BaseLLM):
                     "input": block.input,
                     "name": block.name,
                     "type": block.type
+                })
+                message_dict["function_calls"].append({
+                    "id": block.id,
+                    "input": block.input,
+                    "name": block.name,
                 })
         
         return message_dict

@@ -24,6 +24,7 @@ type ToolEvent struct {
 // ToolResponse represents the response structure
 type ToolResponse struct {
 	Type      string `json:"type"`
+	Name      string `json:"name"`
 	ToolUseID string `json:"tool_use_id"`
 	Content   string `json:"content"`
 }
@@ -44,6 +45,7 @@ type ResearchResult struct {
 func handler(ctx context.Context, event ToolEvent) (ToolResponse, error) {
 	response := ToolResponse{
 		Type:      "tool_result",
+		Name:      event.Name,
 		ToolUseID: event.ID,
 	}
 

@@ -20,7 +20,7 @@ class FinancialAgentStack(Stack):
         # Since we already have the previous agent, we can reuse the same function
 
         # TODO - Get the function name from the previous agent
-        call_llm_function_name = "CallLLM"
+        call_llm_function_name = "CallClaudeLLM"
 
         # Define the Lambda function
         call_llm_lambda_function = _lambda.Function.from_function_name(
@@ -91,7 +91,6 @@ class FinancialAgentStack(Stack):
                 "get_ticker_data",
                 "Return the stock price of the given ticker symbol from Yahoo Finance.",
                 yfinance_lambda_function,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -117,7 +116,6 @@ class FinancialAgentStack(Stack):
                 "get_ticker_recent_history",
                 "Get the recent history for a given ticker symbol over a given period and interval.",
                 yfinance_lambda_function,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -143,7 +141,6 @@ class FinancialAgentStack(Stack):
                 "list_industries",
                 "List the industries for a given sector key.",
                 yfinance_lambda_function,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -161,7 +158,6 @@ class FinancialAgentStack(Stack):
                 "top_industry_companies",
                 "Get the top companies for a given industry key.",
                 yfinance_lambda_function,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -179,7 +175,6 @@ class FinancialAgentStack(Stack):
                 "top_sector_companies",
                 "Get the top companies for a given sector key.",
                 yfinance_lambda_function,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -197,7 +192,6 @@ class FinancialAgentStack(Stack):
                 "execute_python", 
                 "Execute python code in a Jupyter notebook cell and return the URL of the image that was created.",
                 code_interpreter_lambda_function,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {

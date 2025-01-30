@@ -102,6 +102,7 @@ The tools return the output as a JSON object, with the result in the `content` f
         ...
             Map<String, String> response = new HashMap<>();
             response.put("type", "tool_result");
+            response.put("name", event.getName());
             response.put("tool_use_id", event.getId());
             response.put("content", result);
             
@@ -110,6 +111,7 @@ The tools return the output as a JSON object, with the result in the `content` f
         } catch (Exception e) {
             Map<String, String> errorResponse = new HashMap<>();
             errorResponse.put("type", "tool_result");
+            errorResponse.put("name", event.getName());
             errorResponse.put("tool_use_id", event.getId());
             errorResponse.put("content", String.format("error executing tool %s: %s", event.getName(), e.getMessage()));
             return errorResponse;

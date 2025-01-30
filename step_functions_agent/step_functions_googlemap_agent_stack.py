@@ -18,7 +18,7 @@ class GoogleMapAgentStack(Stack):
         # Since we already have the previous agent, we can reuse the same function
 
         # TODO - Get the function name from the previous agent
-        call_llm_function_name = "CallLLM"
+        call_llm_function_name = "CallClaudeLLM"
 
         # Define the Lambda function
         call_llm_lambda_function = _lambda.Function.from_function_name(
@@ -86,7 +86,6 @@ class GoogleMapAgentStack(Stack):
                 "maps_geocode",
                 "Convert an address into geographic coordinates.",
                 google_maps_lambda,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -104,7 +103,6 @@ class GoogleMapAgentStack(Stack):
                 "maps_reverse_geocode",
                 "Convert coordinates into an address.",
                 google_maps_lambda,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -127,7 +125,6 @@ class GoogleMapAgentStack(Stack):
                 "maps_search_places",
                 "Search for places using Google Places API",
                 google_maps_lambda,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -163,7 +160,6 @@ class GoogleMapAgentStack(Stack):
                 "maps_place_details",
                 "Get detailed information about a specific place",
                 google_maps_lambda,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -181,7 +177,6 @@ class GoogleMapAgentStack(Stack):
                 "maps_distance_matrix",
                 "Calculate travel distance and time for multiple origins and destinations",
                 google_maps_lambda,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -215,7 +210,6 @@ class GoogleMapAgentStack(Stack):
                 "maps_elevation",
                 "Get elevation data for locations on the earth",
                 google_maps_lambda,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -250,7 +244,6 @@ class GoogleMapAgentStack(Stack):
                 "maps_directions",
                 "Get directions between two points",
                 google_maps_lambda,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {

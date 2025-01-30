@@ -32,7 +32,8 @@
       "Comment": "The main call to the LLM. Returns the list of messages with the current call at the end, and metadata of the last call.",
       "Output": {
         "messages": "{% $states.result.Payload.body.messages%}",
-        "metadata": "{% $states.result.Payload.body.metadata%}"
+        "metadata": "{% $states.result.Payload.body.metadata%}",
+        "function_calls": "{% $states.result.Payload.body.function_calls%}"
       },
       "Assign": {
         "messages": "{% $states.result.Payload.body.messages%}"
@@ -43,7 +44,7 @@
       "Default": "For each tool use",
       "Choices": [
         {
-          "Condition": "{% $states.input.metadata.stop_reason in [\"end_turn\", \"stop\"] %}",
+          "Condition": "{%  $states.input.function_calls = [] or $states.input.metadata.stop_reason in [\"end_turn\", \"stop\"] %}",
           "Next": "Prepare Output"
         },
         {
@@ -59,14 +60,14 @@
       "Output": {
         "messages": "{% $states.input.messages %}",
         "output": {
-          "answer": "{% $states.input.messages[-1].content[0].text %}"
+          "answer": "{% $type($states.input.messages[-1].content) = \"array\" ? $states.input.messages[-1].content[0].text : $states.input.messages[-1].content %}"
         }
       },
       "Comment": "Extracts the relevant information from the flow, including all the message flow, the textual answer from the last message, and the chart that was generated during the flow."
     },
     "For each tool use": {
       "Type": "Map",
-      "Items": "{% ($provider = \"anthropic\" ? $states.input.messages[-1].content : $states.input.messages[-1].tool_calls) %}",
+      "Items": "{% $states.input.function_calls %}",
       "ItemProcessor": {
         "ProcessorConfig": {
           "Mode": "INLINE"
@@ -78,15 +79,15 @@
             "Choices": [
               {
                 "Next": "Get DB Schema",
-                "Condition": "{% ($states.input.type = \"tool_use\") and ($states.input.name = \"get_db_schema\") %}"
+                "Condition": "{% ($states.input.name = \"get_db_schema\") %}"
               },
               {
                 "Next": "Execute SQL Query",
-                "Condition": "{% ($states.input.type = \"tool_use\") and ($states.input.name = \"execute_sql_query\") %}"
+                "Condition": "{% ($states.input.name = \"execute_sql_query\") %}"
               },
               {
                 "Next": "execute_python",
-                "Condition": "{% $states.input.type = \"tool_use\" and $states.input.name = \"execute_python\" %}"
+                "Condition": "{% $states.input.name = \"execute_python\" %}"
               }
             ],
             "Default": "No Tool to Use (ignore)",
@@ -102,7 +103,7 @@
       },
       "Next": "Append Map to Messages",
       "Output": {
-        "messages": "{% $provider = \"anthropic\" ? $append($states.input.messages, [ {  \"role\": \"user\",    \"content\": [$filter($states.result,function($v) { $v != {} })] } ] ) : $append($states.input.messages, [$filter($states.result,function($v) { $v != {} })]) %}"
+        "messages": "{% $append($states.input.messages, [ {  \"role\": \"user\",    \"content\": [$filter($states.result,function($v) { $v != {} })] } ] ) %}"
       },
       "Comment": "The reply of the LLM can include one or more 'tool_use' request, and we can apply them in parallel."
     },
@@ -114,7 +115,7 @@
     "Print Output": {
       "Type": "Pass",
       "End": true,
-      "Output": "{% \n(\n  $printMessage := $provider = \"anthropic\" ? $states.input.messages[-1].content[**.name = \"print_output\"] : $states.input.messages[-1].tool_calls[**.name = \"print_output\"] ;\n  $printOutput := $provider =\"anthropic\" ? $printMessage.input : $parse($printMessage.function.arguments);\n  \n  $newMessage := $printOutput.{\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"tool_result\",\n          \"tool_use_id\": $printMessage.id,\n          \"content\":  $map($keys($), function($key) { $string($[$key]) })\n        }\n      ]\n  };\n\n  {      \n    \"messages\": $append($messages, $newMessage),\n    \"output\": $printOutput \n  }\n)\n %}"
+      "Output": "{% \n(\n  $printMessage := $states.input.function_calls[**.name = \"print_output\"];\n  $printOutput :=  $printMessage.input;\n  \n  $newMessage := $printOutput.{\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"tool_result\",\n          \"tool_use_id\": $printMessage.id,\n          \"content\":  $map($keys($), function($key) { $string($[$key]) })\n        }\n      ]\n  };\n\n  {      \n    \"messages\": $append($messages, $newMessage),\n    \"output\": $printOutput \n  }\n)\n %}"
     }
   }
 }

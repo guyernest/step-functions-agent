@@ -42,6 +42,7 @@ type ToolInput struct {
 
 type ToolOutput struct {
     Type string `json:"type"`
+	Name string `json:"name"`
     ToolUseId string `json:"tool_use_id"`
     Content string `json:"content"`
 }
@@ -50,6 +51,7 @@ type ToolOutput struct {
 func handler(ctx context.Context, event ToolEvent) (ToolResponse, error) {
 	response := ToolResponse{
 		Type:      "tool_result",
+		Name:      event.Name,
 		ToolUseID: event.ID,
     }
     ...

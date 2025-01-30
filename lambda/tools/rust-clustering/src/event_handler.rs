@@ -77,6 +77,7 @@ impl Default for ToolUsePayload {
 #[derive(Serialize, Debug)]
 pub struct ToolUseResponse {
     pub tool_use_id: String,
+    pub name: String,
     #[serde(rename = "type")]
     pub response_type: String,
     pub content: String,
@@ -168,6 +169,7 @@ pub(crate) async fn function_handler(event: LambdaEvent<Value>) -> Result<ToolUs
 
     Ok(ToolUseResponse {
         tool_use_id: payload.id,
+        name: payload.name,
         response_type: "tool_result".to_string(),
         content: result,
     })

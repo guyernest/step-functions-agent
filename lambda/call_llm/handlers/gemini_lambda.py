@@ -1,6 +1,6 @@
-# call_llm/handlers/claude_lambda.py
+# call_llm/handlers/gemini_lambda.py
 from common.base_llm import logger
-from llms import ClaudeLLM
+from llms.gemini_handler import GeminiLLM
 
 def lambda_handler(event, context):
     logger.info(f"Received event: {event}")
@@ -9,10 +9,9 @@ def lambda_handler(event, context):
         messages = event.get('messages', [])
         tools = event.get('tools', [])
         
-        llm = ClaudeLLM()
+        llm = GeminiLLM()
         assistant_message = llm.generate_response(system, messages, tools)
         
-        # Update messages with assistant's response
         messages.append(assistant_message["message"])
         
         return {
@@ -31,29 +30,25 @@ def lambda_handler(event, context):
         }
 
 if __name__ == "__main__":
-    # Test event for Claude 3
-    test_event_claude = {
-        "model": "claude-3-5-sonnet-20241022",
-        "system": "You are chatbot, who is helping people with answers to their questions.",
+    test_event = {
         "messages": [
-            {
-                "role": "user", 
-                "content": "What is 2+2?"
-            }
+            {"role": "user", "content": "What is 25*4+64*3?"}
         ],
         "tools": [
             {
-                "name": "get_db_schema",
-                "description": "Describe the schema of the SQLite database, including table names, and column names and types.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {}
+                "type": "function",
+                "function": {
+                    "name": "calculator",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "a": {"type": "number"},
+                            "b": {"type": "number"}
+                        }
+                    }
                 }
             }
         ]
     }
-    
-    # Call lambda handler with test events
-    print("\nTesting Claude 3:")
-    response_claude = lambda_handler(test_event_claude, None)
-    print(response_claude)
+    response = lambda_handler(test_event, None)
+    print(response)
