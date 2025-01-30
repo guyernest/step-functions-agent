@@ -115,6 +115,7 @@ def lambda_handler(event, context):
 
     return {
         "type": "tool_result",
+        "name": tool_name,
         "tool_use_id": tool_use["id"],
         "content": result
     }

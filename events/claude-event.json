@@ -1,25 +1,33 @@
 {
   "system": "You are a helpful AI assistant.",
   "messages": [
-    {
-      "role": "user",
-      "content": "What is 2+2?"
-    }
+      {
+          "role": "user",
+          "content": "What is the weather like in Boston, MA and in Seattle, WA?"
+      }
   ],
   "tools": [
-    {
-      "name": "calculator",
-      "description": "Use the calculator for mathematical operations",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "expression": {
-            "type": "string",
-            "description": "The mathematical expression to evaluate"
+      {
+          "name": "get_current_weather",
+          "description": "Get the current weather in a given location",
+          "input_schema": {
+              "type": "object",
+              "properties": {
+                  "location": {
+                      "type": "string",
+                      "description": "The city and state, e.g. San Francisco, CA."
+                  }
+              },
+              "required": ["location"]
           }
-        },
-        "required": ["expression"]
+      },
+      {
+          "name": "get_current_UTC_time",
+          "description": "Get the current time in UTC timezone",
+          "input_schema": {
+              "type": "object",
+              "properties": {}
+          }
       }
-    }
   ]
 }

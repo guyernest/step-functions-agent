@@ -281,6 +281,7 @@ def lambda_handler(event, context):
         
         return {
             "type": "tool_result",
+            "name": tool_name,
             "tool_use_id": tool_use["id"],
             "content": result
         }
@@ -288,6 +289,7 @@ def lambda_handler(event, context):
         logger.error(f"Error while accessing yfinance: {e}")
         return {
             "type": "tool_result",
+            "name": tool_name,
             "tool_use_id": tool_use["id"],
             'content': f"Error while accessing yfinance: {e}"
         }   

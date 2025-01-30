@@ -1,7 +1,7 @@
 # tests/test_claude_handler.py
 import json
 import pytest
-from handlers.claude_lambda import lambda_handler
+from handlers.bedrock_lambda import lambda_handler
 
 @pytest.fixture
 def input_event():
@@ -53,11 +53,11 @@ def test_lambda_handler(input_event):
     assert len(messages) > 1  # Original message plus response
     last_message = messages[-1]  # Last message should be from assistant
     assert last_message["role"] == "assistant"  # Last message should be from assistant
-    assert "content" in messages[-1]
+    assert "tool_calls" in messages[-1]
     # Check the the content includes two calls with type "tool_use"
-    assert len(last_message["content"]) > 1
-    assert last_message["content"][-1]["type"] == "tool_use"
-    assert last_message["content"][-2]["type"] == "tool_use"
+    assert len(last_message["tool_calls"]) > 0
+    assert last_message["tool_calls"][-1]["type"] == "function"
+    assert last_message["tool_calls"][-2]["type"] == "function"
 
     # Test the metadata
     metadata = response["body"]["metadata"]
@@ -88,6 +88,7 @@ def test_lambda_handler(input_event):
 
     # Test the tool result messages
     input_event["messages"].append(tool_response)
+    print(input_event)
     response = lambda_handler(input_event, None)
     
     assert response["statusCode"] == 200
@@ -97,9 +98,7 @@ def test_lambda_handler(input_event):
     messages = response["body"]["messages"]
     assert len(messages) > 1
     last_message = messages[-1]
-    print(last_message)
 
     assert last_message["role"] == "assistant"
-    assert "function_call" not in last_message["content"][0]
-    assert "text" in messages[-1]["content"][0]
-    assert "sunny" in messages[-1]["content"][0]["text"].lower()
+    assert "content" in last_message
+    assert "sunny" in last_message["content"].lower()

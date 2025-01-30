@@ -51,6 +51,7 @@ The output of this Lambda function is a JSON object, which is passed to the LLM 
 ```python
 return {
       "type": "tool_result",
+      "name": tool_name,
       "tool_use_id": tool_use["id"],
       "content": result
 }

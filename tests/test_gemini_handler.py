@@ -1,12 +1,12 @@
-# tests/test_claude_handler.py
-import json
 import pytest
-from handlers.claude_lambda import lambda_handler
+from unittest.mock import Mock, patch
+from handlers.gemini_lambda import lambda_handler
+from llms.gemini_handler import GeminiLLM
 
 @pytest.fixture
 def input_event():
     return {
-        "system": "You are a helpful AI assistant with a set of tools to answer user questions. Please call the tools in parallel to reduce latency.",
+        "system": "You are a helpful AI assistant.",
         "messages": [
             {
                 "role": "user",
@@ -39,25 +39,46 @@ def input_event():
         ]
     }
 
-def test_lambda_handler(input_event):
-    # Test the handler
+@pytest.fixture
+def tool_response():
+    return {
+        "role": "user", 
+        "content": [
+            {
+                "type": "tool_result",
+                "tool_use_id": "toolu_011NmrpmP4ucmWP6x1YMR2dM",
+                "name" : "get_current_weather",
+                "content" : {
+                    "result" : "Sunny with a high of 70°F."
+                }
+            },
+            {
+                "type": "tool_result",
+                "tool_use_id": "toolu_011NmrpmP4ucmWP6x1YMR2dM",
+                "name" : "get_current_weather",
+                "content" : {
+                    "result" : "Clear with a low of 31°F."
+                }
+            }
+        ]
+    }
+
+
+def test_lambda_handler(input_event, tool_response):
+    
+    # Test the initial prompt and tool call output
     response = lambda_handler(input_event, None)
     
-    # Assert response structure
     assert response["statusCode"] == 200
     assert "messages" in response["body"]
     assert "metadata" in response["body"]
     
-    # Assert response content
+    # Test the internal message format of the LLM
     messages = response["body"]["messages"]
-    assert len(messages) > 1  # Original message plus response
-    last_message = messages[-1]  # Last message should be from assistant
-    assert last_message["role"] == "assistant"  # Last message should be from assistant
-    assert "content" in messages[-1]
-    # Check the the content includes two calls with type "tool_use"
-    assert len(last_message["content"]) > 1
-    assert last_message["content"][-1]["type"] == "tool_use"
-    assert last_message["content"][-2]["type"] == "tool_use"
+    assert len(messages) > 1
+    assert messages[-1]["role"] == "model"
+    assert "function_call" in messages[-1]["parts"][0]
+    assert messages[-1]["parts"][0]["function_call"]["name"] == "get_current_weather"
 
     # Test the metadata
     metadata = response["body"]["metadata"]
@@ -72,20 +93,6 @@ def test_lambda_handler(input_event):
     assert len(function_calls) > 0
     assert function_calls[0]["name"] == "get_current_weather"
 
-    # populate the tool response
-    tool_response = {
-        "role": "user",
-        "content": [] 
-    }
-    for function_call in function_calls:
-        tool_response["content"].append({
-            "type": "tool_result",
-            "name": function_call["name"],
-            "tool_use_id": function_call["id"],
-            "content": f"The weather in {function_call['input']['location']} is sunny.",
-        }
-    )
-
     # Test the tool result messages
     input_event["messages"].append(tool_response)
     response = lambda_handler(input_event, None)
@@ -96,10 +103,7 @@ def test_lambda_handler(input_event):
 
     messages = response["body"]["messages"]
     assert len(messages) > 1
-    last_message = messages[-1]
-    print(last_message)
-
-    assert last_message["role"] == "assistant"
-    assert "function_call" not in last_message["content"][0]
-    assert "text" in messages[-1]["content"][0]
-    assert "sunny" in messages[-1]["content"][0]["text"].lower()
+    assert messages[-1]["role"] == "model"
+    assert "function_call" not in messages[-1]["parts"][0]
+    assert "text" in messages[-1]["parts"][0]
+    assert "sunny" in messages[-1]["parts"][0]["text"].lower()

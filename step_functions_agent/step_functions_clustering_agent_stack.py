@@ -17,7 +17,7 @@ class ClusteringAgentStack(Stack):
         # Since we already have the previous agent, we can reuse the same function
 
         # TODO - Get the function name from the previous agent
-        call_llm_function_name = "CallLLM"
+        call_llm_function_name = "CallClaudeLLM"
 
         # Define the Lambda function
         call_llm_lambda_function = _lambda.Function.from_function_name(
@@ -82,7 +82,6 @@ class ClusteringAgentStack(Stack):
                 "download_tickers_data",
                 "Download the data for a list of tickers for the last number of days, put them in S3 bucket for further processing",
                 yfinance_lambda_function,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -109,7 +108,6 @@ class ClusteringAgentStack(Stack):
                 "list_industries",
                 "List the industries for a given sector key.",
                 yfinance_lambda_function,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -127,7 +125,6 @@ class ClusteringAgentStack(Stack):
                 "top_industry_companies",
                 "Get the top companies for a given industry key.",
                 yfinance_lambda_function,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -145,7 +142,6 @@ class ClusteringAgentStack(Stack):
                 "top_sector_companies",
                 "Get the top companies for a given sector key.",
                 yfinance_lambda_function,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -163,7 +159,6 @@ class ClusteringAgentStack(Stack):
                 name="calculate_hdbscan_clusters",
                 description="Use this tool to calculate clustering for a given time series. The input is a file in S3 with the time series data",
                 lambda_function=clustering_lambda,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {

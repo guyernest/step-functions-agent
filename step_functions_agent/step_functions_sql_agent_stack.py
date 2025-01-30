@@ -139,6 +139,22 @@ class SQLAgentStack(Stack):
             role=call_llm_lambda_role,
         )
 
+        # Creating the Call LLM lambda function for Gemini from Google
+        call_llm_lambda_function_gemini = _lambda_python.PythonFunction(
+            self, "CallLLMGemini",
+            function_name="CallGeminiLLM",
+            # Name of the Lambda function that will be used by the agents to find the function.
+            description="Lambda function to Call LLM (Gemini from Google) with messages history and tools.",
+            entry="lambda/call_llm",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            timeout=Duration.seconds(90),
+            memory_size=256,
+            index="handlers/gemini_lambda.py",
+            handler="lambda_handler",
+            architecture=_lambda.Architecture.ARM_64,
+            role=call_llm_lambda_role,
+        )
+
         ### Tools Lambda Functions
 
         #### DB Tools
@@ -241,13 +257,13 @@ class SQLAgentStack(Stack):
                 "get_db_schema", 
                 "Describe the schema of the SQLite database, including table names, and column names and types.",
                 db_interface_lambda_function,
-                provider=anthropic
+                # provider=anthropic
             ),
             Tool(
                 "execute_sql_query", 
                 "Return the query results of the given SQL query to the SQLite database.",
                 db_interface_lambda_function,
-                provider=anthropic,
+                # provider=anthropic,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -260,13 +276,13 @@ class SQLAgentStack(Stack):
                         "sql_query"
                     ]
                 },
-                human_approval_activity=human_approval_activity
+                # human_approval_activity=human_approval_activity
             ),
             Tool(
                 "execute_python", 
                 "Execute python code in a Jupyter notebook cell and return the URL of the image that was created.",
                 code_interpreter_lambda_function,
-                provider=anthropic,
+                # provider=anthropic,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -334,13 +350,13 @@ class SQLAgentStack(Stack):
                 "get_db_schema", 
                 "Describe the schema of the SQLite database, including table names, and column names and types.",
                 db_interface_lambda_function,
-                provider=openai,
+                # provider=openai,
             ),
             Tool(
                 "execute_sql_query", 
                 "Return the query results of the given SQL query to the SQLite database.",
                 db_interface_lambda_function,
-                provider=openai,
+                # provider=openai,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -358,7 +374,7 @@ class SQLAgentStack(Stack):
                 "execute_python", 
                 "Execute python code in a Jupyter notebook cell and return the URL of the image that was created.",
                 code_interpreter_lambda_function,
-                provider=openai,
+                # provider=openai,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -412,13 +428,13 @@ class SQLAgentStack(Stack):
                 "get_db_schema", 
                 "Describe the schema of the SQLite database, including table names, and column names and types.",
                 db_interface_lambda_function,
-                provider=jamba,
+                # provider=jamba,
             ),
             Tool(
                 "execute_sql_query", 
                 "Return the query results of the given SQL query to the SQLite database.",
                 db_interface_lambda_function,
-                provider=jamba,
+                # provider=jamba,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -436,7 +452,7 @@ class SQLAgentStack(Stack):
                 "execute_python", 
                 "Execute python code in a Jupyter notebook cell and return the URL of the image that was created.",
                 code_interpreter_lambda_function,
-                provider=jamba,
+                # provider=jamba,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -461,6 +477,35 @@ class SQLAgentStack(Stack):
             llm_caller=call_llm_lambda_function_ai21, 
             provider=jamba,
             tools=jamba_tools,
+            system_prompt=system_prompt,
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "answer": {
+                        "type": "string",
+                        "description": "The answer to the question"
+                    },
+                    "chart": {
+                        "type": "string",
+                        "description": "The URL of the chart"
+                    }
+                },
+                "required": [
+                    "answer",
+                    "chart"
+                ]
+            }
+        )
+
+        # Create the Gemini agent flow
+        gemini_agent_flow = ConfigurableStepFunctionsConstruct(
+            self,
+            "GeminiStateMachine",
+            state_machine_name="SQLAgentWithToolsFlowAndGemini",
+            state_machine_template_path="step-functions/agent-with-tools-flow-template.json",
+            llm_caller=call_llm_lambda_function_gemini,
+            provider=anthropic,
+            tools=claude_tools,
             system_prompt=system_prompt,
             output_schema={
                 "type": "object",

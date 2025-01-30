@@ -10,12 +10,44 @@ class BedrockLLM(BaseLLM):
         self.client = boto3.client('bedrock-runtime', region_name='us-east-1')
     
     def prepare_messages(self, system: str, messages: List[Dict], tools: List[Dict]) -> Dict:
+
+        jamba_tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": tool["name"],
+                    "description": tool["description"],
+                    # Unpack the input_schema if it exists, otherwise don't include the parameters key
+                    **({"parameters": tool["input_schema"]} if tool["input_schema"]["properties"] != {} else {})
+                },
+            }
+            for tool in tools
+        ] if tools else []
+
+        # Replace the last message with the tool_use_id and content messages.
+        last_message = messages[-1]
+        if last_message["role"] == "user":
+            if "content" in last_message:
+                if isinstance(last_message["content"], list):   
+                    remove_last_message = True                     
+                    for part in last_message["content"]:
+                        if "type" in part and part["type"] == "tool_result":
+                            if remove_last_message:
+                                messages.pop()
+                                remove_last_message = False
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": part["tool_use_id"],
+                                "content": json.dumps(part["content"])
+                            })  # tool_use
+
+
         if system and messages[0]["role"] != "system":
             messages.insert(0, {"role": "system", "content": system})
         return {
             "messages": messages,
             "max_tokens": 4096,
-            "tools": tools
+            "tools": jamba_tools
         }
     
     def convert_to_json(self, response) -> Dict:
@@ -26,21 +58,30 @@ class BedrockLLM(BaseLLM):
         
         message_dict = {
             "role": "assistant",
-            "tool_calls": [{
-                "id": tool_call["id"],
-                "function": {
-                    "arguments": tool_call["function"]["arguments"],
-                    "name": tool_call["function"]["name"],
-                },
-                "type": tool_call["type"]
-            } for tool_call in (message.get("tool_calls") or []) if tool_call is not None]
+            "tool_calls": [
+                {
+                    "id": tool_call["id"],
+                    "function": {
+                        "arguments": tool_call["function"]["arguments"],
+                        "name": tool_call["function"]["name"],
+                    },
+                    "type": tool_call["type"]
+                } for tool_call in message["tool_calls"]
+            ] if message["tool_calls"] else []
         }
 
         if message.get("content"):
-            message_dict["content"] = [{"text": message["content"], "type": "text"}]
+            message_dict["content"] = message["content"]
 
         return {
             "message": message_dict,
+            "function_calls": [
+                {
+                    "id": tool_call["id"],
+                    "input": json.loads(tool_call["function"]["arguments"]),
+                    "name": tool_call["function"]["name"],
+                } for tool_call in message["tool_calls"]
+            ] if "tool_calls" in message and message["tool_calls"] else [],
             "metadata": {
                 "stop_reason": first_choice["finish_reason"],
                 "usage": {

@@ -159,33 +159,20 @@ class ConfigurableStepFunctionsConstruct(Construct):
         # Update tools list
         payload["tools"] = [tool.to_tool_definition() for tool in tools]
 
-        # Defining the print_output tool to meet the LLM provider's format
-        if self.provider == LLMProviderEnum.OPENAI or self.provider == LLMProviderEnum.AI21:
-            print_output_tool = {
-                "type": "function", 
-                "function": {
-                    "name": "print_output", 
-                    "description": "Print the output of the previous steps", 
-                    "parameters": output_schema if output_schema else {
-                        "type": "object", 
-                        "properties": {}
+        # Defining the print_output tool basesd on the output schema
+        print_output_tool = {
+            "name": "print_output",
+            "description": "Print the output of the previous steps",
+            "input_schema": output_schema if output_schema else {
+                "type": "object", 
+                "properties": {
+                    "answer": {
+                        "type": "string",
+                        "description": "The abswer to users question"
                     }
-                }
-            } 
-        elif self.provider == LLMProviderEnum.ANTHROPIC:
-            print_output_tool = {
-                "name": "print_output",
-                "description": "Print the output of the previous steps",
-                "input_schema": output_schema if output_schema else {
-                    "type": "object", 
-                    "properties": {
-                        "answer": {
-                            "type": "string",
-                            "description": "The abswer to users question"
-                        }
-                    },
                 },
-            }
+            },
+        }
 
         # Adding print_output tool
         payload["tools"].append(print_output_tool)
@@ -206,14 +193,13 @@ class ConfigurableStepFunctionsConstruct(Construct):
 
             choice = {
                 "Condition": (
-                    "{% ($states.input.type in [\"function\",\"tool_use\"]) and "
-                    f"($states.input.**.name = \"{tool.name}\") %}}"
+                    f"{{% ($states.input.**.name = \"{tool.name}\") %}}"
                 ),
                 "Next": next_state,
             }
             choices.append(choice)
 
-            tool_input_jsonata = "{% $provider = \"anthropic\" ? $states.input.input : $parse($states.input.function.arguments) %}"
+            tool_input_jsonata = "{% $states.input.input %}"
             # Add the tool approval states
             if tool.human_approval_activity:
                 # Call the human approval activity
@@ -271,7 +257,7 @@ class ConfigurableStepFunctionsConstruct(Construct):
                 }],
                 "End": True,
                 "Comment": f"Call the tool (Lambda function) {tool.name}.",
-                "Output": "{% \n  $provider = \"anthropic\" ? $states.result.Payload :  {\n    \"tool_call_id\": $states.result.Payload.tool_use_id,\n    \"role\": \"tool\",\n    \"content\": $states.result.Payload.content \n} %}"
+                "Output": "{%  $states.result.Payload  %}"
             }
 
         # Update the choice state with new choices

@@ -1,15 +1,9 @@
 # handlers/bedrock_lambda.py
-import os
-import sys
-
-# Add the parent directory to Python path
-current_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(current_dir)
-
 from common.base_llm import logger
 from llms.bedrock_handler import BedrockLLM
 
 def lambda_handler(event, context):
+    logger.info(f"Received event: {event}")
     try:
         system = event.get('system')
         messages = event.get('messages', [])
@@ -24,6 +18,7 @@ def lambda_handler(event, context):
             'statusCode': 200,
             'body': {
                 'messages': messages,
+                'function_calls': assistant_message["function_calls"],
                 'metadata': assistant_message["metadata"]
             }
         }

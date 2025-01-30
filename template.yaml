@@ -37,3 +37,20 @@ Resources:
       Policies:
         - SecretsManagerReadWrite
         - AWSLambdaBasicExecutionRole
+  # Gemini Lambda Function
+  GeminiLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda/call_llm
+      Handler: handlers.gemini_lambda.lambda_handler
+      Runtime: python3.11
+      Timeout: 90
+      MemorySize: 256
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: gemini-llm
+      Architectures:
+        - arm64
+      Policies:
+        - SecretsManagerReadWrite
+        - AWSLambdaBasicExecutionRole

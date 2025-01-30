@@ -19,7 +19,7 @@ class ResearchAgentStack(Stack):
         # Since we already have the previous agent, we can reuse the same function
 
         # TODO - Get the function name from the previous agent
-        call_llm_function_name = "CallLLM"
+        call_llm_function_name = "CallClaudeLLM"
 
         # Define the Lambda function
         call_llm_lambda_function = _lambda.Function.from_function_name(
@@ -88,7 +88,6 @@ class ResearchAgentStack(Stack):
                 "list_industries",
                 "List the industries for a given sector key.",
                 yfinance_lambda_function,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -106,7 +105,6 @@ class ResearchAgentStack(Stack):
                 "top_industry_companies",
                 "Get the top companies for a given industry key.",
                 yfinance_lambda_function,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -124,7 +122,6 @@ class ResearchAgentStack(Stack):
                 "top_sector_companies",
                 "Get the top companies for a given sector key.",
                 yfinance_lambda_function,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -142,7 +139,6 @@ class ResearchAgentStack(Stack):
                 name="research_company",
                 description="Perform stock market stock research on a given company.",
                 lambda_function=research_lambda,
-                provider=provider,
                 input_schema={
                     "type": "object",
                     "properties": {
