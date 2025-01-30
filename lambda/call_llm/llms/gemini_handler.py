@@ -9,7 +9,7 @@ import json
 class GeminiLLM(BaseLLM):
     def __init__(self):
         api_keys = get_api_keys()
-        self.client = genai.Client(api_key='AIzaSyBPpyWRLsSHC7dhTKOshZ8RyDBiZEN4HTg')
+        self.client = genai.Client(api_key=api_keys["GEMINI_API_KEY"])
     
     def prepare_messages(self, system: str, messages: List[Dict], tools: List[Dict]) -> Dict:
         # Convert tools to Gemini format
