@@ -48,6 +48,16 @@ def ChatMessage(msg):
                             cls="bg-gray-700 text-white p-3 rounded my-2"
                         )
                     )
+                elif item.get('type') == 'function':
+                  
+                    rendered_content.append(
+                        Div(
+                            P("🔧 Using tool: " + item['function']['name'], cls="font-semibold"),
+                            P(json.dumps(item['function']['arguments'], indent=2), 
+                              cls="font-mono text-sm whitespace-pre-wrap break-words"),
+                            cls="bg-gray-700 text-white p-3 rounded my-2"
+                        )
+                    )
                 elif item.get('type') == 'tool_result':
                     try:
                         content = item['content']
@@ -179,7 +189,7 @@ def ChatMessage(msg):
     # Define base and role-specific classes separately for better readability
     base_class = "max-w-[80%] rounded-lg p-4 my-2"
     role_class = (
-        "bg-blue-500 text-blue-50 ml-auto" if msg['role'] == 'user' 
+        "bg-blue-500 text-blue-50 ml-auto" if msg['role'] == 'user' or msg['role'] == 'tool'
         else "bg-gray-100 text-gray-900"
     )
     
@@ -189,6 +199,7 @@ def ChatMessage(msg):
         Div(
             Div(msg['role'].title(), cls="font-bold mb-1"),
             *[Div(content, cls=content_class) for content in render_content(msg['content'])],
+            *[Div(tool_call, cls=content_class) for tool_call in render_content(msg.get('tool_calls', []))],
             cls=f"{base_class} {role_class}"
         ),
         cls="w-full"
