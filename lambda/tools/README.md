@@ -6,7 +6,7 @@ This directory contains the implementation of the various lambda functions used 
 
 Please note that each Lambda function is implemented in a dedicated directory and has its own dependencies file. The examples for the different programming languages are:
 
-- ![Python Logo](https://cdn.simpleicons.org/python?size=16) Python: [code-interpreter](code-interpreter) - using [uv](https://github.com/astral-sh/uv) to build the requirements.txt file from the requirements.in file.
+- ![Python Logo](https://cdn.simpleicons.org/python?size=16) Python: [graphql-interface](graphql-interface) - using [uv](https://github.com/astral-sh/uv) to build the requirements.txt file from the requirements.in file, or using SAM template for AWS Lambda.
 - ![TypeScript Logo](https://cdn.simpleicons.org/typescript?size=16) TypeScript: [google-maps](google-maps) - using tsconfig.json for dependencies.
 - ![Rust logo](https://cdn.simpleicons.org/rust/gray?size=16) Rust: [rust-clustering](rust-clustering) - using Cargo.toml for dependencies.
 - ![Java Logo](https://img.icons8.com/?size=16&id=13679&format=png&color=000000) Java: [stock-analyzer](stock-analyzer) - using Maven to build the jar based on the pom.xml.
@@ -82,7 +82,7 @@ pytest tests/
         Handler: db-interface.index.lambda_handler
         Runtime: python3.12
         Timeout: 90
-        MemorySize: 256
+        MemorySize: 128
         Environment:
             Variables:
             POWERTOOLS_SERVICE_NAME: ai-agents-tools
@@ -93,7 +93,7 @@ pytest tests/
             - AWSLambdaBasicExecutionRole
     ```
 
-1. Add a test event to the `events` folder.
+1. Add a test event to the `tests` folder.
 
     ```json
     {
@@ -108,7 +108,7 @@ pytest tests/
 
     ```bash
     sam build
-    sam local invoke DBInterfaceToolLambda -e events/db-interface-tool-event.json
+    sam local invoke DBInterfaceToolLambda -e tests/db-interface-tool-event.json
     ```
 
 ## Deployment
@@ -126,7 +126,7 @@ Using CDK:
             entry="lambda/tools/db-interface",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(90),
-            memory_size=256,
+            memory_size=128,
             index="index.py",
             handler="lambda_handler",
             architecture=_lambda.Architecture.ARM_64,
