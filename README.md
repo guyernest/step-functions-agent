@@ -95,6 +95,7 @@ The other frameworks have some limitations, such as:
   - [`README.md`](lambda/tools/README.md) *(Documentation on building the tools)*
   - `code-interpreter/`
   - `db-interface/`
+  - `graphql-interface/`
   - `google-maps/`
   - `rust-clustering/`
   - `stock-analyzer/`
@@ -156,7 +157,7 @@ This repository contains an example of some tools that are used to build SQL, Fi
 
 Please note that each Lambda function is implemented in a dedicated directory and has its own dependencies file. The examples for the different programming languages are:
 
-- ![Python Logo](https://cdn.simpleicons.org/python?size=16) Python: [lambda/tools/code-interpreter](lambda/tools/code-interpreter) - using [uv](https://github.com/astral-sh/uv) to build the requirements.txt file from the requirements.in file.
+- ![Python Logo](https://cdn.simpleicons.org/python?size=16) Python: [lambda/tools/graphql-interface](lambda/tools/graphql-interface) - using [uv](https://github.com/astral-sh/uv) to build the requirements.txt file from the requirements.in file, or using SAM template for AWS Lambda.
 - ![TypeScript Logo](https://cdn.simpleicons.org/typescript?size=16) TypeScript: [lambda/tools/google-maps](lambda/tools/google-maps) - using tsconfig.json for dependencies.
 - ![Rust logo](https://cdn.simpleicons.org/rust/gray?size=16) Rust: [lambda/tools/rust-clustering](lambda/tools/rust-clustering) - using Cargo.toml for dependencies.
 - ![Java Logo](https://img.icons8.com/?size=16&id=13679&format=png&color=000000) Java: [lambda/tools/stock-analyzer](lambda/tools/stock-analyzer) - using Maven to build the jar based on the pom.xml.
@@ -201,6 +202,7 @@ The output of this Lambda function is a JSON object, which is passed to the LLM 
 ```python
 return {
       "type": "tool_result",
+      "name": tool_name,
       "tool_use_id": tool_use["id"],
       "content": result
 }
@@ -477,7 +479,6 @@ The activity is then used in the Step Functions state machine to require human a
         "execute_sql_query",
         "Return the query results of the given SQL query to the SQLite database.",
         db_interface_lambda_function,
-        provider=anthropic,
         input_schema={
             "type": "object",
             "properties": {

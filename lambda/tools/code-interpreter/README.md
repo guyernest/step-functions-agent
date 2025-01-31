@@ -47,6 +47,7 @@ The tools return the output as a JSON object, with the result in the `content` f
         # Return the execution results
         return {
             "type": "tool_result",
+            "name": tool_name,
             "tool_use_id": tool_use["id"],
             "content": result
         }
@@ -55,6 +56,7 @@ The tools return the output as a JSON object, with the result in the `content` f
         logger.exception("Error executing code")
         return {
             "type": "tool_result",
+            "name": tool_name,
             "tool_use_id": tool_use["id"],
             "content": str(e)
         }
@@ -68,8 +70,5 @@ The following code snippet shows how to initialize the API key.
 
 ```python
 # Global API key
-try:
-    E2B_API_KEY = json.loads(parameters.get_secret("/ai-agent/E2B_API_KEY"))["E2B_API_KEY"]
-except ValueError:
-    E2B_API_KEY = parameters.get_secret("/ai-agent/E2B_API_KEY")
-
+E2B_API_KEY = json.loads(parameters.get_secret("/ai-agent/E2B_API_KEY"))["E2B_API_KEY"]
+```

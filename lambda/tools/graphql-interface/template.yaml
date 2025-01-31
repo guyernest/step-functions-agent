@@ -1,0 +1,22 @@
+# template.yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Resources:
+  # GraphQL Lambda Function Tool
+  GraphQLToolLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: index.lambda_handler
+      Runtime: python3.12
+      Timeout: 90
+      MemorySize: 128
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: graphql-tool
+      Architectures:
+        - arm64
+      Policies:
+        - SecretsManagerRead
+        - AWSLambdaBasicExecutionRole

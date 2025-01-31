@@ -13,6 +13,7 @@ from step_functions_agent.step_functions_research_agent_stack import ResearchAge
 from step_functions_agent.step_functions_supervisor_agent_stack import SupervisorAgentStack
 from step_functions_agent.agent_ui_stack import AgentUIStack
 from step_functions_agent.agent_monitoring_stack import AgentMonitoringStack
+from step_functions_agent.step_functions_graphql_agent_stack import GraphQLAgentStack
 
 app = cdk.App()
 sqlAgentStack = SQLAgentStack(app, "SQLAgentStack")
@@ -21,6 +22,7 @@ googlemapAgentStack = GoogleMapAgentStack(app, "GoogleMapAgentStack")
 clusteringAgentStack = ClusteringAgentStack(app, "ClusteringAgentStack")
 analyzerAgentStack = AnalysisAgentStack(app, "AnalyzerAgentStack")
 researchAgentStack = ResearchAgentStack(app, "ResearchAgentStack")
+graphqlAgentStack = GraphQLAgentStack(app, "GraphQLAgentStack")
 
 superviserAgentStack = SupervisorAgentStack(app, "SuperviserAgentStack")
 
@@ -36,6 +38,8 @@ Tags.of(googlemapAgentStack).add("project", "googlemap-ai-agent")
 Tags.of(clusteringAgentStack).add("project", "clustering-ai-agent")
 Tags.of(analyzerAgentStack).add("project", "analysis-ai-agent")
 Tags.of(researchAgentStack).add("project", "research-ai-agent")
+
+Tags.of(graphqlAgentStack).add("project", "graphql-ai-agent")
 
 Tags.of(superviserAgentStack).add("project", "supervisor-ai-agent")
 

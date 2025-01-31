@@ -92,12 +92,13 @@ class ConfigurableStepFunctionsConstruct(Construct):
         )
 
         # Create the state machine
-        state_machine = sfn.CfnStateMachine(
+        state_machine = sfn.StateMachine(
             self, 
             construct_id,
             state_machine_name=state_machine_name,
-            role_arn=role.role_arn,
-            definition_string=json.dumps(state_machine_def),
+            role=role,
+            definition_body=sfn.DefinitionBody.from_string(json.dumps(state_machine_def)),
+            tracing_enabled=True,
         )
 
         # Print the generated state machine definition
