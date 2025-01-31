@@ -165,7 +165,7 @@ Please note that each Lambda function is implemented in a dedicated directory an
 
 ## Building Tools
 
-Each tool is implemented using a Lambda function in a dedicated directory, and has its own requirements.txt file. The requirements.txt file is used to install the required Python packages for the tool, by the `CDK` stack.
+Each tool is implemented using a Lambda function in a dedicated directory, and has its own build requirements and dependencies. You can see more examples and documentation in the [lambda/tools](lambda/tools) folder.
 
 A tool should know how to parse the tool input, and return the tool output. The tool input is passed to the tool as a JSON object, and the tool output is returned as a JSON object. For example, the following [Lambda function](lambda/tools/db-interface/index.py) implements two tools: `get_db_schema` and `execute_sql_query`:
 
