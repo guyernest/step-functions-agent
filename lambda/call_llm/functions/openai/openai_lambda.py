@@ -1,6 +1,6 @@
 # handlers/openai_lambda.py
 from common.base_llm import logger
-from llms.openai_handler import OpenAILLM
+from openai_handler import OpenAILLM
 
 def lambda_handler(event, context):
     logger.info(f"Received event: {event}")

@@ -1,6 +1,6 @@
-# handlers/bedrock_lambda.py
+# openai/deepseek_lambda.py
 from common.base_llm import logger
-from llms.bedrock_handler import BedrockLLM
+from deepseek_handler import DeepSeekLLM
 
 def lambda_handler(event, context):
     logger.info(f"Received event: {event}")
@@ -9,16 +9,16 @@ def lambda_handler(event, context):
         messages = event.get('messages', [])
         tools = event.get('tools', [])
         
-        llm = BedrockLLM()
+        llm = DeepSeekLLM()
         assistant_message = llm.generate_response(system, messages, tools)
-        logger.info(assistant_message)
+        
         messages.append(assistant_message["message"])
         
         return {
             'statusCode': 200,
             'body': {
                 'messages': messages,
-                'function_calls': assistant_message["function_calls"],
+                'function_calls': assistant_message['function_calls'],
                 'metadata': assistant_message["metadata"]
             }
         }
@@ -30,9 +30,9 @@ def lambda_handler(event, context):
         }
 
 if __name__ == "__main__":
-    # Test event for Jamba model
-    event = {
-        "model": "ai21.jamba-1-5-large-v1:0",
+        # Test event for GPT-4
+    test_event_deepseek = {
+        "model": "deepseek-chat",
         "messages": [
             {"role": "user", "content": "What is 25*4+64*3?"}
         ],
@@ -52,5 +52,5 @@ if __name__ == "__main__":
             }
         ]
     }
-    response = lambda_handler(event, None)
+    response = lambda_handler(test_event_deepseek, None)
     print(response)

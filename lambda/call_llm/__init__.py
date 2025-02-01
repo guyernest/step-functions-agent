@@ -11,9 +11,15 @@ if package_dir not in sys.path:
 __package__ = 'call_llm'
 
 # Import your submodules
-from . import common
-from . import llms
-from . import handlers
+from lambda_layer.python import common
+from functions import bedrock, anthropic, openai
+from functions.bedrock import bedrock_handler
 
 # Make the imports available at the package level
-__all__ = ['common', 'llms', 'handlers']
+__all__ = [
+    'common', 
+    'bedrock', 
+    'bedrock_handler', 
+    'anthropic', 
+    'openai'
+]
