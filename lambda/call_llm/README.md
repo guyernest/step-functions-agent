@@ -6,43 +6,53 @@ This directory contains the implementation of the various lambda functions used 
 
 ```txt
 ├── lambda/
-│   └── call_llm/   
-│       ├── __init__.py
-│       ├── common/
-│       │   ├── __init__.py
-│       │   ├── base_llm.py (abstract class to define the interface for the LLM handlers)
-│       │   └── config.py
-│       ├── llms/
-│       │   ├── __init__.py
-│       │   ├── claude_handler.py (implementation of the Claude LLM handler)
-│       │   ├── openai_handler.py
-│       │   ├── gemini_handler.py
-|       |   ├── nova_handler.py
-│       │   └── bedrock_handler.py (implementation of the Bedrock LLM handler, specifically for the AI21 API)
-│       ├── handlers/
-│       │   ├── __init__.py
-│       │   ├── claude_lambda.py (implementation of the Claude LLM Lambda function)
-│       │   ├── openai_lambda.py
-│       │   ├── gemini_lambda.py
-│       │   ├── nova_lambda.py
-│       │   └── bedrock_lambda.py
-│       ├── tests/
-│       │   ├── conftest.py
-│       │   ├── test_claude_handler.py (unit tests for the Claude LLM handler)
-│       │   ├── test_openai_handler.py
-│       │   ├── test_gemini_handler.py
-│       │   ├── test_nova_handler.py
-│       │   ├── test_bedrock_handler.py
-│       │   └── requirements-test.txt
-│       │   └── events/
-│       │       ├── claude-event.json (example event for the Claude unction for SAM local testing)
-│       │       ├── openai-event.json
-│       │       ├── gemini-event.json
-│       │       ├── nova-event.json
-│       │       └── bedrock-event.json
-│       ├── README.md (this file)
-│       └── template.yaml  (for SAM) (optional)
-
+    └── call_llm/   
+        ├── __init__.py
+        ├── lambda_layer/ (the common layer for all the LLM Lambda functions)
+        │   ├── python/
+        │   │   ├── __init__.py
+        │   │   ├── common/
+        │   │   │   ├── __init__.py
+        │   │   │   ├── base_llm.py (abstract class to define the interface for the LLM handlers)
+        │   │   │   └── config.py
+        ├── functions/
+        │   ├── __init__.py
+        │   ├── anthropic/ 
+        │   │   ├── claude_handler.py (implementation of the Claude LLM handler)
+        │   │   ├── claude_lambda.py (implementation of the Claude LLM Lambda function)
+        │   │   ├── requirements.txt
+        │   │   └── template.yaml (for SAM) (optional)
+        │   ├── bedrock/ (implementation of the Bedrock)
+        │   │   ├── nova_handler.py
+        │   │   ├── nova_lambda.py
+        │   │   ├── bedrock_handler.py
+        │   │   ├── bedrock_lambda.py
+        │   │   ├── requirements.txt
+        │   │   └── template.yaml (for SAM) (optional)
+        │   ├── gemini/
+        │   │   ├── gemini_lambda.py
+        │   │   ├── gemini_handler.py
+        │   │   ├── requirements.txt
+        │   │   └── template.yaml (for SAM) (optional)
+        │   └── openai/
+        │       ├── openai_handler.py
+        │       ├── openai_lambda.py
+        │       ├── deepseek_handler.py
+        │       ├── deepseek_lambda.py
+        │       ├── requirements.txt
+        │       └── template.yaml (for SAM) (optional)
+        ├── tests/
+        │   ├── conftest.py
+        │   ├── test_claude_handler.py (unit tests for the Claude LLM handler)
+        │   ├── test_openai_handler.py
+        │   ├── test_gemini_handler.py
+        │   ├── test_nova_handler.py
+        │   ├── test_bedrock_handler.py
+        │   ├── requirements-test.txt
+        │   └── events/
+        │       └── multiple-places-weather-event.json (example event for SAM local testing)
+        ├── README.md (this file)
+        └── template.yaml (for SAM) (optional)
 ```
 
 ## Building the LLM caller
@@ -54,6 +64,7 @@ The LLM caller is implemented using a Lambda function. It calls the LLM API, wit
 - [Jamba](https://docs.ai21.com/reference/jamba-15-api-ref) models from AI21, through [AWS Bedrock InvokeModel API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_InvokeModel.html#API_runtime_InvokeModel_RequestBody).
 - [Gemini](https://gemini.google.com/) models from Google.
 - [Nova](https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html) models from Amazon.
+- [DeepSeek](https://platform.deepseek.com/) models from DeepSeek.
 
 However, the tool usage is very similar to other LLM, such as FAIR [Llama](https://github.com/meta-llama/llama-models/blob/main/models/llama3_3/prompt_format.md#json-based-tool-calling), Amazon [Nova](https://docs.aws.amazon.com/nova/latest/userguide/prompting-tools-function.html), etc.
 
@@ -225,8 +236,8 @@ pytest tests/
 1. To test the Lambda function locally, you can use the following command:
 
     ```bash
-    sam build
-    sam local invoke OpenAILambda -e tests/events/multiple-places-weather-event.json
+    cd lambda/call_llm/functions/openai
+    sam build && sam local invoke OpenAILambda -e tests/events/multiple-places-weather-event.json
     ```
 
 ## Deployment
@@ -240,11 +251,11 @@ Using CDK:
             # Name of the Lambda function that will be used by the agents to find the function.
             function_name="CallClaudeLLM", 
             description="Lambda function to Call LLM (Anthropic) with messages history and tools.",
-            entry="lambda/call_llm",
+            entry="lambda/call_llm/functions/anthropic",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(90),
             memory_size=256,
-            index="handlers/claude_lambda.py",
+            index="claude_lambda.py",
             handler="lambda_handler",
             architecture=_lambda.Architecture.ARM_64,
             role=call_llm_lambda_role,
