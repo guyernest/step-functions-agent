@@ -72,25 +72,18 @@ class SQLAgentStack(Stack):
                     "bedrock:InvokeModel"
                 ],
                 resources=[
-                    "arn:aws:bedrock:*::foundation-model/*"
+                    "arn:aws:bedrock:*::foundation-model/*",
+                    f"arn:aws:bedrock:*:{self.account}:inference-profile/us.amazon.nova-*-v1:0"
                 ]
             )
         )
 
-        # Define the Lambda function
-        call_llm_lambda_function = _lambda_python.PythonFunction(
-            self, "CallLLMLambda",
-            function_name="CallLLM",
-            description="Lambda function to Call LLM (Anthropic or OpenAI) with messages history and tools.",
-            entry="lambda/call_llm",
-            runtime=_lambda.Runtime.PYTHON_3_12,
-            timeout=Duration.seconds(90),
-            memory_size=256,
-            index="index.py",
-            handler="lambda_handler",
-            architecture=_lambda.Architecture.ARM_64,  
-            log_retention=logs.RetentionDays.ONE_WEEK,     
-            role=call_llm_lambda_role,
+        llm_layer = _lambda_python.PythonLayerVersion(
+            self, "LLMLayer",
+            entry="lambda/call_llm/lambda_layer/python",
+            compatible_runtimes=[_lambda.Runtime.PYTHON_3_12],
+            compatible_architectures=[_lambda.Architecture.ARM_64],
+            description="A layer for the LLM Lambda functions",
         )
 
         # Creating the Call LLM lambda function for Claude only 
@@ -99,12 +92,13 @@ class SQLAgentStack(Stack):
             function_name="CallClaudeLLM",
             # Name of the Lambda function that will be used by the agents to find the function.
             description="Lambda function to Call LLM (Anthropic) with messages history and tools.",
-            entry="lambda/call_llm",
+            entry="lambda/call_llm/functions/anthropic",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(90),
             memory_size=256,
-            index="handlers/claude_lambda.py",
+            index="claude_lambda.py",
             handler="lambda_handler",
+            layers=[llm_layer],
             architecture=_lambda.Architecture.ARM_64,
             log_retention=logs.RetentionDays.ONE_WEEK,
             role=call_llm_lambda_role,
@@ -116,29 +110,13 @@ class SQLAgentStack(Stack):
             function_name="CallOpenAILLM",
             # Name of the Lambda function that will be used by the agents to find the function.
             description="Lambda function to Call LLM (GPT from OpenAI) with messages history and tools.",
-            entry="lambda/call_llm",
+            entry="lambda/call_llm/functions/openai",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(90),
             memory_size=256,
-            index="handlers/openai_lambda.py",
+            index="openai_lambda.py",
             handler="lambda_handler",
-            architecture=_lambda.Architecture.ARM_64,
-            log_retention=logs.RetentionDays.ONE_WEEK,
-            role=call_llm_lambda_role,
-        )
-
-        # Creating the Call LLM lambda function for GPT from OpenAI only 
-        call_llm_lambda_function_ai21 = _lambda_python.PythonFunction(
-            self, "CallLLMLambdaAI21",
-            function_name="CallAI21LLM",
-            # Name of the Lambda function that will be used by the agents to find the function.
-            description="Lambda function to Call LLM (Jambda from AI21) with messages history and tools.",
-            entry="lambda/call_llm",
-            runtime=_lambda.Runtime.PYTHON_3_12,
-            timeout=Duration.seconds(90),
-            memory_size=256,
-            index="handlers/bedrock_lambda.py",
-            handler="lambda_handler",
+            layers=[llm_layer],
             architecture=_lambda.Architecture.ARM_64,
             log_retention=logs.RetentionDays.ONE_WEEK,
             role=call_llm_lambda_role,
@@ -150,12 +128,49 @@ class SQLAgentStack(Stack):
             function_name="CallGeminiLLM",
             # Name of the Lambda function that will be used by the agents to find the function.
             description="Lambda function to Call LLM (Gemini from Google) with messages history and tools.",
-            entry="lambda/call_llm",
+            entry="lambda/call_llm/functions/gemini",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(90),
             memory_size=256,
-            index="handlers/gemini_lambda.py",
+            index="gemini_lambda.py",
             handler="lambda_handler",
+            layers=[llm_layer],
+            architecture=_lambda.Architecture.ARM_64,
+            log_retention=logs.RetentionDays.ONE_WEEK,
+            role=call_llm_lambda_role,
+        )
+
+        # Creating the Call LLM lambda function for Jambda from AI21 through Bedrock
+        call_llm_lambda_function_ai21 = _lambda_python.PythonFunction(
+            self, "CallLLMLambdaAI21",
+            function_name="CallAI21LLM",
+            # Name of the Lambda function that will be used by the agents to find the function.
+            description="Lambda function to Call LLM (Jambda from AI21) with messages history and tools.",
+            entry="lambda/call_llm/functions/bedrock",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            timeout=Duration.seconds(90),
+            memory_size=256,
+            index="bedrock_lambda.py",
+            handler="lambda_handler",
+            layers=[llm_layer],
+            architecture=_lambda.Architecture.ARM_64,
+            log_retention=logs.RetentionDays.ONE_WEEK,
+            role=call_llm_lambda_role,
+        )
+
+        # Creating the Call LLM lambda function for Nova from Amazon through Bedrock
+        call_llm_lambda_function_nova = _lambda_python.PythonFunction(
+            self, "CallLLMNova",
+            function_name="CallNovaLLM",
+            # Name of the Lambda function that will be used by the agents to find the function.
+            description="Lambda function to Call LLM (Nova from Amazon) with messages history and tools.",
+            entry="lambda/call_llm/functions/bedrock",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            timeout=Duration.seconds(90),
+            memory_size=256,
+            index="nova_lambda.py",
+            handler="lambda_handler",
+            layers=[llm_layer],
             architecture=_lambda.Architecture.ARM_64,
             log_retention=logs.RetentionDays.ONE_WEEK,
             role=call_llm_lambda_role,
@@ -260,7 +275,7 @@ class SQLAgentStack(Stack):
         # Create claude tools
         anthropic = LLMProviderEnum.ANTHROPIC
 
-        claude_tools = [
+        tools = [
             Tool(
                 "get_db_schema", 
                 "Describe the schema of the SQLite database, including table names, and column names and types.",
@@ -318,154 +333,56 @@ class SQLAgentStack(Stack):
         - you can run any python code you want, everything is running in a secure sandbox environment.
         """
 
+        output_schema={
+            "type": "object",
+            "properties": {
+                "answer": {
+                    "type": "string",
+                    "description": "The answer to the question"
+                },
+                "chart": {
+                    "type": "string",
+                    "description": "The URL of the chart"
+                }
+            },
+            "required": [
+                "answer",
+                "chart"
+            ]
+        }
+
         claude_agent_flow = ConfigurableStepFunctionsConstruct(
             self, 
-            "ClaudeAIStateMachine",
+            "SQLAgentWithToolsFlowAndClaude",
             state_machine_name="SQLAgentWithToolsFlowAndClaude",
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
             llm_caller=call_llm_lambda_function_claude, 
             provider=anthropic,
-            tools=claude_tools,
+            tools=tools,
             system_prompt=system_prompt,
-            output_schema={
-                "type": "object",
-                "properties": {
-                    "answer": {
-                        "type": "string",
-                        "description": "The answer to the question"
-                    },
-                    "chart": {
-                        "type": "string",
-                        "description": "The URL of the chart"
-                    }
-                },
-                "required": [
-                    "answer",
-                    "chart"
-                ]
-            }
+            output_schema=output_schema,
         )
 
         # Using OpenAI as the LLM provider
         ## Create gpt tools
         openai = LLMProviderEnum.OPENAI
 
-        gpt_tools = [
-            Tool(
-                "get_db_schema", 
-                "Describe the schema of the SQLite database, including table names, and column names and types.",
-                db_interface_lambda_function,
-            ),
-            Tool(
-                "execute_sql_query", 
-                "Return the query results of the given SQL query to the SQLite database.",
-                db_interface_lambda_function,
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "sql_query": {
-                            "type": "string",
-                            "description": "The sql query to execute against the SQLite database."
-                        }
-                    },
-                    "required": [
-                        "sql_query"
-                    ]
-                }
-            ),
-            Tool(
-                "execute_python", 
-                "Execute python code in a Jupyter notebook cell and return the URL of the image that was created.",
-                code_interpreter_lambda_function,
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "code": {
-                            "type": "string",
-                            "description": "The python code to execute in a single cell."
-                        }
-                    },
-                    "required": [
-                        "code"
-                    ]
-                }
-            )
-        ]
-
         ## Create gpt agent flow
         gpt_agent_flow = ConfigurableStepFunctionsConstruct(
             self, 
-            "GPTAIStateMachine",
+            "SQLAgentWithToolsFlowAndGPT",
             state_machine_name="SQLAgentWithToolsFlowAndGPT",
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
             llm_caller=call_llm_lambda_function_openai, 
             provider=openai,
-            tools=gpt_tools,
+            tools=tools,
             system_prompt=system_prompt,
-            output_schema={
-                "type": "object",
-                "properties": {
-                    "answer": {
-                        "type": "string",
-                        "description": "The answer to the question"
-                    },
-                    "chart": {
-                        "type": "string",
-                        "description": "The URL of the chart"
-                    }
-                },
-                "required": [
-                    "answer",
-                    "chart"
-                ]
-            }
+            output_schema=output_schema,
         )
 
         # Using Jambda through Bedrock
-        ## Create Jambda tools
+        # Create Jambda tools
         jamba = LLMProviderEnum.AI21
-
-        jamba_tools = [
-            Tool(
-                "get_db_schema", 
-                "Describe the schema of the SQLite database, including table names, and column names and types.",
-                db_interface_lambda_function,
-            ),
-            Tool(
-                "execute_sql_query", 
-                "Return the query results of the given SQL query to the SQLite database.",
-                db_interface_lambda_function,
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "sql_query": {
-                            "type": "string",
-                            "description": "The sql query to execute against the SQLite database."
-                        }
-                    },
-                    "required": [
-                        "sql_query"
-                    ]
-                }
-            ),
-            Tool(
-                "execute_python", 
-                "Execute python code in a Jupyter notebook cell and return the URL of the image that was created.",
-                code_interpreter_lambda_function,
-                input_schema={
-                    "type": "object",
-                    "properties": {
-                        "code": {
-                            "type": "string",
-                            "description": "The python code to execute in a single cell."
-                        }
-                    },
-                    "required": [
-                        "code"
-                    ]
-                }
-            )
-        ]
 
         ## Create Jambda agent flow
         jamba_agent_flow = ConfigurableStepFunctionsConstruct(
@@ -475,52 +392,33 @@ class SQLAgentStack(Stack):
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
             llm_caller=call_llm_lambda_function_ai21, 
             provider=jamba,
-            tools=jamba_tools,
+            tools=tools,
             system_prompt=system_prompt,
-            output_schema={
-                "type": "object",
-                "properties": {
-                    "answer": {
-                        "type": "string",
-                        "description": "The answer to the question"
-                    },
-                    "chart": {
-                        "type": "string",
-                        "description": "The URL of the chart"
-                    }
-                },
-                "required": [
-                    "answer",
-                    "chart"
-                ]
-            }
+            output_schema=output_schema,
         )
 
         # Create the Gemini agent flow
         gemini_agent_flow = ConfigurableStepFunctionsConstruct(
             self,
-            "GeminiStateMachine",
+            "SQLAgentWithToolsFlowAndGemini",
             state_machine_name="SQLAgentWithToolsFlowAndGemini",
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json",
             llm_caller=call_llm_lambda_function_gemini,
             provider=anthropic,
-            tools=claude_tools,
+            tools=tools,
             system_prompt=system_prompt,
-            output_schema={
-                "type": "object",
-                "properties": {
-                    "answer": {
-                        "type": "string",
-                        "description": "The answer to the question"
-                    },
-                    "chart": {
-                        "type": "string",
-                        "description": "The URL of the chart"
-                    }
-                },
-                "required": [
-                    "answer",
-                    "chart"
-                ]
-            }
+            output_schema=output_schema,
+        )
+
+        # Create the Nova agent flow
+        nova_agent_flow = ConfigurableStepFunctionsConstruct(
+            self,
+            "SQLAgentWithToolsFlowAndNova",
+            state_machine_name="SQLAgentWithToolsFlowAndNova",
+            state_machine_template_path="step-functions/agent-with-tools-flow-template.json",
+            llm_caller=call_llm_lambda_function_nova,
+            provider=anthropic,
+            tools=tools,
+            system_prompt=system_prompt,
+            output_schema=output_schema,
         )

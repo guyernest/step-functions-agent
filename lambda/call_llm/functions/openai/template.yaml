@@ -1,0 +1,51 @@
+# template.yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Resources:
+  LLMLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      ContentUri: ../../lambda_layer/python
+      CompatibleRuntimes:
+        - python3.12
+    Metadata:
+      BuildMethod: python3.12 
+  # Anthropic Lambda Function
+  OpenAILambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: openai_lambda.lambda_handler
+      Description: OpenAI LLM Lambda
+      Layers:
+        - !Ref LLMLayer
+      Runtime: python3.12
+      Timeout: 90
+      MemorySize: 128
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: ai-agent-llm
+      Architectures:
+        - arm64
+      Policies:
+        - AWSLambdaBasicExecutionRole
+  # Anthropic Lambda Function
+  DeepSeekLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: deepseek_lambda.lambda_handler
+      Description: DeepSeek LLM Lambda
+      Layers:
+        - !Ref LLMLayer
+      Runtime: python3.12
+      Timeout: 90
+      MemorySize: 128
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: ai-agent-llm
+      Architectures:
+        - arm64
+      Policies:
+        - AWSLambdaBasicExecutionRole      

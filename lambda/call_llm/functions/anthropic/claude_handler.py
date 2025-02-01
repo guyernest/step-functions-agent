@@ -1,11 +1,4 @@
 # call_llm/llms/claude_handler.py
-import os
-import sys
-
-# Add the parent directory to Python path
-current_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(current_dir)
-
 import anthropic
 from anthropic.types import Message, TextBlock, ToolUseBlock
 from common.base_llm import BaseLLM, logger

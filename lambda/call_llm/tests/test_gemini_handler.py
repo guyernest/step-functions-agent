@@ -1,7 +1,5 @@
 import pytest
-from unittest.mock import Mock, patch
-from handlers.gemini_lambda import lambda_handler
-from llms.gemini_handler import GeminiLLM
+from functions.gemini.gemini_lambda import lambda_handler
 
 @pytest.fixture
 def input_event():

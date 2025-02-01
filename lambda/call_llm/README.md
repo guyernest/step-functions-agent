@@ -17,27 +17,32 @@ This directory contains the implementation of the various lambda functions used 
 │       │   ├── claude_handler.py (implementation of the Claude LLM handler)
 │       │   ├── openai_handler.py
 │       │   ├── gemini_handler.py
+|       |   ├── nova_handler.py
 │       │   └── bedrock_handler.py (implementation of the Bedrock LLM handler, specifically for the AI21 API)
 │       ├── handlers/
 │       │   ├── __init__.py
 │       │   ├── claude_lambda.py (implementation of the Claude LLM Lambda function)
 │       │   ├── openai_lambda.py
 │       │   ├── gemini_lambda.py
+│       │   ├── nova_lambda.py
 │       │   └── bedrock_lambda.py
-│       └── README.md (this file)
-├── tests/
-│   ├── conftest.py
-│   ├── test_claude_handler.py (unit tests for the Claude LLM handler)
-│   ├── test_openai_handler.py
-│   ├── test_gemini_handler.py
-│   ├── test_bedrock_handler.py
-│   └── requirements-test.txt
-├── events/
-│   └── claude-event.json (example event for the Claude LLM Lambda function for SAM local testing)
-│   └── openai-event.json  
-│   └── gemini-event.json
-│   └── bedrock-event.json 
-└── template.yaml  (for SAM) (optional)
+│       ├── tests/
+│       │   ├── conftest.py
+│       │   ├── test_claude_handler.py (unit tests for the Claude LLM handler)
+│       │   ├── test_openai_handler.py
+│       │   ├── test_gemini_handler.py
+│       │   ├── test_nova_handler.py
+│       │   ├── test_bedrock_handler.py
+│       │   └── requirements-test.txt
+│       │   └── events/
+│       │       ├── claude-event.json (example event for the Claude unction for SAM local testing)
+│       │       ├── openai-event.json
+│       │       ├── gemini-event.json
+│       │       ├── nova-event.json
+│       │       └── bedrock-event.json
+│       ├── README.md (this file)
+│       └── template.yaml  (for SAM) (optional)
+
 ```
 
 ## Building the LLM caller
@@ -48,6 +53,7 @@ The LLM caller is implemented using a Lambda function. It calls the LLM API, wit
 - [GPT](https://platform.openai.com/docs/guides/function-calling) models from OpenAI.
 - [Jamba](https://docs.ai21.com/reference/jamba-15-api-ref) models from AI21, through [AWS Bedrock InvokeModel API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_InvokeModel.html#API_runtime_InvokeModel_RequestBody).
 - [Gemini](https://gemini.google.com/) models from Google.
+- [Nova](https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html) models from Amazon.
 
 However, the tool usage is very similar to other LLM, such as FAIR [Llama](https://github.com/meta-llama/llama-models/blob/main/models/llama3_3/prompt_format.md#json-based-tool-calling), Amazon [Nova](https://docs.aws.amazon.com/nova/latest/userguide/prompting-tools-function.html), etc.
 
@@ -189,28 +195,29 @@ pytest tests/
             - AWSLambdaBasicExecutionRole
     ```
 
-1. Add a test event to the `events` folder.
+1. Add a test event to the `tests/events` folder.
 
     ```json
     {
-    "model": "gpt-4o",
     "messages": [
-        {"role": "user", "content": "What is 25*4+64*3?"}
+        {"role": "user", "content": "Do I need a jacket for today in Boston, MA?"}
     ],
     "tools": [
         {
-            "type": "function",
-            "function": {
-                "name": "calculator",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "a": {"type": "number"},
-                        "b": {"type": "number"}
-                    }
-                }
-            }
-        }
+          "name": "get_current_weather",
+          "description": "Get the current weather in a given location",
+          "input_schema": {
+              "type": "object",
+              "properties": {
+                  "location": {
+                      "type": "string",
+                      "description": "The city and state, e.g. San Francisco, CA."
+                  }
+              },
+              "required": ["location"]
+          }
+      },
+      ...
     ]
     }
     ```
@@ -219,7 +226,7 @@ pytest tests/
 
     ```bash
     sam build
-    sam local invoke OpenAILambda -e events/openai-event.jsonx
+    sam local invoke OpenAILambda -e tests/events/multiple-places-weather-event.json
     ```
 
 ## Deployment

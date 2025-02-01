@@ -1,6 +1,6 @@
 # call_llm/handlers/gemini_lambda.py
 from common.base_llm import logger
-from llms.gemini_handler import GeminiLLM
+from gemini_handler import GeminiLLM
 
 def lambda_handler(event, context):
     logger.info(f"Received event: {event}")

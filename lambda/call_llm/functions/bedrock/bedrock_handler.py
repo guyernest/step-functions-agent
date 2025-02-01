@@ -46,7 +46,6 @@ class BedrockLLM(BaseLLM):
             messages.insert(0, {"role": "system", "content": system})
         return {
             "messages": messages,
-            "max_tokens": 4096,
             "tools": jamba_tools
         }
     
