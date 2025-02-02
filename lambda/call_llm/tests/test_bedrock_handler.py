@@ -1,10 +1,7 @@
 # tests/test_bedrock_handler.py
-
-import json
 import pytest
-import call_llm  # Ensure your package is imported
 
-from functions.bedrock.bedrock_lambda import lambda_handler
+from functions.bedrock_llm.bedrock_lambda import lambda_handler
 
 @pytest.fixture
 def input_event():

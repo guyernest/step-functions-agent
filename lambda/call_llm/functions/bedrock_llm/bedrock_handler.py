@@ -1,4 +1,4 @@
-# llms/bedrock_handler.py
+# functions/bedrock/bedrock_handler.py
 import boto3
 import json
 from common.base_llm import BaseLLM, logger

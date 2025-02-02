@@ -92,7 +92,7 @@ class SQLAgentStack(Stack):
             function_name="CallClaudeLLM",
             # Name of the Lambda function that will be used by the agents to find the function.
             description="Lambda function to Call LLM (Anthropic) with messages history and tools.",
-            entry="lambda/call_llm/functions/anthropic",
+            entry="lambda/call_llm/functions/anthropic_llm",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(90),
             memory_size=256,
@@ -110,7 +110,7 @@ class SQLAgentStack(Stack):
             function_name="CallOpenAILLM",
             # Name of the Lambda function that will be used by the agents to find the function.
             description="Lambda function to Call LLM (GPT from OpenAI) with messages history and tools.",
-            entry="lambda/call_llm/functions/openai",
+            entry="lambda/call_llm/functions/openai_llm",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(90),
             memory_size=256,
@@ -128,7 +128,7 @@ class SQLAgentStack(Stack):
             function_name="CallGeminiLLM",
             # Name of the Lambda function that will be used by the agents to find the function.
             description="Lambda function to Call LLM (Gemini from Google) with messages history and tools.",
-            entry="lambda/call_llm/functions/gemini",
+            entry="lambda/call_llm/functions/gemini_llm",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(90),
             memory_size=256,
@@ -146,7 +146,7 @@ class SQLAgentStack(Stack):
             function_name="CallAI21LLM",
             # Name of the Lambda function that will be used by the agents to find the function.
             description="Lambda function to Call LLM (Jambda from AI21) with messages history and tools.",
-            entry="lambda/call_llm/functions/bedrock",
+            entry="lambda/call_llm/functions/bedrock_llm",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(90),
             memory_size=256,
@@ -164,7 +164,7 @@ class SQLAgentStack(Stack):
             function_name="CallNovaLLM",
             # Name of the Lambda function that will be used by the agents to find the function.
             description="Lambda function to Call LLM (Nova from Amazon) with messages history and tools.",
-            entry="lambda/call_llm/functions/bedrock",
+            entry="lambda/call_llm/functions/bedrock_llm",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(90),
             memory_size=256,

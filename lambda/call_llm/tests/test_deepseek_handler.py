@@ -1,6 +1,6 @@
-import json
 import pytest
-from functions.openai.deepseek_lambda import lambda_handler
+
+from functions.openai_llm.deepseek_lambda import lambda_handler
 
 @pytest.fixture
 def input_event():

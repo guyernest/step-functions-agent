@@ -17,30 +17,30 @@ This directory contains the implementation of the various lambda functions used 
         │   │   │   └── config.py
         ├── functions/
         │   ├── __init__.py
-        │   ├── anthropic/ 
+        │   ├── anthropic_llm/ 
         │   │   ├── claude_handler.py (implementation of the Claude LLM handler)
         │   │   ├── claude_lambda.py (implementation of the Claude LLM Lambda function)
         │   │   ├── requirements.txt
-        │   │   └── template.yaml (for SAM) (optional)
-        │   ├── bedrock/ (implementation of the Bedrock)
+        │   │   └── template.yaml (for SAM local testing) (optional)
+        │   ├── bedrock_llm/ (implementation of the Bedrock models)
         │   │   ├── nova_handler.py
         │   │   ├── nova_lambda.py
         │   │   ├── bedrock_handler.py
         │   │   ├── bedrock_lambda.py
         │   │   ├── requirements.txt
-        │   │   └── template.yaml (for SAM) (optional)
-        │   ├── gemini/
+        │   │   └── template.yaml 
+        │   ├── gemini_llm/
         │   │   ├── gemini_lambda.py
         │   │   ├── gemini_handler.py
         │   │   ├── requirements.txt
-        │   │   └── template.yaml (for SAM) (optional)
-        │   └── openai/
+        │   │   └── template.yaml 
+        │   └── openai_llm/
         │       ├── openai_handler.py
         │       ├── openai_lambda.py
         │       ├── deepseek_handler.py
         │       ├── deepseek_lambda.py
         │       ├── requirements.txt
-        │       └── template.yaml (for SAM) (optional)
+        │       └── template.yaml
         ├── tests/
         │   ├── conftest.py
         │   ├── test_claude_handler.py (unit tests for the Claude LLM handler)
