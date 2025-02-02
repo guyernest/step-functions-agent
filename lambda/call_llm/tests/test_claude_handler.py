@@ -1,7 +1,6 @@
 # tests/test_claude_handler.py
-import json
 import pytest
-from functions.anthropic.claude_lambda import lambda_handler
+from functions.anthropic_llm.claude_lambda import lambda_handler
 
 @pytest.fixture
 def input_event():

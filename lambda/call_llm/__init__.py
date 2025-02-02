@@ -12,14 +12,13 @@ __package__ = 'call_llm'
 
 # Import your submodules
 from lambda_layer.python import common
-from functions import bedrock, anthropic, openai
-from functions.bedrock import bedrock_handler
+from functions import bedrock_llm, anthropic_llm, openai_llm
+# from functions.bedrock import bedrock_handler
 
 # Make the imports available at the package level
 __all__ = [
     'common', 
-    'bedrock', 
-    'bedrock_handler', 
-    'anthropic', 
-    'openai'
+    'bedrock_llm', 
+    'anthropic_llm', 
+    'openai_llm'
 ]

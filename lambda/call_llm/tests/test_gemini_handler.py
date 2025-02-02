@@ -1,5 +1,6 @@
 import pytest
-from functions.gemini.gemini_lambda import lambda_handler
+
+from functions.gemini_llm.gemini_lambda import lambda_handler
 
 @pytest.fixture
 def input_event():

@@ -1,7 +1,7 @@
-# tests/test_claude_handler.py
+# tests/test_openai_handler.py
 import json
 import pytest
-from functions.openai.openai_lambda import lambda_handler
+from functions.openai_llm.openai_lambda import lambda_handler
 
 @pytest.fixture
 def input_event():

@@ -1,7 +1,7 @@
 # tests/test_nova_handler.py
-import json
 import pytest
-from functions.bedrock.nova_lambda import lambda_handler
+
+from functions.bedrock_llm.nova_lambda import lambda_handler
 
 @pytest.fixture
 def input_event():
