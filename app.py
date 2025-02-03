@@ -14,6 +14,7 @@ from step_functions_agent.step_functions_supervisor_agent_stack import Superviso
 from step_functions_agent.agent_ui_stack import AgentUIStack
 from step_functions_agent.agent_monitoring_stack import AgentMonitoringStack
 from step_functions_agent.step_functions_graphql_agent_stack import GraphQLAgentStack
+from step_functions_agent.step_functions_cloudwatch_agent_stack import CloudWatchAgentStack
 
 app = cdk.App()
 sqlAgentStack = SQLAgentStack(app, "SQLAgentStack")
@@ -23,6 +24,7 @@ clusteringAgentStack = ClusteringAgentStack(app, "ClusteringAgentStack")
 analyzerAgentStack = AnalysisAgentStack(app, "AnalyzerAgentStack")
 researchAgentStack = ResearchAgentStack(app, "ResearchAgentStack")
 graphqlAgentStack = GraphQLAgentStack(app, "GraphQLAgentStack")
+CloudWatchAgentStack = CloudWatchAgentStack(app, "CloudWatchAgentStack")
 
 superviserAgentStack = SupervisorAgentStack(app, "SuperviserAgentStack")
 
@@ -40,6 +42,7 @@ Tags.of(analyzerAgentStack).add("project", "analysis-ai-agent")
 Tags.of(researchAgentStack).add("project", "research-ai-agent")
 
 Tags.of(graphqlAgentStack).add("project", "graphql-ai-agent")
+Tags.of(CloudWatchAgentStack).add("project", "cloudwatch-ai-agent")
 
 Tags.of(superviserAgentStack).add("project", "supervisor-ai-agent")
 
