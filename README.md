@@ -96,6 +96,7 @@ The other frameworks have some limitations, such as:
   - `code-interpreter/`
   - `db-interface/`
   - `graphql-interface/`
+  - `cloudwatch-queries/`
   - `google-maps/`
   - `rust-clustering/`
   - `stock-analyzer/`

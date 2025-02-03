@@ -34,6 +34,13 @@ class SQLAgentStack(Stack):
                 secret_object_value=secret_values
             )
 
+        ## Create Log Group to be used by the lambdas and step functions
+        log_group = logs.LogGroup(
+            self, 
+            "SQLAgentLogGroup", 
+            retention=logs.RetentionDays.ONE_WEEK
+        )
+
         ####### Call LLM Lambda   ######
 
         # The execution role for the lambda
@@ -100,7 +107,7 @@ class SQLAgentStack(Stack):
             handler="lambda_handler",
             layers=[llm_layer],
             architecture=_lambda.Architecture.ARM_64,
-            log_retention=logs.RetentionDays.ONE_WEEK,
+            log_group=log_group,
             role=call_llm_lambda_role,
         )
 
@@ -118,7 +125,7 @@ class SQLAgentStack(Stack):
             handler="lambda_handler",
             layers=[llm_layer],
             architecture=_lambda.Architecture.ARM_64,
-            log_retention=logs.RetentionDays.ONE_WEEK,
+            log_group=log_group,
             role=call_llm_lambda_role,
         )
 
@@ -136,7 +143,7 @@ class SQLAgentStack(Stack):
             handler="lambda_handler",
             layers=[llm_layer],
             architecture=_lambda.Architecture.ARM_64,
-            log_retention=logs.RetentionDays.ONE_WEEK,
+            log_group=log_group,
             role=call_llm_lambda_role,
         )
 
@@ -154,7 +161,7 @@ class SQLAgentStack(Stack):
             handler="lambda_handler",
             layers=[llm_layer],
             architecture=_lambda.Architecture.ARM_64,
-            log_retention=logs.RetentionDays.ONE_WEEK,
+            log_group=log_group,
             role=call_llm_lambda_role,
         )
 
@@ -172,7 +179,7 @@ class SQLAgentStack(Stack):
             handler="lambda_handler",
             layers=[llm_layer],
             architecture=_lambda.Architecture.ARM_64,
-            log_retention=logs.RetentionDays.ONE_WEEK,
+            log_group=log_group,
             role=call_llm_lambda_role,
         )
 
@@ -203,7 +210,7 @@ class SQLAgentStack(Stack):
             index="index.py",
             handler="lambda_handler",
             architecture=_lambda.Architecture.ARM_64,
-            log_retention=logs.RetentionDays.ONE_WEEK,
+            log_group=log_group,
             role=db_interface_lambda_role,
         )
 
@@ -260,7 +267,7 @@ class SQLAgentStack(Stack):
                 "IMAGE_BUCKET_NAME": code_interpreter_output_bucket.bucket_name,
             },
             architecture=_lambda.Architecture.X86_64,  # Using x86_64 for better compatibility with dependencies
-            log_retention=logs.RetentionDays.ONE_WEEK,
+            log_group=log_group,
             role=code_interpreter_lambda_role,
         )
 
@@ -364,8 +371,6 @@ class SQLAgentStack(Stack):
         )
 
         # Using OpenAI as the LLM provider
-        ## Create gpt tools
-        openai = LLMProviderEnum.OPENAI
 
         ## Create gpt agent flow
         gpt_agent_flow = ConfigurableStepFunctionsConstruct(
@@ -374,15 +379,12 @@ class SQLAgentStack(Stack):
             state_machine_name="SQLAgentWithToolsFlowAndGPT",
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
             llm_caller=call_llm_lambda_function_openai, 
-            provider=openai,
             tools=tools,
             system_prompt=system_prompt,
             output_schema=output_schema,
         )
 
         # Using Jambda through Bedrock
-        # Create Jambda tools
-        jamba = LLMProviderEnum.AI21
 
         ## Create Jambda agent flow
         jamba_agent_flow = ConfigurableStepFunctionsConstruct(
@@ -391,7 +393,6 @@ class SQLAgentStack(Stack):
             state_machine_name="SQLAgentWithToolsFlowAndJamba",
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
             llm_caller=call_llm_lambda_function_ai21, 
-            provider=jamba,
             tools=tools,
             system_prompt=system_prompt,
             output_schema=output_schema,
@@ -404,7 +405,6 @@ class SQLAgentStack(Stack):
             state_machine_name="SQLAgentWithToolsFlowAndGemini",
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json",
             llm_caller=call_llm_lambda_function_gemini,
-            provider=anthropic,
             tools=tools,
             system_prompt=system_prompt,
             output_schema=output_schema,
@@ -417,7 +417,6 @@ class SQLAgentStack(Stack):
             state_machine_name="SQLAgentWithToolsFlowAndNova",
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json",
             llm_caller=call_llm_lambda_function_nova,
-            provider=anthropic,
             tools=tools,
             system_prompt=system_prompt,
             output_schema=output_schema,
