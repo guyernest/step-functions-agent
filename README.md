@@ -88,9 +88,13 @@ The other frameworks have some limitations, such as:
 
 - **lambda/call_llm/** *(Lambda functions to call the various LLM)*
   - [`README.md`](lambda/call_llm/README.md) *(Documentation on building the LLM callers)*
-  - `common/`
-  - `llms/`
-  - `handlers/`
+  - `lambda_layer/` (Lambda layer shared by all the LLM callers)
+  - `functions/` (Specific LLM providers)
+    - `anthropic_llm/` (for Claude)
+    - `openai_llm/` (for GPT and DeepSeek)
+    - `bedrock_llm/` (for Jamba and Nova)
+    - `gemini_llm/` (for Gemini)
+  - `tests/`
 - **lambda/tools/** *(Lambda functions for the tools in various programming languages)*
   - [`README.md`](lambda/tools/README.md) *(Documentation on building the tools)*
   - `code-interpreter/`

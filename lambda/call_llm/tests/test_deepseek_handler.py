@@ -57,7 +57,8 @@ def input_event():
 
 def test_lambda_handler(input_event):
     response = lambda_handler(input_event, None)
-    
+    print(response)
+
     assert response["statusCode"] == 200
     assert "messages" in response["body"]
     assert "metadata" in response["body"]
