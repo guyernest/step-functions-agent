@@ -25,7 +25,7 @@ class CloudWatchAgentStack(Stack):
         # Since we already have the previous agent, we can reuse the same function
 
         # TODO - Get the function name from the previous agent
-        call_llm_function_name = "CallNovaLLM"
+        call_llm_function_name = "CallGeminiLLM"
 
         # Define the Lambda function
         call_llm_lambda_function = _lambda.Function.from_function_name(
@@ -122,7 +122,10 @@ class CloudWatchAgentStack(Stack):
                     "type": "object",
                     "properties": {
                         "log_groups": {
-                            "type": "list",
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
                             "description": "The list of log groups to query."
                         },
                         "query": {

@@ -34,6 +34,23 @@ def input_event():
                     "type": "object",
                     "properties": {}
                 }
+            },
+            {
+                "name": "get_current_time_cities",
+                "description": "Get the current time in the given city list",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "locations": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "The list of cities and states, e.g. [San Francisco, CA, New York, NY]."
+                        }
+                    },
+                    "required": ["locations"]
+                }
             }
         ]
     }
