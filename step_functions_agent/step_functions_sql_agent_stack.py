@@ -183,6 +183,25 @@ class SQLAgentStack(Stack):
             role=call_llm_lambda_role,
         )
 
+        # Creating the Call LLM lambda function for DeepSeek through OpenRouter API
+        call_llm_lambda_function_deepseek = _lambda_python.PythonFunction(
+            self, 
+            "CallLLMDeepSeek",
+            function_name="CallLLMDeepSeek",
+            # Name of the Lambda function that will be used by the agents to find the function.
+            description="Lambda function to Call LLM (DeepSeek) with messages history and tools.",
+            entry="lambda/call_llm/functions/openai_llm",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            timeout=Duration.seconds(90),
+            memory_size=256,
+            index="deepseek_lambda.py",
+            handler="lambda_handler",
+            layers=[llm_layer],
+            architecture=_lambda.Architecture.ARM_64,
+            log_group=log_group,
+            role=call_llm_lambda_role,
+        )
+
         ### Tools Lambda Functions
 
         #### DB Tools
@@ -417,6 +436,18 @@ class SQLAgentStack(Stack):
             state_machine_name="SQLAgentWithToolsFlowAndNova",
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json",
             llm_caller=call_llm_lambda_function_nova,
+            tools=tools,
+            system_prompt=system_prompt,
+            output_schema=output_schema,
+        )
+
+        # Create the DeepSeek agent flow
+        deepseek_agent_flow = ConfigurableStepFunctionsConstruct(
+            self,
+            "SQLAgentWithToolsFlowAndDeepSeek",
+            state_machine_name="SQLAgentWithToolsFlowAndDeepSeek",
+            state_machine_template_path="step-functions/agent-with-tools-flow-template.json",
+            llm_caller=call_llm_lambda_function_deepseek,
             tools=tools,
             system_prompt=system_prompt,
             output_schema=output_schema,
