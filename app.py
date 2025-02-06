@@ -30,7 +30,14 @@ superviserAgentStack = SupervisorAgentStack(app, "SuperviserAgentStack")
 
 uiStack = AgentUIStack(app, "AgentUIStack")
 
-monitoringStack = AgentMonitoringStack(app, "AgentMonitoringStack")
+monitoringStack = AgentMonitoringStack(
+    app, 
+    "AgentMonitoringStack",
+    agents= sqlAgentStack.agent_flows,
+    llm_functions= sqlAgentStack.llm_functions,
+    tool_functions= sqlAgentStack.tool_functions,
+    log_group_name= sqlAgentStack.log_group_name
+)
 
 Tags.of(app).add("application", "ai-agents")
 
