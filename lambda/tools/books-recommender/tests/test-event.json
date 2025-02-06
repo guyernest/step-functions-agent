@@ -1,0 +1,7 @@
+{
+  "name": "get_nyt_books",
+  "id": "unique_request_id",
+  "input": {
+    "genre": "hardcover-fiction"
+  }
+}

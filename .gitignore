@@ -25,3 +25,6 @@ lambda/tools/stock-analyzer/target
 lambda/tools/web-research/.aws-sam
 uv.lock
 .aws-sam
+lambda/tools/books-recommender/node_modules
+lambda/tools/books-recommender/package-lock.json
+lambda/tools/google-maps/package-lock.json

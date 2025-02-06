@@ -1,8 +1,13 @@
 import { Handler } from 'aws-lambda';
 import { getSecret } from '@aws-lambda-powertools/parameters/secrets';
 import { Logger } from '@aws-lambda-powertools/logger';
+import { URL } from 'url';
+import fetch from 'node-fetch'
+// import { Tracer } from '@aws-lambda-powertools/tracer';
 
-const logger = new Logger({ serviceName: 'Google Maps Tools' });
+const logger = new Logger({ serviceName: 'ai-agents' });
+// const tracer = new Tracer({ serviceName: 'ai-agents' });
+
 
 // Response interfaces
 interface GoogleMapsResponse {
@@ -492,7 +497,7 @@ async function handleDirections(
             }, null, 2)
 }
 
-export const handler: Handler = async (event, context) => {
+export const handler: Handler = async (event) => {
 
     // Initialize API key if not already set
     if (!GOOGLE_MAPS_API_KEY) {
