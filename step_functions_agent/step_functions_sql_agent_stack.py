@@ -452,3 +452,28 @@ class SQLAgentStack(Stack):
             system_prompt=system_prompt,
             output_schema=output_schema,
         )
+
+        self.llm_functions = [
+            call_llm_lambda_function_openai.function_name,
+            call_llm_lambda_function_claude.function_name,
+            call_llm_lambda_function_gemini.function_name,
+            call_llm_lambda_function_ai21.function_name,
+            call_llm_lambda_function_nova.function_name,
+            call_llm_lambda_function_deepseek.function_name,
+        ]
+
+        self.tool_functions = [
+            db_interface_lambda_function.function_name,
+            code_interpreter_lambda_function.function_name,
+        ]
+
+        self.agent_flows = [
+            gpt_agent_flow.state_machine_name,
+            claude_agent_flow.state_machine_name,
+            gemini_agent_flow.state_machine_name,
+            jamba_agent_flow.state_machine_name,
+            nova_agent_flow.state_machine_name,
+            deepseek_agent_flow.state_machine_name,
+        ]
+
+        self.log_group_name = log_group.log_group_name
