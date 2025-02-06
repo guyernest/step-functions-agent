@@ -12,9 +12,13 @@ The AI Agent that is created using these tools is implemented in the [step_funct
 google-maps/
 ├── src/
 │   └── index.ts
+|   └── local-test.ts
+├── tests/
+│   └── test-event.json
 ├── package.json
 ├── tsconfig.json
-└── README.md
+├── template.yaml (for SAM CLI)
+└── README.md (This file)
 ```
 
 ## Tool list
@@ -130,6 +134,12 @@ To test the Lambda function locally, run the following command:
 
 ```bash
 npm run test
+```
+
+or using SAM CLI:
+
+```bash
+sam local invoke GoogleMapsLambda --event tests/test-event.json
 ```
 
 ## Deployment
