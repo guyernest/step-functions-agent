@@ -52,6 +52,47 @@ def input_event():
                     },
                     "required": ["locations"]
                 }
+            },
+            {
+                "name": "get_nyt_books",
+                "description": "Get the New York Times Best Sellers list for a specified genre.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "genre": {
+                            "type": "string",
+                            "enum": [
+                                "hardcover-fiction",
+                                "hardcover-nonfiction",
+                                "trade-fiction-paperback",
+                                "paperback-nonfiction",
+                                "combined-print-and-e-book-fiction",
+                                "combined-print-and-e-book-nonfiction",
+                                "e-book-fiction",
+                                "e-book-nonfiction",
+                                "advice-how-to-and-miscellaneous",
+                                "childrens-middle-grade-hardcover",
+                                "childrens-middle-grade-paperback",
+                                "childrens-middle-grade-e-book",
+                                "picture-books",
+                                "series-books",
+                                "audio-fiction",
+                                "audio-nonfiction",
+                                "business-books",
+                                "graphic-books-and-manga",
+                                "mass-market-monthly",
+                                "middle-grade-paperback",
+                                "young-adult-hardcover",
+                                "young-adult-paperback",
+                                "young-adult-e-book"
+                            ],
+                            "description": "The genre/category of books to retrieve (e.g., 'hardcover-fiction')."
+                        }
+                    },
+                    "required": [
+                        "genre",
+                    ]
+                }
             }
         ]
     }
