@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any
 from aws_lambda_powertools import Logger
+from aws_lambda_powertools import Tracer
 
 logger = Logger(level="INFO")
+tracer = Tracer(service="ai-agents")
 
 class BaseLLM(ABC):
     @abstractmethod

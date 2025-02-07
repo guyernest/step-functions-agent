@@ -1,7 +1,8 @@
 # call_llm/handlers/claude_lambda.py
-from common.base_llm import logger
+from common.base_llm import logger, tracer
 from claude_handler import ClaudeLLM
 
+@tracer.capture_lambda_handler
 def lambda_handler(event, context):
     logger.info(f"Received event: {event}")
     try:
@@ -25,10 +26,7 @@ def lambda_handler(event, context):
         }
     except Exception as e:
         logger.error(e)
-        return {
-            'statusCode': 500,
-            'body': {'error': str(e)}
-        }
+        raise e # To activate the retry mechanism in the caller
 
 if __name__ == "__main__":
     # Test event for Claude 3

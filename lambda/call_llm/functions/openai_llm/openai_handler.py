@@ -26,17 +26,33 @@ class OpenAILLM(BaseLLM):
             } for tool in tools
         ] if tools else []
 
-        # Convert messages to OpenAI format
-        for message in messages:
-            if message["role"] == "user":
-                if "content" in message:
-                    if isinstance(message["content"], list):                        
-                        for part in message["content"]:
-                            if "type" in part and part["type"] == "tool_result":  # tool_use
-                                message['role'] = 'tool'
-                                message['tool_call_id'] = part['tool_use_id']
-                                message['content'] = json.dumps(part['content'])
+        # # Convert messages to OpenAI format
+        # for message in messages:
+        #     if message["role"] == "user":
+        #         if "content" in message:
+        #             if isinstance(message["content"], list):                        
+        #                 for part in message["content"]:
+        #                     if "type" in part and part["type"] == "tool_result":  # tool_use
+        #                         message['role'] = 'tool'
+        #                         part['tool_call_id'] = part['tool_use_id']
+        #                         part['content'] = json.dumps(part['content'])
 
+        # Replace the last message with the tool_use_id and content messages.
+        last_message = messages[-1]
+        if last_message["role"] == "user":
+            if "content" in last_message:
+                if isinstance(last_message["content"], list):   
+                    remove_last_message = True                     
+                    for part in last_message["content"]:
+                        if "type" in part and part["type"] == "tool_result":
+                            if remove_last_message:
+                                messages.pop()
+                                remove_last_message = False
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": part["tool_use_id"],
+                                "content": json.dumps(part["content"])
+                            })  # tool_use
 
         if system and messages[0]["role"] != "system":
             messages.insert(0, {"role": "system", "content": system})
@@ -51,7 +67,7 @@ class OpenAILLM(BaseLLM):
         return {
             "message": {
                 "role": message.role,
-                "content": [{"text": message.content, "type": "text"}] if message.content else [],
+                "content": [{"text": message.content, "type": "text"}] if message.content else "",
                 "tool_calls": [
                     {
                         "id": tool_call.id,

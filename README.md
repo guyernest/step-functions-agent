@@ -1,7 +1,7 @@
 # Executing AI Agents in AWS Step Functions
 
 > 📦 **Enterprise AI Agent Framework**
-> 
+>
 > Extreme flexibility and scalability for enterprise grade AI Agents. Supporting all LLMs and tools in any programming language. Including human approval and observability. All in a single framework.
 > ___
 
@@ -29,6 +29,7 @@
 - [uv Set up](#uv-set-up)
 - [Deploying the AI Agent Step Function using CDK](#deploying-the-ai-agent-step-function-using-cdk)
   - [Other CDK commands](#other-cdk-commands)
+- [Monitoring](#monitoring)
 
 ## AI Agent Overview
 
@@ -625,3 +626,20 @@ cdk diff SQLAgentStack
 cdk diff FinancialAgentStack
 ```
 
+## Monitoring
+
+### CloudWatch Logs
+
+The CDK stack defines a log group that can be used for all the Lambda functions. The log group is created with a retention period of 7 days, which can be changed in the CDK stack definition.
+
+The project includes a [CloudWatch and X-ray AI Agent](step_functions_agent/step_functions_cloudwatch_agent_stack.py) that can check issues in the log and analyze the traces.
+
+### X-Ray
+
+The CDK stack defines a X-Ray tracing for all the Lambda functions. The X-Ray tracing is enabled by default. The X-Ray traces can be viewed in the AWS X-Ray console.
+
+![Service Map Graph for SQL AI Agent](images/AI-Agents-Traces-Service-Map.png)
+
+### CloudWatch Dashboards
+
+The [CDK Monitoring stack](step_functions_agent/agent_monitoring_stack.py) defines a CloudWatch dashboard that can be used to monitor the Lambda functions.

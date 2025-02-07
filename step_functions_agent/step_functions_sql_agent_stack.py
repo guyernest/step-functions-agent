@@ -109,6 +109,7 @@ class SQLAgentStack(Stack):
             architecture=_lambda.Architecture.ARM_64,
             log_group=log_group,
             role=call_llm_lambda_role,
+            tracing= _lambda.Tracing.ACTIVE,
         )
 
         # Creating the Call LLM lambda function for GPT from OpenAI only 
@@ -127,6 +128,7 @@ class SQLAgentStack(Stack):
             architecture=_lambda.Architecture.ARM_64,
             log_group=log_group,
             role=call_llm_lambda_role,
+            tracing= _lambda.Tracing.ACTIVE,
         )
 
         # Creating the Call LLM lambda function for Gemini from Google
@@ -145,6 +147,7 @@ class SQLAgentStack(Stack):
             architecture=_lambda.Architecture.ARM_64,
             log_group=log_group,
             role=call_llm_lambda_role,
+            tracing= _lambda.Tracing.ACTIVE,
         )
 
         # Creating the Call LLM lambda function for Jambda from AI21 through Bedrock
@@ -163,6 +166,7 @@ class SQLAgentStack(Stack):
             architecture=_lambda.Architecture.ARM_64,
             log_group=log_group,
             role=call_llm_lambda_role,
+            tracing= _lambda.Tracing.ACTIVE,
         )
 
         # Creating the Call LLM lambda function for Nova from Amazon through Bedrock
@@ -181,6 +185,7 @@ class SQLAgentStack(Stack):
             architecture=_lambda.Architecture.ARM_64,
             log_group=log_group,
             role=call_llm_lambda_role,
+            tracing= _lambda.Tracing.ACTIVE,
         )
 
         # Creating the Call LLM lambda function for DeepSeek through OpenRouter API
@@ -200,6 +205,7 @@ class SQLAgentStack(Stack):
             architecture=_lambda.Architecture.ARM_64,
             log_group=log_group,
             role=call_llm_lambda_role,
+            tracing= _lambda.Tracing.ACTIVE,
         )
 
         ### Tools Lambda Functions
@@ -231,6 +237,7 @@ class SQLAgentStack(Stack):
             architecture=_lambda.Architecture.ARM_64,
             log_group=log_group,
             role=db_interface_lambda_role,
+            tracing= _lambda.Tracing.ACTIVE,
         )
 
         #### Code Interpreter Tools
@@ -288,6 +295,7 @@ class SQLAgentStack(Stack):
             architecture=_lambda.Architecture.X86_64,  # Using x86_64 for better compatibility with dependencies
             log_group=log_group,
             role=code_interpreter_lambda_role,
+            tracing= _lambda.Tracing.ACTIVE,
         )
 
         # Adding human approval to the usage of the tools

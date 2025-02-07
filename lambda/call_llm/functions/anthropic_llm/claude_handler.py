@@ -1,7 +1,7 @@
 # call_llm/functions/anthropic/claude_handler.py
 import anthropic
 from anthropic.types import Message, TextBlock, ToolUseBlock
-from common.base_llm import BaseLLM, logger
+from common.base_llm import BaseLLM
 from common.config import get_api_keys
 
 from typing import List, Dict
