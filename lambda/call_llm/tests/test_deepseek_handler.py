@@ -80,35 +80,38 @@ def test_lambda_handler(input_event):
     assert "output_tokens" in usage
 
     function_calls = response["body"]["function_calls"]
-    while len(function_calls) > 0:
-        assert function_calls[0]["name"] == "get_current_weather"
+    assert function_calls[0]["name"] == "get_current_weather"
 
-        tool_response = {
-            "role": "user",
-            "content": []
-        }
-        for function_call in function_calls:
-            tool_response["content"].append({
-                "type": "tool_result",
-                "name": function_call["name"],
-                "tool_use_id": function_call["id"],
-                "content": f"The weather in {function_call['input']['location']} is sunny.",
-            })
+    tool_response = {
+        "role": "user",
+        "content": []
+    }
+    print("+++++++++++++++++++++++++++")
+    print(function_calls)
+    for function_call in function_calls:
+        tool_response["content"].append({
+            "type": "tool_result",
+            "name": function_call["name"],
+            "tool_use_id": function_call["id"],
+            "content": f"The weather in {function_call['input']['location']} is sunny.",
+        })
 
-        input_event["messages"].append(tool_response)
-        response = lambda_handler(input_event, None)
-        
-        assert response["statusCode"] == 200
-        assert "messages" in response["body"]
-        assert "metadata" in response["body"]
+    input_event["messages"].append(tool_response)
+    print("+++++++++++++++++++++++++++")
+    print(input_event)
+    response = lambda_handler(input_event, None)
+    
+    assert response["statusCode"] == 200
+    assert "messages" in response["body"]
+    assert "metadata" in response["body"]
 
-        messages = response["body"]["messages"]
-        assert len(messages) > 1
-        last_message = messages[-1]
-        print(last_message)
+    messages = response["body"]["messages"]
+    assert len(messages) > 1
+    last_message = messages[-1]
+    print(last_message)
 
-        assert last_message["role"] == "assistant"
-        function_calls = response["body"]["function_calls"]
+    assert last_message["role"] == "assistant"
+    function_calls = response["body"]["function_calls"]
 
     assert "text" in messages[-1]["content"][0]
     assert "sunny" in messages[-1]["content"][0]["text"].lower()

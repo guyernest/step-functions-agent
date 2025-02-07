@@ -64,9 +64,9 @@ The LLM caller is implemented using a Lambda function. It calls the LLM API, wit
 - [Jamba](https://docs.ai21.com/reference/jamba-15-api-ref) models from AI21, through [AWS Bedrock InvokeModel API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_InvokeModel.html#API_runtime_InvokeModel_RequestBody).
 - [Gemini](https://gemini.google.com/) models from Google.
 - [Nova](https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html) models from Amazon.
-- [DeepSeek](https://platform.deepseek.com/) models from DeepSeek.
+- [DeepSeek](https://platform.deepseek.com/) models from DeepSeek. (Note: DeepSeek does not support function calling yet [Issue](https://github.com/deepseek-ai/DeepSeek-V3/issues/15).)
 
-However, the tool usage is very similar to other LLM, such as FAIR [Llama](https://github.com/meta-llama/llama-models/blob/main/models/llama3_3/prompt_format.md#json-based-tool-calling), Amazon [Nova](https://docs.aws.amazon.com/nova/latest/userguide/prompting-tools-function.html), etc.
+However, the tool usage is very similar to other LLM, such as FAIR [Llama](https://github.com/meta-llama/llama-models/blob/main/models/llama3_3/prompt_format.md#json-based-tool-calling), and others.
 
 ## LLM Interface
 
@@ -102,10 +102,7 @@ def lambda_handler(event, context):
         }
     except Exception as e:
         logger.error(e)
-        return {
-            'statusCode': 500,
-            'body': {'error': str(e)}
-        }
+        raise e # Raise the exception to trigger a retry
 ```
 
 ## API Key
@@ -248,7 +245,6 @@ Using CDK:
         # Creating the Call LLM lambda function for Claude only 
         call_llm_lambda_function_claude = _lambda_python.PythonFunction(
             self, "CallLLMLambdaClaude",
-            # Name of the Lambda function that will be used by the agents to find the function.
             function_name="CallClaudeLLM", 
             description="Lambda function to Call LLM (Anthropic) with messages history and tools.",
             entry="lambda/call_llm/functions/anthropic",
@@ -259,5 +255,6 @@ Using CDK:
             handler="lambda_handler",
             architecture=_lambda.Architecture.ARM_64,
             role=call_llm_lambda_role,
+            tracing= _lambda.Tracing.ACTIVE,
         )
 ```

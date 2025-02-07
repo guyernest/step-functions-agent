@@ -74,6 +74,7 @@ When crafting queries:
 class CloudWatchInterface:
     def __init__(self):
         self.logs_client = boto3.client('logs')
+        self.xray_client = boto3.client('xray')
 
     def find_log_groups_by_tag(self, tag_name: str, tag_value: str) -> list:
         """Find CloudWatch log groups that have a specific tag."""
@@ -168,6 +169,21 @@ class CloudWatchInterface:
         """Returns the prompt for generating CloudWatch Logs Insights queries."""
         return QUERY_GENERATION_PROMPT
 
+    # Adding call to get the X-ray map of the service for a given time range
+    def get_xray_map(self, start_time: int, end_time: int, group_name: str = None,):
+        try:
+            response = self.xray_client.get_service_graph(
+                StartTime=start_time,
+                EndTime=end_time,
+                # TODO: Add support for filtering by group name
+                # GroupName=group_name
+            )
+            return response
+        except Exception as e:
+            return {
+                'error': f"Failed to get X-ray map: {str(e)}"
+            }
+
 def lambda_handler(event, context):
     # Get the tool name from the input event
     tool_use = event
@@ -210,6 +226,21 @@ def lambda_handler(event, context):
                 'prompt': cloudwatch.get_query_generation_prompt()
             })
  
+        case 'get_service_map':
+            required_params = ['start_time', 'end_time']
+            if not all(param in tool_input for param in required_params):
+                result = json.dumps({
+                    'error': f"Missing required parameters: {', '.join(required_params)}"
+                })
+            else:
+                result = json.dumps({
+                    'service_map': cloudwatch.get_xray_map(
+                        tool_input['start_time'],
+                        tool_input['end_time'],
+                        tool_input.get('group_name', None),
+                    )
+                }, default=str)
+
         case _:
             result = json.dumps({
                 'error': f"Unknown tool name: {tool_name}"
@@ -266,3 +297,19 @@ if __name__ == "__main__":
     print("\nTesting get_query_generation_prompt:")
     response_get_prompt = lambda_handler(test_event_get_prompt, None)
     print(response_get_prompt)
+
+    now = int(time.time())
+
+    # Test event for get_service_map
+    test_event_get_service_map = {
+        "name": "get_service_map",
+        "id": "get_service_map_unique_id",
+        "type": "tool_use",
+        "input": {
+            "start_time": now - 3600,
+            "end_time": now,
+        }
+    }
+    print("\nTesting get_service_map:") 
+    response_get_service_map = lambda_handler(test_event_get_service_map, None)
+    print(response_get_service_map)

@@ -24,10 +24,7 @@ def lambda_handler(event, context):
         }
     except Exception as e:
         logger.error(e)
-        return {
-            'statusCode': 500,
-            'body': {'error': str(e)}
-        }
+        raise e # To trigger the retry logic in the caller
 
 if __name__ == "__main__":
     # Test event for Jamba model

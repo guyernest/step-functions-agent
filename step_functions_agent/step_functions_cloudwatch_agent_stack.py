@@ -1,19 +1,13 @@
 from aws_cdk import (
     Duration,
-    RemovalPolicy,
     Stack,
-    SecretValue,
     aws_iam as iam,
     aws_lambda as _lambda,
-    aws_secretsmanager as secretsmanager,
-    aws_ssm as ssm,
     aws_logs as logs,
-    aws_events as events,
-    aws_events_targets as targets,
     aws_lambda_python_alpha as _lambda_python,
 )
 from constructs import Construct
-from .ai_agent_construct_from_json import ConfigurableStepFunctionsConstruct, Tool, LLMProviderEnum
+from .ai_agent_construct_from_json import ConfigurableStepFunctionsConstruct, Tool
 
 class CloudWatchAgentStack(Stack):
 
@@ -25,7 +19,7 @@ class CloudWatchAgentStack(Stack):
         # Since we already have the previous agent, we can reuse the same function
 
         # TODO - Get the function name from the previous agent
-        call_llm_function_name = "CallGeminiLLM"
+        call_llm_function_name = "CallClaudeLLM"
 
         # Define the Lambda function
         call_llm_lambda_function = _lambda.Function.from_function_name(
@@ -50,7 +44,7 @@ class CloudWatchAgentStack(Stack):
             ]
         )
 
-       # Grant the Lambda function permission to access CloudWatch Logs
+       # Grant the Lambda function permission to access CloudWatch Logs and X-ray service graph
         cloudwatch_lambda_role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -60,6 +54,7 @@ class CloudWatchAgentStack(Stack):
                     "logs:StopQuery",
                     "logs:GetQueryResults",
                     "logs:DescribeQueries",
+                    "xray:GetServiceGraph",
                 ],
                 resources=[
                     "*"
@@ -143,15 +138,43 @@ class CloudWatchAgentStack(Stack):
                         "time_range"
                     ]
                 }
+            ),
+            Tool(
+                "get_service_graph",
+                "Get the service graph for a given time range.",
+                cloudwatch_lambda_function,
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "start_time": {
+                            "type": "integer",
+                            "description": "epoch time in seconds of the start time of the traces to analyze."
+                        },
+                        "end_time": {
+                            "type": "integer",
+                            "description": "epoch time in seconds of the end time of the traces to analyze."
+                        }
+                    },
+                    "required": [
+                        "start_time",
+                        "end_time"
+                    ]
+                }
             )
         ]  # type: list[Tool]
 
         system_prompt="""
         You are an expert software system analyst with deep knowledge root cause analysis.
-        You are working with a user who is trying to understand the root cause of a problem in a software system
-         
-        Your job is to help users understand what is happening to their systems based on the log data.
+        You are working with a user who is trying to understand the root cause of a problem in a software system.
+
         You have access to a set of tools, and please use them when needed. 
+
+        You have access to log data from the system, and you can use that data to help the user understand what is happening.
+        You can also use the service graph to help the user understand the relationships between different services in the system.
+        The json output of the graph also includes statistics of the latency and error rate for each service.
+        You can use the service graph to help the user understand which services are affected by the problem and which services are not.
+        You can also use the service graph to help the user understand which services are causing the problem and which services are not.
+         
         One of the tools can give you examples and instructions on how to use CloudWatch Insights queries.
         Please prefer to use the print_output tool to format the reply, instead of ending the turn.
         Please use the generate_query_prompt tool to generate the prompt for a CloudWatch Insights query, including the query examples.
@@ -168,3 +191,16 @@ class CloudWatchAgentStack(Stack):
             tools=cloudwatch_tools,
             system_prompt=system_prompt,
         )
+
+                # Adding the generated lambda and step functions to self to allow monitoring stack to access them
+        self.llm_functions = []
+
+        self.tool_functions = [
+            cloudwatch_lambda_function.function_name,
+        ]
+
+        self.agent_flows = [
+            cloudwatch_insights_agent_flow.state_machine_name,
+        ]
+
+        # self.log_group_name = log_group.log_group_name  
