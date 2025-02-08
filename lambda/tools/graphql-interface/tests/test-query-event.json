@@ -1,8 +1,0 @@
-{
-    "id": "unique_tool_use_id",
-    "input": {
-        "graphql_query": "query test { organization { name } }"
-    },
-    "name": "execute_graphql_query",
-    "type": "tool_use"
-}

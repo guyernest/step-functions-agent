@@ -1,2 +1,0 @@
-e2b_code_interpreter==1.0.0  # Needed for dynamic code execution
-aws-lambda-powertools>=2.30.2  # AWS Lambda Powertools for Python

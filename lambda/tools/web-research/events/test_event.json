@@ -1,9 +1,0 @@
-{
-    "id": "unique_request_id",
-    "name": "research_company",
-    "input": {
-      "company": "Apple",
-      "topics": ["recent financial performance", "market position"]
-    },
-    "type": "tool_use"
-  }

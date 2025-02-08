@@ -1,2 +1,0 @@
-aws-lambda-powertools>=2.30.2  # AWS Lambda Powertools for Python
-aws_xray_sdk # For tracer

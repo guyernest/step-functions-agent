@@ -1,9 +1,0 @@
-# tests/requirements-test.txt
-pytest>=7.4.0
-pytest-mock>=3.12.0
-anthropic>=0.18.0
-openai>=1.12.0
-google-genai>=0.6.0
-aws-lambda-powertools>=2.34.1
-boto3>=1.34.34
-moto>=4.2.14  # For mocking AWS services in tests
