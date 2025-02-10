@@ -106,6 +106,7 @@ The other frameworks have some limitations, such as:
   - `rust-clustering/`
   - `stock-analyzer/`
   - `web-research/`
+  = `web-scraper/`
 
 ### Step Functions Agent
 
@@ -116,6 +117,13 @@ The other frameworks have some limitations, such as:
   - `step_functions_sql_agent_stack.py`
   - `step_functions_analysis_agent_stack.py`
   - `step_functions_clustering_agent_stack.py`
+  - `step_functions_research_agent_stack.py`
+  - `step_functions_graphql_agent_stack.py`
+  - `step_functions_cloudwatch_agent_stack.py`
+  - `step_functions_books_agent_stack.py`
+  - `step_functions_web_scraper_agent_stack.py`
+  - `step_functions_supervisor_agent_stack.py`
+  - `step_functions_agent_monitoring_stack.py`
 
 ### Step Functions
 
@@ -129,19 +137,6 @@ The other frameworks have some limitations, such as:
   - `call_agent.py`
   - `requirements.txt`
   - `test_chat_display.py`
-
-### Tests
-
-- **tests/**
-  - `conftest.py`
-  - `requirements-test.txt`
-  - `test_claude_handler.py`
-
-### Events
-
-- **events/**
-  - `claude-event.json`
-  - `openai-event.json`
 
 ### Root Files
 

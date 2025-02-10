@@ -1,0 +1,10 @@
+{
+    "id": "scrape_1",
+    "name": "web_scrape",
+    "input": {
+        "url": "https://example.com",
+        "selectors": {
+            "resultContainer": "h1"
+        }
+    }
+}
