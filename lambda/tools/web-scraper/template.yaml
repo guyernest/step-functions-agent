@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SAM template for Web Scraper Lambda function using @sparticuz/chromium
+
+Globals:
+  Function:
+    Timeout: 300
+    MemorySize: 2048
+    Runtime: nodejs18.x
+    Architectures:
+      - x86_64
+
+Resources:
+  WebScraperFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: web-scraper
+      CodeUri: dist/
+      Handler: index.handler
+      Layers:
+        - !Ref ChromiumLayer
+
+  ChromiumLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: chromium-layer
+      Description: Layer containing Chromium binary
+      ContentUri: layers/chromium/chromium.zip
+      CompatibleRuntimes:
+        - nodejs18.x
+      CompatibleArchitectures:
+        - x86_64
+
+Outputs:
+  WebScraperFunction:
+    Description: Web Scraper Lambda Function ARN
+    Value: !GetAtt WebScraperFunction.Arn

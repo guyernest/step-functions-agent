@@ -28,3 +28,6 @@ uv.lock
 lambda/tools/books-recommender/node_modules
 lambda/tools/books-recommender/package-lock.json
 lambda/tools/google-maps/package-lock.json
+lambda/tools/web-scraper/layers/chromium/nodejs
+lambda/tools/web-scraper/layers/chromium/chromium.zip
+lambda/tools/web-scraper/node_modules

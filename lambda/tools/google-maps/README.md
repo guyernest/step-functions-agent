@@ -2,7 +2,7 @@
 
 This directory contains the implementation of the tools for Google Maps AI Agent in **TypeScript**, based on the MCP implementation in [this MCP server](https://github.com/modelcontextprotocol/servers/tree/main/src/google-maps).
 
-The AI Agent that is created using these tools is implemented in the [step_functions_googlemap_agent_stack.py](../../../step_functions_sql_agent/step_functions_googlemap_agent_stack.py) file.
+The AI Agent that is created using these tools is implemented in the [step_functions_googlemap_agent_stack.py](../../../step_functions_agent/step_functions_googlemap_agent_stack.py) file.
 
 ![Google Maps Agent Step Functions](../../../images/GoogleMaps-agent-step-functions.svg)
 

@@ -1,0 +1,22 @@
+{
+    "name": "web-scraper",
+    "version": "1.0.0",
+    "description": "Web scraper Lambda function using @sparticuz/chromium",
+    "main": "index.js",
+    "scripts": {
+      "build": "tsc",
+      "clean": "rm -rf dist/",
+      "predeploy": "./setup.sh",
+      "deploy": "sam build && sam deploy"
+    },
+    "dependencies": {
+      "puppeteer-core": "24.2.0",
+      "@sparticuz/chromium": "132.0.0",
+      "@aws-lambda-powertools/logger": "^2.12.0"
+    },
+    "devDependencies": {
+      "@types/aws-lambda": "^8.10.129",
+      "@types/node": "^18.19.3",
+      "typescript": "^5.3.3"
+    }
+  }
