@@ -10,10 +10,10 @@ const config: Config = {
   favicon: 'img/favicon.ico',
 
   // Set the production url of your site here
-  url: 'https://guyernest.github.io',
+  url: 'https://agentdocsstack-agentdocsbucket120ce565-55f8ms5gjuyn.s3.us-west-2.amazonaws.com',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
-  baseUrl: 'step-functions-agent/',
+  baseUrl: '/',
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
