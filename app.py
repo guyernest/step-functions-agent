@@ -17,6 +17,7 @@ from step_functions_agent.step_functions_graphql_agent_stack import GraphQLAgent
 from step_functions_agent.step_functions_cloudwatch_agent_stack import CloudWatchAgentStack
 from step_functions_agent.step_functions_books_agent_stack import BooksAgentStack
 from step_functions_agent.step_functions_web_scraper_agent_stack import WebScraperAgentStack
+from step_functions_agent.step_functions_image_analysis_agent_stack import ImageAnalysisAgentStack
 
 app = cdk.App()
 sqlAgentStack = SQLAgentStack(app, "SQLAgentStack")
@@ -29,6 +30,7 @@ graphqlAgentStack = GraphQLAgentStack(app, "GraphQLAgentStack")
 cloudWatchAgentStack = CloudWatchAgentStack(app, "CloudWatchAgentStack")
 booksAgentStack = BooksAgentStack(app, "BooksAgentStack")
 webScraperAgentStack = WebScraperAgentStack(app, "WebScraperAgentStack")
+imageAnalysisAgentStack = ImageAnalysisAgentStack(app, "ImageAnalysisAgentStack")
 
 superviserAgentStack = SupervisorAgentStack(app, "SuperviserAgentStack")
 
@@ -51,11 +53,11 @@ Tags.of(googlemapAgentStack).add("project", "googlemap-ai-agent")
 Tags.of(clusteringAgentStack).add("project", "clustering-ai-agent")
 Tags.of(analyzerAgentStack).add("project", "analysis-ai-agent")
 Tags.of(researchAgentStack).add("project", "research-ai-agent")
-
 Tags.of(graphqlAgentStack).add("project", "graphql-ai-agent")
 Tags.of(cloudWatchAgentStack).add("project", "cloudwatch-ai-agent")
 Tags.of(booksAgentStack).add("project", "books-ai-agent")
-Tags.of(webScraperAgentStack).add("project", "webscraper-ai-agent")
+Tags.of(webScraperAgentStack).add("project", "web-scraper-ai-agent")
+Tags.of(imageAnalysisAgentStack).add("project", "image-analysis-ai-agent")
 
 Tags.of(superviserAgentStack).add("project", "supervisor-ai-agent")
 

@@ -1,0 +1,14 @@
+{
+    "name": "analyze_images",
+    "id": "analyze_images_unique_id",
+    "input": {
+        "image_locations": [
+            {
+                "bucket": "ai-agent-test-bucket-672915487120-us-west-2", 
+                "key": "uploads/tehini_image.jpg"
+            }
+        ],
+        "query": "What products are shown in these images and what are their ingredients?"
+    },
+    "type": "tool_use"
+}
