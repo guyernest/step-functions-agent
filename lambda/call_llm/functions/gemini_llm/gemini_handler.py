@@ -4,7 +4,6 @@ from google.genai import types
 from common.base_llm import BaseLLM, logger
 from common.config import get_api_keys
 from typing import List, Dict
-import json
 
 class GeminiLLM(BaseLLM):
     def __init__(self):

@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SAM template for Image Analysis Lambda function using Gemini API
+
+Globals:
+  Function:
+    Timeout: 60
+    MemorySize: 512
+    Runtime: python3.11
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        LOG_LEVEL: INFO
+        POWERTOOLS_SERVICE_NAME: image-analysis-service
+
+Resources:
+  ImageAnalysisFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: index.lambda_handler
+      Description: Lambda function for analyzing images using Gemini API
+      Policies:
+        - S3ReadPolicy:
+            BucketName: '*'  # Allow reading from any S3 bucket. Adjust as needed for your security requirements
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/ai-agent/api-keys'
+      Tags:
+        Purpose: ImageAnalysis
+        Service: AI-Agent
+
+Outputs:
+  ImageAnalysisFunction:
+    Description: Image Analysis Lambda Function ARN
+    Value: !GetAtt ImageAnalysisFunction.Arn
+  ImageAnalysisFunctionIamRole:
+    Description: Implicit IAM Role created for Image Analysis function
+    Value: !GetAtt ImageAnalysisFunctionRole.Arn
