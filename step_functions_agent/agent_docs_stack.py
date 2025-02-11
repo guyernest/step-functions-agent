@@ -3,15 +3,12 @@
 from aws_cdk import (
     Stack,
     RemovalPolicy,
-    CfnOutput,
     aws_s3 as s3,
+    aws_iam as iam,
 )
 from aws_cdk.aws_s3_deployment import Source, BucketDeployment
 
 from constructs import Construct
-
-import json
-import os.path as path
 
 class AgentDocsStack(Stack):
 
@@ -30,6 +27,15 @@ class AgentDocsStack(Stack):
                 block_public_policy=False,
                 ignore_public_acls=False,
                 restrict_public_buckets=False
+            )
+        )
+
+                # Add bucket policy to allow public access to all files
+        docs_bucket.add_to_resource_policy(
+            iam.PolicyStatement(
+                actions=["s3:GetObject"],
+                resources=[docs_bucket.arn_for_objects("*")],
+                principals=[iam.AnyPrincipal()]
             )
         )
 
