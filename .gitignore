@@ -33,3 +33,4 @@ lambda/tools/web-scraper/layers/chromium/chromium.zip
 lambda/tools/web-scraper/node_modules
 lambda/tools/web-scraper/package-lock.json
 lambda/tools/web-scraper/samconfig.toml
+docs/package-lock.json

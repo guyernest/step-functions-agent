@@ -13,6 +13,7 @@ from step_functions_agent.step_functions_research_agent_stack import ResearchAge
 from step_functions_agent.step_functions_supervisor_agent_stack import SupervisorAgentStack
 from step_functions_agent.agent_ui_stack import AgentUIStack
 from step_functions_agent.agent_monitoring_stack import AgentMonitoringStack
+from step_functions_agent.agent_docs_stack import AgentDocsStack
 from step_functions_agent.step_functions_graphql_agent_stack import GraphQLAgentStack
 from step_functions_agent.step_functions_cloudwatch_agent_stack import CloudWatchAgentStack
 from step_functions_agent.step_functions_books_agent_stack import BooksAgentStack
@@ -44,6 +45,8 @@ monitoringStack = AgentMonitoringStack(
     tool_functions= sqlAgentStack.tool_functions,
     log_group_name= sqlAgentStack.log_group_name
 )
+
+docsStack = AgentDocsStack(app, "AgentDocsStack")
 
 Tags.of(app).add("application", "ai-agents")
 
