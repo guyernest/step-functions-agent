@@ -11,32 +11,31 @@ type FeatureItem = {
 
 const FeatureList: FeatureItem[] = [
   {
-    title: 'Easy to Use',
+    title: 'Extreme Flexibility',
     Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
     description: (
       <>
-        Docusaurus was designed from the ground up to be easily installed and
-        used to get your website up and running quickly.
+        AI Agents Framework allows you to call any LLM and use any tool in any programming language.
       </>
     ),
   },
   {
-    title: 'Focus on What Matters',
+    title: 'Extreme Observability',
     Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
     description: (
       <>
-        Docusaurus lets you focus on your docs, and we&apos;ll do the chores. Go
-        ahead and move your docs into the <code>docs</code> directory.
+        Built on top of the reliable serverless infrastructure (AWS Lambda and Step Functions), AI Agents Framework provides extreme observability.
+        Inspect every execution step and every tool call, using CloudWatch and X-ray.
       </>
     ),
   },
   {
-    title: 'Powered by React',
-    Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
+    title: 'Extreme Scalability',
+    Svg: require('@site/static/img/scalability.svg').default,
     description: (
       <>
-        Extend or customize your website layout by reusing React. Docusaurus can
-        be extended while reusing the same header and footer.
+        Based on true serverless architecture, AI Agents Framework can scale to any number of concurrent users and any number of concurrent executions.
+        You only pay for what you use.
       </>
     ),
   },

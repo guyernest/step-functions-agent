@@ -2,7 +2,7 @@
 
 This directory contains the implementation of the various CDK stacks and constructs to build the step functions for the AI agents.
 
-## Table of Contents
+## Table of Contents (TOC)
 
 - [AI Agent Definition](#ai-agent-definition)
   - [LLM Call Lambda](#llm-call-lambda)
@@ -32,11 +32,11 @@ The process of building a new LLM call is described in the [lambda/call_llm](lam
             # Name of the Lambda function that will be used by the agents to find the function.
             function_name="CallLLMLambdaClaude", 
             description="Lambda function to Call LLM (Anthropic) with messages history and tools.",
-            entry="lambda/call_llm",
+            entry="lambda/call_llm/functions/anthropic_llm",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(90),
             memory_size=256,
-            index="handlers/claude_handler.py",
+            index="claude_handler.py",
             handler="lambda_handler",
             architecture=_lambda.Architecture.ARM_64,
             role=call_llm_lambda_claude_role,
@@ -102,7 +102,6 @@ Each of the tools that are used by the AI agents are defined and AWS Lambda func
 Once you have the tool defined you can use it in the AI agent. You can define it in the CDK stack as follows:
 
 ```python
-    provider = LLMProviderEnum.ANTHROPIC
 
     # Create agent tools
     agent_tools = [
@@ -110,7 +109,6 @@ Once you have the tool defined you can use it in the AI agent. You can define it
             "maps_geocode",
             "Convert an address into geographic coordinates.",
             tool_x_lambda_function,
-            provider=provider,
             input_schema={
                 "type": "object",
                 "properties": {
@@ -128,7 +126,6 @@ Once you have the tool defined you can use it in the AI agent. You can define it
             "maps_reverse_geocode",
             "Convert coordinates into an address.",
             tool_x_lambda_function,
-            provider=provider,
             input_schema={
                 "type": "object",
                 "properties": {
@@ -162,15 +159,12 @@ Some of the tools might have side effects and need a human approval. In this cas
         activity_name="HumanApprovalActivityForToolX",
     )
 
-    anthropic = LLMProviderEnum.ANTHROPIC
-
     agent_tools = [
         ...
         Tool(
             "execute_sql_query", 
             "Return the query results of the given SQL query to the SQLite database.",
             tool_x_lambda_function,
-            provider=anthropic,
             input_schema={
                 "type": "object",
                 "properties": {

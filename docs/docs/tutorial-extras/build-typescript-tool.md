@@ -2,7 +2,9 @@
 sidebar_position: 1
 ---
 
-# ![TypeScript Logo](https://cdn.simpleicons.org/typescript?size=48) TypeScript Example: Google Maps Tools
+# Building a tool in TypeScript
+
+![TypeScript Logo](https://cdn.simpleicons.org/typescript?size=48)
 
 ## Tutorial: Building a New TypeScript Function Tool
 
