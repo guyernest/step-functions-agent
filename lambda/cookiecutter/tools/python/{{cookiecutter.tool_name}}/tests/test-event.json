@@ -1,0 +1,8 @@
+{
+    "id": "unique_tool_use_id",
+    "input": {
+        "{{cookiecutter.input_param_name}}": "{{cookiecutter.test_input}}"
+    },
+    "name": "{{cookiecutter.tool_name}}",
+    "type": "tool_use"
+}
