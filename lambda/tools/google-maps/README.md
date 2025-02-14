@@ -1,4 +1,6 @@
-# ![TypeScript Logo](https://cdn.simpleicons.org/typescript?size=48) TypeScript Example: Google Maps Tools
+# TypeScript Example: Google Maps Tools
+
+![TypeScript Logo](https://cdn.simpleicons.org/typescript?size=48)
 
 This directory contains the implementation of the tools for Google Maps AI Agent in **TypeScript**, based on the MCP implementation in [this MCP server](https://github.com/modelcontextprotocol/servers/tree/main/src/google-maps).
 
@@ -154,7 +156,7 @@ from aws_cdk import (
     aws_lambda_nodejs as nodejs_lambda,
 )
 
-       ## Google Maps Tools in Typescript
+        ## Google Maps Tools in Typescript
         # TypeScript Lambda
         google_maps_lambda = nodejs_lambda.NodejsFunction(
             self, 

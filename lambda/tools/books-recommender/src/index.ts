@@ -140,12 +140,14 @@ exports.handler = async (event:any, context:any) => {
         logger.info("Result", { result });
         return {
             "type": "tool_result",
+            "name": tool_name,
             "tool_use_id": tool_use["id"],
             "content": result
         };
     } catch (error) {
         return {
             "type": "tool_result",
+            "name": tool_name,
             "tool_use_id": tool_use["id"],
             "content": JSON.stringify({
                 error: error instanceof Error ? error.message : String(error)

@@ -1,0 +1,7 @@
+{
+    "tool_name": "EarthQuakeQueryTS",
+    "tool_description": "Query interface to the USGS Earthquake Catalog API",
+    "input_param_name": "start_date",
+    "input_param_description": "The start date of the query in YYYY-MM-DD format",
+    "input_test_value": "2024-01-01"
+}

@@ -6,6 +6,12 @@ A simple way to create a new tool for the Step Functions Agent using [Cookiecutt
 
 You can either install the cookiecutter package or use it with `uvx`. The rest of the documentation here will use `uvx` to run the cookiecutter.
 
+Start with the following command to get the tools folder:
+
+```bash
+cd lambda/tools
+```
+
 ### Python
 
 ```bash

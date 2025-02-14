@@ -1,0 +1,23 @@
+# template.yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Resources:
+  # Query interface to the USGS Earthquake Catalog API
+  EarthQuakeQueryTS:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: dist/index.handler
+      Description: "Query interface to the USGS Earthquake Catalog API"
+      Runtime: nodejs18.x
+      Timeout: 90
+      MemorySize: 128
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: EarthQuakeQueryTS
+      Architectures:
+        - arm64
+      Policies:
+        - SecretsManagerRead
+        - AWSLambdaBasicExecutionRole
