@@ -15,9 +15,9 @@ tracer = Tracer()
 def {{cookiecutter.tool_name}}(
     {{cookiecutter.input_param_name}}: str
     ) -> str:
-    """{{cookiecutter.description}}.
+    """{{cookiecutter.tool_description}}.
     Args:
-        {{cookiecutter.imput_param_name}} (str): {{cookiecutter.imput_param_description}}.
+        {{cookiecutter.input_param_name}} (str): {{cookiecutter.input_param_description}}.
 
     Returns:
         str: {{cookiecutter.tool_description}},
@@ -44,10 +44,10 @@ def lambda_handler(event, context):
     logger.info(f"Tool name: {tool_name}")
     match tool_name:
         case '{{cookiecutter.tool_name}}':
-            result = {{cookiecutter.tool_name}}(tool_input['{{cookiecutter.imput_param_name}}'])
+            result = {{cookiecutter.tool_name}}(tool_input['{{cookiecutter.input_param_name}}'])
 
         # Add more tools functions here as needed
-        
+
         case _:
             result = json.dumps({
                 'error': f"Unknown tool name: {tool_name}"

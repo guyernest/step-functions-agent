@@ -7,7 +7,7 @@ def input_event():
     return {
         "id": "uniquetooluseid",
         "input": {
-            "{{cookiecutter.input_param_name}}": "{{cookiecutter.test_input}}"
+            "{{cookiecutter.input_param_name}}": "{{cookiecutter.input_test_value}}"
         },
         "name": "{{cookiecutter.tool_name}}",
         "type": "tool_use"
