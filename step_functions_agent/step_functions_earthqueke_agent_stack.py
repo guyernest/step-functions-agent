@@ -5,6 +5,7 @@ from aws_cdk import (
     aws_lambda as _lambda,
     aws_logs as logs,
     aws_lambda_python_alpha as _lambda_python,
+    aws_lambda_nodejs as nodejs_lambda,
 )
 from constructs import Construct
 from .ai_agent_construct_from_json import ConfigurableStepFunctionsConstruct, Tool
@@ -44,8 +45,8 @@ class EarthquakeAgentStack(Stack):
             ]
         )
 
-        # Define the Lambda function
-        earthquake_tool_lambda_function = _lambda_python.PythonFunction(
+        # Define the Python Lambda function
+        earthquake_tool_lambda_function_python = _lambda_python.PythonFunction(
             self, 
             "EarthquakeToolLambdaFunction",
             function_name="EarthquakeToolLambdaFunction",
@@ -61,6 +62,26 @@ class EarthquakeAgentStack(Stack):
             role=earthquake_tool_lambda_role,
         )
 
+        # Define the TypeScript Lambda function
+        earthquake_tool_lambda_function_typescript = nodejs_lambda.NodejsFunction(
+            self, 
+            "EarthQuakeQueryTSLambda",
+            function_name="EarthQuakeQueryTS",
+            description="Query interface to the USGS Earthquake Catalog API.",
+            timeout=Duration.seconds(30),
+            entry="lambda/tools/EarthQuakeQueryTS/src/index.ts", 
+            handler="handler",  # Name of the exported function
+            runtime=_lambda.Runtime.NODEJS_18_X,
+            architecture=_lambda.Architecture.ARM_64,
+            # Optional: Bundle settings
+            bundling=nodejs_lambda.BundlingOptions(
+                minify=True,
+                source_map=True,
+            ),
+            role=earthquake_tool_lambda_role
+        )
+
+
         # Define the Step Functions state machine
 
         # Create graphql tools
@@ -68,7 +89,8 @@ class EarthquakeAgentStack(Stack):
             Tool(
                 "query_earthquakes",
                 "Retrieve earthquake data from the USGS Earthquake Hazards Program API and display the .",
-                earthquake_tool_lambda_function,
+                # earthquake_tool_lambda_function_python,
+                earthquake_tool_lambda_function_typescript,
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -111,7 +133,7 @@ class EarthquakeAgentStack(Stack):
         self.llm_functions = []
 
         self.tool_functions = [
-            earthquake_tool_lambda_function.function_name,
+            earthquake_tool_lambda_function_typescript.function_name,
         ]
 
         self.agent_flows = [
