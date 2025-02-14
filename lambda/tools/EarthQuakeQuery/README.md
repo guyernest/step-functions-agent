@@ -1,13 +1,13 @@
-# Python Tool: {{cookiecutter.tool_name}}
+# Python Tool: EarthQuakeQuery
 
 ![Python Logo](https://cdn.simpleicons.org/python?size=48) 
 
-This directory contains the implementation of the tools {{cookiecutter.tool_name}} in **Python**.
+This directory contains the implementation of the tools EarthQuakeQuery in **Python**.
 
 ## Folder structure
 
 ```txt
-{{cookiecutter.tool_name}}/
+EarthQuakeQuery/
 ├── index.py
 ├── requirements.in
 ├── requirements.txt
@@ -24,31 +24,11 @@ This directory contains the implementation of the tools {{cookiecutter.tool_name
 
 The tools are:
 
-* `{{cookiecutter.tool_name}}`: {{cookiecutter.tool_description}}.
-
-## Setup
-
-You should update the `requirements.in` file with the dependencies of the tool (for example, `requests`).
-
-To setup the tool, you need to compile the dependencies using the following command:
-
-```bash
-uv pip compile requirements.in --output-file requirements.txt
-```
-
-The `requirements.txt` file is used to install the dependencies in the Lambda function by the SAM CLI and the CDK.
+* `EarthQuakeQuery`: Query interface to the USGS Earthquake Catalog API.
 
 ## Testing
 
 You can test the tool using Pytest as other Python code, or using the AWS SAM CLI to test the Lambda function locally.
-
-### Pytest
-
-The tests are defined in the `tests/` directory. You can run the tests using the following command:
-
-```bash
-pytest tests/
-```
 
 ### AWS SAM CLI
 
@@ -56,7 +36,15 @@ The AWS Function is defined in the `template.yaml` file. You can test the Lambda
 
 ```bash
 sam build
-sam local invoke {{cookiecutter.tool_name}} --event tests/test-event.json
+sam local invoke EarthQuakeQuery --event tests/test-event.json
+```
+
+### Pytest
+
+The tests are defined in the `tests/` directory. You can run the tests using the following command:
+
+```bash
+pytest tests/
 ```
 
 ## Deployment
@@ -88,8 +76,8 @@ The CDK stack is defined with the rest of the AI Agent definition to allow full 
     # Create graphql tools
     graphql_tools = [
         Tool(
-            "{{cookiecutter.tool_name}}",
-            "{{cookiecutter.tool_description}}.",
+            "EarthQuakeQuery",
+            "Query interface to the USGS Earthquake Catalog API.",
             graphql_lambda_function,
             input_schema={
                 "type": "object",
