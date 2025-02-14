@@ -8,16 +8,18 @@ This tutorial will guide you through the process of creating a new tool for the 
 
 ## Prerequisites
 
-- AWS Account
-- AWS CDK installed
-- Python 3.12 or later
-- Basic understanding of AWS Lambda
+- [AWS Account](https://aws.amazon.com/account/)
+- [AWS CDK](https://docs.aws.amazon.com/cdk/latest/guide/getting_started.html) installed
+- Python 3.12 or later (preferably using [uv](https://github.com/astral-sh/uv))
+- Basic understanding of [AWS Lambda](https://aws.amazon.com/lambda/)
 
 ## Step 1: Create the Tool Directory Structure
 
 Create a new directory for your tool in the `lambda/tools` directory:
 
 ```bash
+# Navigate to the project root directory (after you clone the repo)
+cd step-functions-agent
 mkdir -p lambda/tools/my-new-tool
 cd lambda/tools/my-new-tool
 ```
@@ -43,11 +45,17 @@ cd lambda/tools/my-new-tool
   uv pip compile requirements.in -o requirements.txt
   ```
 
+Alternatively, you can use pip:
+
+```bash
+pip install -r requirements.in
+```
+
 ## Step 3: Implement the Tool Handler
 
 1. Create an index.py file in your tool directory with this basic structure:
 
-```python title="index.py"
+```python title="index.py" showLineNumbers
 import json
 from typing import Dict, Any
 
@@ -103,7 +111,7 @@ def handle_my_tool(input_data: Dict[str, Any]) -> str:
 
 1. Create a test file `tests/test_my_tool.py` with the following content:
 
-  ```python title="tests/test_my_tool.py"
+  ```python title="tests/test_my_tool.py" showLineNumbers
   import pytest
   from my_new_tool.index import lambda_handler
 
@@ -127,7 +135,7 @@ def handle_my_tool(input_data: Dict[str, Any]) -> str:
 
 1. Add your function to the `template.yaml` file:
 
-  ```yaml title="template.yaml"
+  ```yaml title="template.yaml" showLineNumbers
   MyNewToolFunction:
       Type: AWS::Serverless::Function
       Properties:
@@ -149,7 +157,7 @@ def handle_my_tool(input_data: Dict[str, Any]) -> str:
 
 1. Add the following to your CDK stack:
 
-  ```python title="cdk_stack.py"
+  ```python title="cdk_stack.py" showLineNumbers
   from aws_cdk import (
       aws_lambda as _lambda,
       aws_lambda_python_alpha as _lambda_python,
