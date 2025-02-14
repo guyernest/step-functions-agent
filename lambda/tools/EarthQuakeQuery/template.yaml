@@ -3,8 +3,8 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
 Resources:
-  # {{cookiecutter.tool_description}}
-  {{cookiecutter.tool_name}}:
+  # Query interface to the USGS Earthquake Catalog API
+  EarthQuakeQuery:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: .
@@ -14,7 +14,7 @@ Resources:
       MemorySize: 128
       Environment:
         Variables:
-          POWERTOOLS_SERVICE_NAME: {{cookiecutter.tool_name}}
+          POWERTOOLS_SERVICE_NAME: EarthQuakeQuery
       Architectures:
         - arm64
       Policies:

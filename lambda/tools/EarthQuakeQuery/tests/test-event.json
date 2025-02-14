@@ -1,0 +1,9 @@
+{
+    "id": "unique_tool_use_id",
+    "input": {
+        "start_date": "2024-01-01",
+        "end_date": "2024-01-02"
+    },
+    "name": "query_earthquakes",
+    "type": "tool_use"
+}
