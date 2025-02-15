@@ -13,7 +13,7 @@ from aws_cdk import (
     aws_lambda_python_alpha as _lambda_python,
 )
 from constructs import Construct
-from .ai_agent_construct_from_json import ConfigurableStepFunctionsConstruct, Tool, LLMProviderEnum
+from .ai_agent_construct_from_json import ConfigurableStepFunctionsConstruct, Tool
 
 class GraphQLAgentStack(Stack):
 
@@ -122,8 +122,6 @@ class GraphQLAgentStack(Stack):
 
         # Define the Step Functions state machine
 
-        provider = LLMProviderEnum.OPENAI
-
         # Create graphql tools
         graphql_tools = [
             Tool(
@@ -181,7 +179,6 @@ class GraphQLAgentStack(Stack):
             state_machine_name="GraphQLAIAgentStateMachine",
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
             llm_caller=call_llm_lambda_function, 
-            provider=provider,
             tools=graphql_tools,
             system_prompt=system_prompt,
             output_schema={

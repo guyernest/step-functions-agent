@@ -7,13 +7,6 @@ from aws_cdk import (
 )
 from constructs import Construct
 
-# Enum for LLM providers (OpenAI, Anthropic, etc.)
-class LLMProviderEnum:
-    OPENAI = "openai"
-    ANTHROPIC = "anthropic"
-    AI21 = "ai21"
-    GEMINI = "gemini"
-
 class Tool:
     def __init__(
         self,
@@ -52,7 +45,6 @@ class ConfigurableStepFunctionsConstruct(Construct):
         state_machine_name: str,
         state_machine_template_path: str,
         llm_caller: lambda_.Function,
-        provider: str = LLMProviderEnum.ANTHROPIC,
         tools: List[Tool] = [],
         system_prompt: str = None,
         output_schema: Dict[str, Any] = None,
@@ -60,7 +52,6 @@ class ConfigurableStepFunctionsConstruct(Construct):
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
         self.state_machine_name = state_machine_name
-        self.provider = provider
 
         # Load the base state machine definition
         with open(state_machine_template_path, 'r') as f:
@@ -72,7 +63,6 @@ class ConfigurableStepFunctionsConstruct(Construct):
         self._configure_llm_call(
             state_machine_def, 
             llm_caller, 
-            provider, 
             system_prompt
         )
 
@@ -109,28 +99,18 @@ class ConfigurableStepFunctionsConstruct(Construct):
         self, 
         definition: Dict[str, Any], 
         llm_caller: lambda_.Function,
-        provider: str = LLMProviderEnum.ANTHROPIC,
         system_prompt: str = None
     ) -> None:
         """Configure the state machine definition with the provided LLM caller"""
         # Update the LLM call state with the provided LLM caller
         llm_state = definition["States"]["Call LLM"]
         llm_state["Arguments"]["FunctionName"] = llm_caller.function_arn
-        llm_state["Assign"]["provider"] = provider
 
         payload = llm_state["Arguments"]["Payload"]
 
         # Update system prompt if provided
         if system_prompt:
             payload["system"] = system_prompt
-
-        match provider:
-            case LLMProviderEnum.OPENAI:
-                payload["model"] = "gpt-4o"
-            case LLMProviderEnum.AI21:
-                payload["model"] = "ai21.jamba-1-5-large-v1:0"
-            case LLMProviderEnum.ANTHROPIC:
-                payload["model"] = "claude-3-5-sonnet-20241022"
 
     def _configure_tools(
         self, 
@@ -267,6 +247,14 @@ class ConfigurableStepFunctionsConstruct(Construct):
         for tool in tools:
             tool.grant_invoke(role)
 
+        # Add CloudWatch metrics permissions
+        role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["cloudwatch:PutMetricData"],
+                resources=["*"]
+            )
+        )
+
         return role
 
 
@@ -315,8 +303,6 @@ if __name__ == "__main__":
         ]
     }
 
-    provider = LLMProviderEnum.OPENAI
-
     # Create test tools
     tools = [
         Tool(
@@ -334,7 +320,6 @@ if __name__ == "__main__":
         state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
         system_prompt="Blah",
         llm_caller=llm_caller, 
-        provider=provider,
         tools=tools,
         output_schema=output_schema
     )

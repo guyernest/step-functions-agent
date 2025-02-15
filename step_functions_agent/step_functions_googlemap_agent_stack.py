@@ -6,7 +6,7 @@ from aws_cdk import (
     aws_lambda_nodejs as nodejs_lambda,
 )
 from constructs import Construct
-from .ai_agent_construct_from_json import ConfigurableStepFunctionsConstruct, Tool, LLMProviderEnum
+from .ai_agent_construct_from_json import ConfigurableStepFunctionsConstruct, Tool
 
 class GoogleMapAgentStack(Stack):
 
@@ -77,8 +77,6 @@ class GoogleMapAgentStack(Stack):
         )
 
         # Define the Step Functions state machine
-
-        provider = LLMProviderEnum.ANTHROPIC
 
         # Create Google Maps tools
         google_maps_tools = [
@@ -282,7 +280,6 @@ class GoogleMapAgentStack(Stack):
             state_machine_name="GoogleMapsAgentWithToolsAndClaude",
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
             llm_caller=call_llm_lambda_function, 
-            provider=provider,
             tools=google_maps_tools,
             system_prompt=system_prompt,
         )

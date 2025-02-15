@@ -20,7 +20,7 @@
           "JitterStrategy": "FULL"
         }
       ],
-      "Next": "Is done?",
+      "Next": "Update Token Metrics",
       "Arguments": {
         "Payload": {
           "system": "You are an expert business analyst with deep knowledge of SQL and visualization code in Python. Your job is to help users understand and analyze their internal baseball data. You have access to a set of tools, but only use them when needed. You also have access to a tool that allows execution of python code. Use it to generate the visualizations in your analysis. - the python code runs in jupyter notebook. - every time you call `execute_python` tool, the python code is executed in a separate cell. it's okay to multiple calls to `execute_python`. - display visualizations using matplotlib directly in the notebook. don't worry about saving the visualizations to a file. - you can run any python code you want, everything is running in a secure sandbox environment.",
@@ -38,6 +38,39 @@
       "Assign": {
         "messages": "{% $states.result.Payload.body.messages%}"
       }
+    },
+    "Update Token Metrics": {
+      "Type": "Task",
+      "Arguments": {
+        "Namespace": "AI-Agents",
+        "MetricData": [
+          {
+            "MetricName": "InputTokens",
+            "Value": "{% $states.input.metadata.usage.input_tokens %}",
+            "Unit": "Count",
+            "Dimensions": [
+              {
+                "Name": "state_machine_name",
+                "Value": "{% $states.context.StateMachine.Name %}"
+              }
+            ]
+          },
+          {
+            "MetricName": "OutputTokens",
+            "Value": "{% $states.input.metadata.usage.output_tokens %}",
+            "Unit": "Count",
+            "Dimensions": [
+              {
+                "Name": "state_machine_name",
+                "Value": "{% $states.context.StateMachine.Name %}"
+              }
+            ]
+          }
+        ]
+      },
+      "Resource": "arn:aws:states:::aws-sdk:cloudwatch:putMetricData",
+      "Next": "Is done?",
+      "Output": "{%  $states.input  %}"
     },
     "Is done?": {
       "Type": "Choice",

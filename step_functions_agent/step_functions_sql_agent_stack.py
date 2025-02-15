@@ -11,7 +11,7 @@ from aws_cdk import (
     aws_stepfunctions as sfn,
 )
 from constructs import Construct
-from .ai_agent_construct_from_json import ConfigurableStepFunctionsConstruct, Tool, LLMProviderEnum
+from .ai_agent_construct_from_json import ConfigurableStepFunctionsConstruct, Tool
 
 class SQLAgentStack(Stack):
 
@@ -307,7 +307,6 @@ class SQLAgentStack(Stack):
         # Define the Step Functions state machine
 
         # Create claude tools
-        anthropic = LLMProviderEnum.ANTHROPIC
 
         tools = [
             Tool(
@@ -391,7 +390,6 @@ class SQLAgentStack(Stack):
             state_machine_name="SQLAgentWithToolsFlowAndClaude",
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
             llm_caller=call_llm_lambda_function_claude, 
-            provider=anthropic,
             tools=tools,
             system_prompt=system_prompt,
             output_schema=output_schema,
