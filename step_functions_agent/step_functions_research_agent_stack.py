@@ -7,7 +7,7 @@ from aws_cdk import (
     aws_lambda_go_alpha as _lambda_go,
 )
 from constructs import Construct
-from .ai_agent_construct_from_json import ConfigurableStepFunctionsConstruct, Tool, LLMProviderEnum
+from .ai_agent_construct_from_json import ConfigurableStepFunctionsConstruct, Tool
 
 class ResearchAgentStack(Stack):
 
@@ -79,8 +79,6 @@ class ResearchAgentStack(Stack):
         )
 
         # Define the Step Functions state machine
-
-        provider = LLMProviderEnum.ANTHROPIC
 
         # Create research tools
         research_tools = [
@@ -174,7 +172,6 @@ class ResearchAgentStack(Stack):
             state_machine_name="ResearchAgentWithToolsAndClaude",
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
             llm_caller=call_llm_lambda_function, 
-            provider=provider,
             tools=research_tools,
             system_prompt=system_prompt,
         )

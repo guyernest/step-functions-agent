@@ -6,7 +6,7 @@ from aws_cdk import (
     aws_lambda as _lambda,
 )
 from constructs import Construct
-from .ai_agent_construct_from_json import ConfigurableStepFunctionsConstruct, Tool, LLMProviderEnum
+from .ai_agent_construct_from_json import ConfigurableStepFunctionsConstruct, Tool
 
 class AnalysisAgentStack(Stack):
 
@@ -90,8 +90,6 @@ class AnalysisAgentStack(Stack):
 
 
         # Define the Step Functions state machine
-
-        provider = LLMProviderEnum.ANTHROPIC
 
         # Create yfinance tools
         stock_analysis_tools = [
@@ -249,7 +247,6 @@ class AnalysisAgentStack(Stack):
             state_machine_name="AnalysisAgentWithToolsAndClaude",
             state_machine_template_path="step-functions/agent-with-tools-flow-template.json", 
             llm_caller=call_llm_lambda_function, 
-            provider=provider,
             tools=stock_analysis_tools,
             system_prompt=system_prompt,
             output_schema={

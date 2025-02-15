@@ -43,6 +43,52 @@ class AgentMonitoringStack(Stack):
         )
         high_level_facade.add_large_header('AI Agent Monitoring Dashboard')
 
+        # Adding the token metrics
+        high_level_facade.add_medium_header('Token Metrics')
+
+        metric_factory = high_level_facade.create_metric_factory()
+
+        input_tokens_metrics = [
+            metric_factory.create_metric(
+                metric_name='InputTokens',
+                namespace="AI-Agents",
+                dimensions_map={
+                    "state_machine_name": agent_name,
+                },
+                label=f'Input Tokens - {agent_name}',
+                statistic=MetricStatistic.N,
+                period=Duration.minutes(5),
+            )
+            for agent_name in agents
+        ]
+
+        output_tokens_metrics = [
+            metric_factory.create_metric(
+                metric_name='OutputTokens',
+                namespace="AI-Agents",
+                dimensions_map={
+                    "state_machine_name": agent_name,
+                },
+                label=f'Output Tokens - {agent_name}',
+                statistic=MetricStatistic.N,
+                period=Duration.minutes(5),
+            )
+            for agent_name in agents
+        ]
+
+        group = CustomMetricGroup(
+            metrics=(
+                input_tokens_metrics +
+                output_tokens_metrics
+            ), 
+            title='Token Usage'
+        )
+        high_level_facade.monitor_custom(
+            metric_groups=[group], 
+            human_readable_name='LLM Token Usage', 
+            alarm_friendly_name='Tokens'
+        )
+
         high_level_facade.add_medium_header('AI Agent Step Functions Monitoring')
         agent_step_functions_list = [
             stepfunctions.StateMachine.from_state_machine_name(
