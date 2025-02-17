@@ -6,6 +6,8 @@ from common.config import get_api_keys
 from typing import List, Dict
 import json
 
+MODEL_ID = "gpt-4o"
+
 class OpenAILLM(BaseLLM):
     def __init__(self):
         api_keys = get_api_keys()
@@ -87,6 +89,7 @@ class OpenAILLM(BaseLLM):
                 } for tool_call in message.tool_calls
             ] if message.tool_calls else [],
             "metadata": {
+                "model": MODEL_ID,
                 "stop_reason": choice.finish_reason,
                 "usage": {
                     "input_tokens": completion.usage.prompt_tokens,
@@ -98,7 +101,7 @@ class OpenAILLM(BaseLLM):
     def generate_response(self, system: str, messages: List[Dict], tools: List[Dict]) -> Dict:
         prepared_messages = self.prepare_messages(system, messages, tools)
         completion = self.client.chat.completions.create(
-            model="gpt-4",
+            model=MODEL_ID,
             **prepared_messages
         )
         return self.convert_to_json(completion)

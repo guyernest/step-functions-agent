@@ -5,6 +5,8 @@ from common.base_llm import BaseLLM, logger
 from common.config import get_api_keys
 from typing import List, Dict
 
+MODEL_ID = "gemini-2.0-flash-001"
+
 class GeminiLLM(BaseLLM):
     def __init__(self):
         api_keys = get_api_keys()
@@ -62,6 +64,7 @@ class GeminiLLM(BaseLLM):
             },
             "function_calls": [],
             "metadata": {
+                "model": MODEL_ID,
                 "stop_reason": response.candidates[0].finish_reason,
                 "usage": {
                     "input_tokens": response.usage_metadata.prompt_token_count,
@@ -95,7 +98,7 @@ class GeminiLLM(BaseLLM):
         prepared_messages = self.prepare_messages(system, messages, tools)
         logger.info(f"Prepared messages: {prepared_messages}")
         response = self.client.models.generate_content(
-            model="gemini-2.0-flash-exp",
+            model=MODEL_ID,
             contents=prepared_messages["messages"],
             config=types.GenerateContentConfig(
                 system_instruction=prepared_messages["system"],

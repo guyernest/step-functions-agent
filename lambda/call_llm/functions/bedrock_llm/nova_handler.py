@@ -9,6 +9,8 @@ from typing import List, Dict
 LITE_MODEL_ID = "us.amazon.nova-lite-v1:0"
 PRO_MODEL_ID = "us.amazon.nova-pro-v1:0"
 
+MODEL_ID = PRO_MODEL_ID
+
 class NovaLLM(BedrockLLM):
     def __init__(self):
         self.client = boto3.client('bedrock-runtime', region_name='us-west-2')
@@ -86,6 +88,7 @@ class NovaLLM(BedrockLLM):
             "message": message,
             "function_calls": function_calls,
             "metadata": {
+                "model": MODEL_ID,
                 "stop_reason": completion["stopReason"],
                 "usage": {
                     "input_tokens": completion["usage"]["inputTokens"],
@@ -98,7 +101,7 @@ class NovaLLM(BedrockLLM):
         prepared_messages = self.prepare_messages(system, messages, tools)
         logger.info(f"Messages: {prepared_messages}")
         response = self.client.invoke_model(
-            modelId=PRO_MODEL_ID,
+            modelId=MODEL_ID,
             body=json.dumps(prepared_messages)
         )
         logger.info(f"Bedrock response: {response}")

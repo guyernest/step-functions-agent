@@ -5,6 +5,8 @@ from common.base_llm import BaseLLM, logger
 
 from typing import List, Dict
 
+MODEL_ID = "ai21.jamba-1-5-large-v1:0"
+
 class BedrockLLM(BaseLLM):
     def __init__(self):
         self.client = boto3.client('bedrock-runtime', region_name='us-east-1')
@@ -82,6 +84,7 @@ class BedrockLLM(BaseLLM):
                 } for tool_call in message["tool_calls"]
             ] if "tool_calls" in message and message["tool_calls"] else [],
             "metadata": {
+                "model": MODEL_ID,
                 "stop_reason": first_choice["finish_reason"],
                 "usage": {
                     "input_tokens": completion["usage"]["prompt_tokens"],
@@ -94,7 +97,7 @@ class BedrockLLM(BaseLLM):
         prepared_messages = self.prepare_messages(system, messages, tools)
         logger.info(f"Messages: {prepared_messages}")
         response = self.client.invoke_model(
-            modelId="ai21.jamba-1-5-large-v1:0",
+            modelId=MODEL_ID,
             body=json.dumps(prepared_messages)
         )
         logger.info(f"Bedrock response: {response}")

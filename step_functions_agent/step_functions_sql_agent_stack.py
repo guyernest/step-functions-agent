@@ -96,8 +96,8 @@ class SQLAgentStack(Stack):
         # Creating the Call LLM lambda function for Claude only 
         call_llm_lambda_function_claude = _lambda_python.PythonFunction(
             self, "CallLLMLambdaClaude",
-            function_name="CallClaudeLLM",
             # Name of the Lambda function that will be used by the agents to find the function.
+            function_name="CallClaudeLLM",
             description="Lambda function to Call LLM (Anthropic) with messages history and tools.",
             entry="lambda/call_llm/functions/anthropic_llm",
             runtime=_lambda.Runtime.PYTHON_3_12,
