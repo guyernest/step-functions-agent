@@ -6,6 +6,8 @@ from common.config import get_api_keys
 
 from typing import List, Dict
 
+MODEL_ID = "claude-3-5-sonnet-20241022"
+
 class ClaudeLLM(BaseLLM):
     def __init__(self):
         api_keys = get_api_keys()
@@ -38,6 +40,7 @@ class ClaudeLLM(BaseLLM):
             },
             "function_calls": [],
             "metadata": {
+                "model": MODEL_ID,
                 "stop_reason": message.stop_reason,
                 "stop_sequence": message.stop_sequence,
                 "type": message.type,
@@ -72,7 +75,7 @@ class ClaudeLLM(BaseLLM):
     def generate_response(self, system: str, messages: List[Dict], tools: List[Dict]) -> Dict:
         prepared_messages = self.prepare_messages(system, messages, tools)
         response = self.client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model=MODEL_ID,
             **prepared_messages
         )
         return self.convert_to_json(response)

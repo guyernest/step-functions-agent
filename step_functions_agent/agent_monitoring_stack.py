@@ -1,30 +1,18 @@
 from aws_cdk import (
     Stack,
     Duration,
-    Token,
-    RemovalPolicy,
-    aws_logs as logs,
     aws_stepfunctions as stepfunctions,
     aws_cloudwatch as cloudwatch,
     aws_lambda as lambda_,
-    aws_resourcegroups as resourcegroups,
-    aws_iam as iam,
-    custom_resources as cr,
 )
 
 from constructs import Construct
 from cdk_monitoring_constructs import (
-    AlarmFactoryDefaults,
     CustomMetricGroup,
-    ErrorRateThreshold,
-    LatencyThreshold,
     MetricStatistic,
     MonitoringFacade,
-    SnsAlarmActionStrategy,
 )
 
-import json
-import os.path as path
 from typing import List
 
 class AgentMonitoringStack(Stack):
@@ -70,13 +58,13 @@ class AgentMonitoringStack(Stack):
                     "state_machine_name": agent_name,
                 },
                 label=f'Output Tokens - {agent_name}',
-                statistic=MetricStatistic.N,
+                statistic=MetricStatistic.SUM,
                 period=Duration.minutes(5),
             )
             for agent_name in agents
         ]
 
-        group = CustomMetricGroup(
+        token_usage_group = CustomMetricGroup(
             metrics=(
                 input_tokens_metrics +
                 output_tokens_metrics
@@ -84,9 +72,41 @@ class AgentMonitoringStack(Stack):
             title='Token Usage'
         )
         high_level_facade.monitor_custom(
-            metric_groups=[group], 
+            metric_groups=[token_usage_group], 
             human_readable_name='LLM Token Usage', 
-            alarm_friendly_name='Tokens'
+            alarm_friendly_name='Tokens',
+        )
+
+        # Calculate the total cost of tokens. We use the model dimensions to get the cost per token.
+        # We use the input and output tokens to calculate the cost.
+        # We use the following pricing:
+        # gpt-4: input $0.03 / 1K tokens, output $0.06 / 1K tokens
+        # gpt-3.5-turbo: input $0.0015 / 1K tokens, output $0.002 / 1K tokens
+
+
+            # Create the math expression
+        math_expression = cloudwatch.MathExpression(
+            expression="""
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens gpt-4o', 'Sum')) * 2.50 / 1000000 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens gpt-4o', 'Sum')) * 10.00 / 1000000 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens gpt-4o-mini', 'Sum')) * 0.15 / 1000000 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens gpt-4o-mini', 'Sum')) * 0.60 / 1000000 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens claude-3-5-sonnet-20241022', 'Sum')) * 3.00 / 1000000 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens claude-3-5-sonnet-20241022', 'Sum')) * 15.00 / 1000000 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens gemini-2.0-flash', 'Sum')) * 0.10 / 1000000 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens gemini-2.0-flash', 'Sum')) * 0.40 / 1000000 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens amazon.nova-pro', 'Sum')) * 0.8 / 1000000 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens amazon.nova-pro', 'Sum')) * 3.20 / 1000000
+            """,
+            label="Cost Calculation"  # Label that will appear on the dashboard
+        )
+
+        # Add the math expression to the dashboard
+        high_level_facade.add_widget(
+            cloudwatch.GraphWidget(
+                title="Model Usage Cost (USD)",
+                left=[math_expression],
+            ),
         )
 
         high_level_facade.add_medium_header('AI Agent Step Functions Monitoring')

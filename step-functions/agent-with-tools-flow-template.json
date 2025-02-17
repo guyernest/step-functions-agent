@@ -50,6 +50,10 @@
             "Unit": "Count",
             "Dimensions": [
               {
+                "Name": "model",
+                "Value": "{% $states.input.metadata.model %}"
+              },
+              {
                 "Name": "state_machine_name",
                 "Value": "{% $states.context.StateMachine.Name %}"
               }
@@ -60,6 +64,10 @@
             "Value": "{% $states.input.metadata.usage.output_tokens %}",
             "Unit": "Count",
             "Dimensions": [
+              {
+                "Name": "model",
+                "Value": "{% $states.input.metadata.model %}"
+              },
               {
                 "Name": "state_machine_name",
                 "Value": "{% $states.context.StateMachine.Name %}"
@@ -93,7 +101,7 @@
       "Output": {
         "messages": "{% $states.input.messages %}",
         "output": {
-          "answer": "{% $type($states.input.messages[-1].content) = \"array\" ? $states.input.messages[-1].content[0].text : $states.input.messages[-1].content %}"
+          "answer": "{% $states.input.messages[-1].**.text ? $states.input.messages[-1].**.text : $states.input.messages[-1].**.content %}"
         }
       },
       "Comment": "Extracts the relevant information from the flow, including all the message flow, the textual answer from the last message, and the chart that was generated during the flow."
