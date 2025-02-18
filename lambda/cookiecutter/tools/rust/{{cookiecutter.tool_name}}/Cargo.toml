@@ -1,0 +1,12 @@
+[package]
+name = "{{cookiecutter.tool_name}}"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde_json = "1"
+
+lambda_runtime = "0.13.0"
+tokio = { version = "1", features = ["macros"] }
+serde = "1.0.217"
+
