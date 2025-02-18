@@ -1,0 +1,8 @@
+{
+    "id": "unique_tool_use_id",
+    "input": {
+        "search_query": "How many vacation days can I take?"
+    },
+    "name": "semantic_search_rust",
+    "type": "tool_use"
+}

@@ -1,0 +1,7 @@
+{
+    "tool_name": "ToolNameRust",
+    "tool_description": "Tool description",
+    "input_param_name": "input_param_name",
+    "input_param_description": "input_param_description",
+    "input_test_value": "2024-01-01"
+}

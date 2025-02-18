@@ -36,3 +36,4 @@ lambda/tools/web-scraper/samconfig.toml
 docs/package-lock.json
 lambda/tools/EarthQuakeQueryTS/node_modules
 lambda/tools/EarthQuakeQueryTS/package-lock.json
+lambda/tools/SemanticSearchRust/target
