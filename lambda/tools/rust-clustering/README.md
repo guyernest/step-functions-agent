@@ -155,7 +155,7 @@ If you want to run integration tests locally, you can use the `cargo lambda watc
 
 First, run `cargo lambda watch` to start a local server. When you make changes to the code, the server will automatically restart.
 
-For generic events, where you define the event data structure, you can create a JSON file with the data you want to test with. For example:
+For generic events, where you define the event data structure, you can create a JSON file with the data you want to test with under `tests/test-event.json`. For example:
 
 ```json
 {
@@ -171,10 +171,16 @@ For generic events, where you define the event data structure, you can create a 
 Then, run
 
 ```bash
-cargo lambda invoke --data-file ./data.json
+cargo lambda invoke --data-file tests/test-event.json
 ```
 
-to invoke the function with the data in `data.json`.
+or using the SAM CLI:
+
+```bash
+sam local invoke RustClusteringFunction --event tests/test-event.json
+```
+
+to invoke the function with the data in `test-event.json`.
 
 ## Deployment
 

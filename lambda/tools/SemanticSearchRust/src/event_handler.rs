@@ -28,8 +28,9 @@ pub struct ToolUseResponse {
     pub content: String,
 }
 
+use anyhow::{Context, Result};
+
 // Embedding using cohere
-use anyhow::Result;
 use reqwest::Client;
 
 #[derive(Deserialize, Debug)]
@@ -54,7 +55,9 @@ pub async fn embed(text: &str) -> Result<Vec<Vec<f32>>> {
         .get_secret_value()
         .secret_id(name)
         .send()
-        .await?;
+        .await
+        .context(format!("Failed to retrieve secret '{name}' from AWS Secrets Manager. Please check key name and IAM permissions"))?;
+
     let secret_json: serde_json::Value =
         serde_json::from_str(resp.secret_string().unwrap_or_default())
             .expect("Failed to parse JSON");
@@ -75,7 +78,8 @@ pub async fn embed(text: &str) -> Result<Vec<Vec<f32>>> {
             .to_string(),
         )
         .send()
-        .await?;
+        .await
+        .context("Failed to embed text using Cohere API. Please check API key and input.")?;
 
     // Print the raw response body for debugging
     let response_text = response.text().await?;
@@ -119,7 +123,7 @@ use aws_config::meta::region::RegionProviderChain;
 
 async fn semantic_search_rust(
     search_query: String,
-) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<String> {
     // Handle Secrets
     let region_provider = RegionProviderChain::default_provider().or_else("us-west-2");
     let shared_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
@@ -132,7 +136,9 @@ async fn semantic_search_rust(
         .get_secret_value()
         .secret_id(name)
         .send()
-        .await?;
+        .await        
+        .context(format!("Failed to retrieve secret '{name}' from AWS Secrets Manager. Please check key name and IAM permissions"))?;
+    
     let secret_json: serde_json::Value =
         serde_json::from_str(resp.secret_string().unwrap_or_default())
             .expect("Failed to parse JSON");
@@ -144,16 +150,20 @@ async fn semantic_search_rust(
     // let qdrant_url_value: &str = secret_json["QDRANT_URL"].as_str().unwrap_or("No value!");
     let ssm_client = aws_sdk_ssm::Client::new(&shared_config);
 
+    let parameter_name: &str = "/ai-agent/qdrant/qdrant_endpoint";
+
     let qdrant_url_value: String = ssm_client
         .get_parameter()
-        .name("/ai-agent/qdrant/qdrant_endpoint")
+        .name(parameter_name)
         .send()
         .await
+        .context(format!("Failed to retrieve parameter '{parameter_name}' from AWS Parameter Store. Please check key name and IAM permissions"))
         .unwrap()
         .parameter
         .unwrap()
         .value
-        .unwrap_or_else(|| "No value!".to_string());
+        .unwrap();
+    
 
     // Search the vector database
     // let client = Qdrant::new(qdrant_client_confit).unwrap();
@@ -165,17 +175,30 @@ async fn semantic_search_rust(
     let collection_name = "test_collection";
 
     // clean_setup(collection_name).await?;
-    let search_results = search(&search_query, collection_name.to_owned(), &client).await?;
+    let search_results = search(
+        &search_query, 
+        collection_name.to_owned(), 
+        &client
+    ).await
+    .context(format!("Failed to retrieve documents from collection '{collection_name}'. Please check endpoint URL and API key"))?;
+
 
     let response_body: String = search_results
         .result
         .into_iter()
         .map(|p| {
-            let title = p.payload.get("title").unwrap().as_str().unwrap().to_owned();
+            let title = p
+                .payload.get("title")
+                .context("Retrieved document's Payload should include title element.")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_owned();
 
             let description = p
                 .payload
                 .get("description")
+                .context("Retrieved document's Payload should include description element.")
                 .unwrap()
                 .as_str()
                 .unwrap()
@@ -212,8 +235,11 @@ pub(crate) async fn function_handler(event: LambdaEvent<Value>) -> Result<ToolUs
 
             // Call tool function
             let response_body =
-                semantic_search_rust(payload.input["search_query"].as_str().unwrap().to_string())
-                    .await?;
+                semantic_search_rust(
+                    payload.input["search_query"].as_str().unwrap().to_string()
+                )
+                .await
+                .context("Internal tool function failed to execute.")?;
 
             result = serde_json::to_string(&serde_json::json!({
                 "docs": response_body,
@@ -243,11 +269,9 @@ mod tests {
 
     #[tokio::test]
     async fn check_embedding() {
-        // ignore this test if API_KEY isn't set
-        let api_key = &std::env::var("API_KEY");
-        // let embedding = crate::embed("What is semantic search?", api_key).unwrap()[0];
-        // Cohere's `small` model has 1024 output dimensions.
-        // assert_eq!(1024, embedding.len());
+        let embedding = embed("What is semantic search?").await.unwrap();
+        // Cohere's embed model has 1024 output dimensions.
+        assert_eq!(1024, embedding[0].len());
     }
 
     #[tokio::test]
