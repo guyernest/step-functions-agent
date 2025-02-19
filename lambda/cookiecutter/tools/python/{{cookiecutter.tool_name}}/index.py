@@ -59,3 +59,20 @@ def lambda_handler(event, context):
         "tool_use_id": tool_use["id"],
         "content": result
     }
+
+if __name__ == "__main__":
+    # Test event 
+    test_event = {
+        "name": "{{cookiecutter.tool_name}}",
+        "id": "execute_unique_id",
+        "input": {
+            "{{cookiecutter.input_param_name}}": "{{cookiecutter.input_test_value}}"
+        },
+        "type": "tool_use"
+    }
+        
+    # Call lambda handler with test events
+    print("\nTesting tool:")
+    response = lambda_handler(test_event, None)
+    print(response)
+    

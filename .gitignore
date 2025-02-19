@@ -37,3 +37,5 @@ docs/package-lock.json
 lambda/tools/EarthQuakeQueryTS/node_modules
 lambda/tools/EarthQuakeQueryTS/package-lock.json
 lambda/tools/SemanticSearchRust/target
+lambda/tools/SemanticSearchRust/Cargo.lock
+lambda/tools/rust-clustering/Cargo.lock

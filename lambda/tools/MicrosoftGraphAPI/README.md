@@ -1,13 +1,13 @@
-# Python Tool: {{cookiecutter.tool_name}}
+# Python Tool: MicrosoftGraphAPI
 
-![Python Logo](https://cdn.simpleicons.org/python?size=48)
+![Python Logo](https://cdn.simpleicons.org/python?size=48) 
 
-This directory contains the implementation of the tools {{cookiecutter.tool_name}} in **Python**.
+This directory contains the implementation of the tools MicrosoftGraphAPI in **Python**.
 
 ## Folder structure
 
 ```txt
-{{cookiecutter.tool_name}}/
+MicrosoftGraphAPI/
 ├── index.py
 ├── requirements.in
 ├── requirements.txt
@@ -24,7 +24,7 @@ This directory contains the implementation of the tools {{cookiecutter.tool_name
 
 The tools are:
 
-* `{{cookiecutter.tool_name}}`: {{cookiecutter.tool_description}}.
+* `MicrosoftGraphAPI`: Interface to the Microsoft Graph API of a specific tenant..
 
 ## Setup
 
@@ -37,6 +37,19 @@ uv pip compile requirements.in --output-file requirements.txt
 ```
 
 The `requirements.txt` file is used to install the dependencies in the Lambda function by the SAM CLI and the CDK.
+
+## Accessing the Microsoft Graph API
+
+The tool uses the Microsoft Graph API to access the data. You need to create an app in the Azure portal and get the client ID and client secret. You can find more information in the [Microsoft Graph API documentation](https://docs.microsoft.com/en-us/graph/auth-v2-service).
+You should store the client ID and client secret in the `.env` file as follows:
+
+```text
+TENANT_ID=your_tenant_id
+CLIENT_ID=your_client_id
+CLIENT_SECRET=your_client_secret
+```
+
+The CDK stack will pass the secrets to the Lambda function through the secrets manager.
 
 ## Testing
 
@@ -56,7 +69,7 @@ The AWS Function is defined in the `template.yaml` file. You can test the Lambda
 
 ```bash
 sam build
-sam local invoke {{cookiecutter.tool_name}} --event tests/test-event.json
+sam local invoke MicrosoftGraphAPI --event tests/test-event.json
 ```
 
 ## Deployment
@@ -69,12 +82,12 @@ The CDK stack is defined with the rest of the AI Agent definition to allow full 
 
 ```python
     # Define the Lambda function
-    tool_lambda_function = _lambda_python.PythonFunction(
+    graphql_lambda_function = _lambda_python.PythonFunction(
         self, 
-        "{{cookiecutter.tool_name}}ToolLambdaFunction",
-        function_name="{{cookiecutter.tool_name}}ToolLambdaFunction",
-        description="{{cookiecutter.tool_description}}.",
-        entry="lambda/tools/{{cookiecutter.tool_name}}",
+        "GraphQLToolLambdaFunction",
+        function_name="GraphQLToolLambdaFunction",
+        description="Explore and query a GraphQL API.",
+        entry="lambda/tools/graphql-interface",
         runtime=_lambda.Runtime.PYTHON_3_12,
         timeout=Duration.seconds(90),
         memory_size=128,
@@ -82,25 +95,25 @@ The CDK stack is defined with the rest of the AI Agent definition to allow full 
         handler="lambda_handler",
         architecture=_lambda.Architecture.ARM_64,
         log_retention=logs.RetentionDays.ONE_WEEK,
-        role=tool_lambda_role,
+        role=graphql_lambda_role,
     )
 
     # Create graphql tools
-    tools = [
+    graphql_tools = [
         Tool(
-            "{{cookiecutter.tool_name}}",
-            "{{cookiecutter.tool_description}}.",
-            tool_lambda_function,
+            "MicrosoftGraphAPI",
+            "Interface to the Microsoft Graph API of a specific tenant.",
+            graphql_lambda_function,
             input_schema={
                 "type": "object",
                 "properties": {
-                    "{{cookiecutter.input_param_name}}": {
+                    "query": {
                         "type": "string",
-                        "description": "{{cookiecutter.input_param_description}}.",
+                        "description": "The API query to perform.",
                     }
                 },
                 "required": [
-                    "{{cookiecutter.input_param_name}}",
+                    "query",
                 ]
             }
         )
