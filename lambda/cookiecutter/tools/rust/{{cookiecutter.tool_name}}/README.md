@@ -21,6 +21,35 @@ The tools are:
 
 * `{{cookiecutter.tool_name}}`: {{cookiecutter.tool_description}}.
 
+## API Key
+
+Tools often need to make requests to external APIs. This requires an API key. Although it is possible to use environment variables to store the API key, it is recommended to use a Secrets Manager to store the API key. The secrets are stored from the main CDK stack that reads the local various API keys from an .env file.
+
+The following code snippet shows how to retrieve the API key from the Secrets Manager.
+
+```rust
+    // Handle Secrets
+    let region_provider = RegionProviderChain::default_provider().or_else("us-west-2");
+    let shared_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+        .region(region_provider)
+        .load()
+        .await;
+    let secrets_client = aws_sdk_secretsmanager::Client::new(&shared_config);
+    let name: &str = "/ai-agent/TOOL_NAME";
+    let resp = secrets_client
+        .get_secret_value()
+        .secret_id(name)
+        .send()
+        .await?;
+    let secret_json: serde_json::Value =
+        serde_json::from_str(&resp.secret_string().unwrap_or_default())
+            .expect("Failed to parse JSON");
+    let api_key_value: String = secret_json["TOOL_API_KEY"]
+        .as_str()
+        .unwrap_or("No value!")
+        .to_string();
+```
+
 ## Prerequisites
 
 * [Rust](https://www.rust-lang.org/tools/install)

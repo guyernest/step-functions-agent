@@ -21,6 +21,56 @@ The tools are:
 
 * `SemanticSearchRust`: Semantic search using vector database (Qdrant) in Rust.
 
+## Semantic Indexing
+
+We will use Qdrant as the vector database. Qdrant is a vector database that is used to store and search vectors. Vectors are mathematical representations of data. In our case, we will use vectors to represent the semantic meaning of text. Qdrant is fast as it is implemented also in Rust.
+Qdrant is available as a managed service on [Qdrant Cloud](https://qdrant.tech/cloud/), which also includes a free tier. Once you launch a cluster, you can access the API key and the endpoint from the Qdrant Cloud console.
+
+## Populate the Semantic Index
+
+To populate the semantic index, we will use the notebooks [here](notebooks/pupulate_database.ipynb). The example takes a set of session descriptions from Re:Invent 2024 about AI. You can modify the notebook to use your own data.
+
+## API Key
+
+Tools often need to make requests to external APIs. This requires an API key. Although it is possible to use environment variables to store the API key, it is recommended to use a Secrets Manager to store the API key. The secrets are stored from the main CDK stack that reads the local various API keys from an .env file.
+
+The following code snippet shows how to retrieve the API key from the Secrets Manager.
+
+```rust
+    // Handle Secrets
+    let region_provider = RegionProviderChain::default_provider().or_else("us-west-2");
+    let shared_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+        .region(region_provider)
+        .load()
+        .await;
+    let secrets_client = aws_sdk_secretsmanager::Client::new(&shared_config);
+    let name: &str = "/ai-agent/TOOL_NAME";
+    let resp = secrets_client
+        .get_secret_value()
+        .secret_id(name)
+        .send()
+        .await?;
+    let secret_json: serde_json::Value =
+        serde_json::from_str(&resp.secret_string().unwrap_or_default())
+            .expect("Failed to parse JSON");
+    let api_key_value: String = secret_json["TOOL_API_KEY"]
+        .as_str()
+        .unwrap_or("No value!")
+        .to_string();
+```
+
+Please note that for Qdrant Cloud you have to modify the port to 6334, as the default port 6333 is not working for the Rust client. For example modify the following line:
+
+```text
+QDRANT_URL="QDRANT_URL="https://XXXXXXXXXXXXXX.aws.cloud.qdrant.io:6333"
+```
+
+to:
+
+```text
+QDRANT_URL="QDRANT_URL="https://XXXXXXXXXXXXXX.aws.cloud.qdrant.io:6334"
+```
+
 ## Prerequisites
 
 * [Rust](https://www.rust-lang.org/tools/install)
