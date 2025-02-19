@@ -20,6 +20,7 @@ from step_functions_agent.step_functions_books_agent_stack import BooksAgentStac
 from step_functions_agent.step_functions_web_scraper_agent_stack import WebScraperAgentStack
 from step_functions_agent.step_functions_image_analysis_agent_stack import ImageAnalysisAgentStack
 from step_functions_agent.step_functions_earthqueke_agent_stack import EarthquakeAgentStack
+from step_functions_agent.step_functions_semantic_search_agent_stack import SemanticSearchAgentStack
 
 app = cdk.App()
 sqlAgentStack = SQLAgentStack(app, "SQLAgentStack")
@@ -34,6 +35,7 @@ booksAgentStack = BooksAgentStack(app, "BooksAgentStack")
 webScraperAgentStack = WebScraperAgentStack(app, "WebScraperAgentStack")
 imageAnalysisAgentStack = ImageAnalysisAgentStack(app, "ImageAnalysisAgentStack")
 earthAgentStack = EarthquakeAgentStack(app, "EarthquakeAgentStack")
+semanticSearchAgentStack = SemanticSearchAgentStack(app, "SemanticSearchAgentStack")
 
 superviserAgentStack = SupervisorAgentStack(app, "SuperviserAgentStack")
 
@@ -64,6 +66,7 @@ Tags.of(booksAgentStack).add("project", "books-ai-agent")
 Tags.of(webScraperAgentStack).add("project", "web-scraper-ai-agent")
 Tags.of(imageAnalysisAgentStack).add("project", "image-analysis-ai-agent")
 Tags.of(earthAgentStack).add("project", "earthquake-ai-agent")
+Tags.of(semanticSearchAgentStack).add("project", "semantic-search-ai-agent")
 
 Tags.of(superviserAgentStack).add("project", "supervisor-ai-agent")
 

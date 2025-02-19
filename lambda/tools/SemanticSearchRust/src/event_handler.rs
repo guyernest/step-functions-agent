@@ -1,8 +1,6 @@
 use lambda_runtime::{tracing, Error, LambdaEvent};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
-use std::result;
 
 #[derive(Deserialize, Debug)]
 pub struct ToolUsePayload {
@@ -34,36 +32,66 @@ pub struct ToolUseResponse {
 use anyhow::Result;
 use reqwest::Client;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct CohereResponse {
-    outputs: Vec<Vec<f32>>,
+    embeddings: EmbeddingsResponse,
 }
 
-pub async fn embed(client: &Client, text: &str, api_key: &str) -> Result<Vec<Vec<f32>>> {
-    let CohereResponse { outputs } = client
-        .post("https://api.cohere.ai/embed")
-        .header("Authorization", &format!("Bearer {api_key}"))
-        .header("Content-Type", "application/json")
-        .header("Cohere-Version", "2021-11-08")
-        .body(format!("{{\"text\":[\"{text}\"],\"model\":\"small\"}}"))
+#[derive(Deserialize, Debug)]
+struct EmbeddingsResponse {
+    float: Vec<Vec<f32>>,
+}
+pub async fn embed(text: &str) -> Result<Vec<Vec<f32>>> {
+    let client = Client::new();
+    let region_provider = RegionProviderChain::default_provider().or_else("us-west-2");
+    let shared_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+        .region(region_provider)
+        .load()
+        .await;
+    let secrets_client = aws_sdk_secretsmanager::Client::new(&shared_config);
+    let name: &str = "/ai-agent/api-keys";
+    let resp = secrets_client
+        .get_secret_value()
+        .secret_id(name)
         .send()
-        .await?
-        .json()
         .await?;
-    Ok(outputs)
+    let secret_json: serde_json::Value =
+        serde_json::from_str(resp.secret_string().unwrap_or_default())
+            .expect("Failed to parse JSON");
+    let api_key_value: &str = secret_json["CO_API_KEY"].as_str().unwrap_or("No value!");
+
+    let response = client
+        .post("https://api.cohere.com/v2/embed")
+        .header("Authorization", &format!("Bearer {api_key_value}"))
+        .header("Content-Type", "application/json")
+        .header("accept", "application/json")
+        .body(
+            serde_json::json!({
+                "texts": [text],
+                "model": "embed-english-v3.0",
+                "input_type": "search_query",
+                "embedding_types": ["float"],
+            })
+            .to_string(),
+        )
+        .send()
+        .await?;
+
+    // Print the raw response body for debugging
+    let response_text = response.text().await?;
+    tracing::debug!("Response text from emebedding API: {}", response_text);
+
+    // Parse the response text back to json
+    let CohereResponse { embeddings } = serde_json::from_str(&response_text)?;
+
+    Ok(embeddings.float)
 }
 
 // Upsert document to Qdrant
-use qdrant_client::qdrant::{
-    CreateCollectionBuilder, Distance, SearchResponse, VectorParamsBuilder,
-};
-use qdrant_client::qdrant::{PointStruct, UpsertPointsBuilder};
-use qdrant_client::{Payload, Qdrant};
-use serde_json::json;
+use qdrant_client::qdrant::SearchResponse;
+use qdrant_client::Qdrant;
 
-use qdrant_client::qdrant::{
-    Condition, CountPointsBuilder, Filter, SearchParamsBuilder, SearchPointsBuilder,
-};
+use qdrant_client::qdrant::{SearchParamsBuilder, SearchPointsBuilder};
 // Semantic Search using vector database (Qdrant) in Rust
 pub async fn search(
     text: &str,
@@ -72,13 +100,13 @@ pub async fn search(
     // api_key: &str,
     qdrant: &Qdrant,
 ) -> Result<SearchResponse> {
+    let embeddings = embed(text).await?;
+    let vector = embeddings[0].clone();
+    println!("Vector: {:?}", vector);
+    // Search for the closest vectors
     let points = qdrant
         .search_points(
-            SearchPointsBuilder::new(collection_name, vec![0.2, 0.1, 0.9, 0.7], 3)
-                // .filter(Filter::must([Condition::matches(
-                //     "city",
-                //     "London".to_string(),
-                // )]))
+            SearchPointsBuilder::new(collection_name, vector, 3)
                 .with_payload(true)
                 .params(SearchParamsBuilder::default().hnsw_ef(128).exact(false)),
         )
@@ -88,16 +116,10 @@ pub async fn search(
 }
 
 use aws_config::meta::region::RegionProviderChain;
-use aws_sdk_secretsmanager::{config::Region, meta::PKG_VERSION};
 
 async fn semantic_search_rust(
     search_query: String,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    // Embed the search query
-    // let embed_client = Client::new("http://localhost:6333");
-    // let embed_api_key = "your_api_key_here";
-    // let embed = embed(embed_client, search_query, embed_api_key)?;
-
     // Handle Secrets
     let region_provider = RegionProviderChain::default_provider().or_else("us-west-2");
     let shared_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
@@ -105,29 +127,42 @@ async fn semantic_search_rust(
         .load()
         .await;
     let secrets_client = aws_sdk_secretsmanager::Client::new(&shared_config);
-    let name: &str = "/ai-agent/qdrant";
+    let name: &str = "/ai-agent/semantic_search";
     let resp = secrets_client
         .get_secret_value()
         .secret_id(name)
         .send()
         .await?;
     let secret_json: serde_json::Value =
-        serde_json::from_str(&resp.secret_string().unwrap_or_default())
+        serde_json::from_str(resp.secret_string().unwrap_or_default())
             .expect("Failed to parse JSON");
     let api_key_value: String = secret_json["QDRANT_API_KEY"]
         .as_str()
         .unwrap_or("No value!")
         .to_string();
-    let qdrant_url_value: &str = secret_json["QDRANT_URL"].as_str().unwrap_or("No value!");
+
+    // let qdrant_url_value: &str = secret_json["QDRANT_URL"].as_str().unwrap_or("No value!");
+    let ssm_client = aws_sdk_ssm::Client::new(&shared_config);
+
+    let qdrant_url_value: String = ssm_client
+        .get_parameter()
+        .name("/ai-agent/qdrant/qdrant_endpoint")
+        .send()
+        .await
+        .unwrap()
+        .parameter
+        .unwrap()
+        .value
+        .unwrap_or_else(|| "No value!".to_string());
 
     // Search the vector database
     // let client = Qdrant::new(qdrant_client_confit).unwrap();
-    let client = Qdrant::from_url(qdrant_url_value)
+    let client = Qdrant::from_url(&qdrant_url_value)
         .api_key(api_key_value)
         .build()
         .unwrap();
 
-    let collection_name = "star_charts";
+    let collection_name = "test_collection";
 
     // clean_setup(collection_name).await?;
     let search_results = search(&search_query, collection_name.to_owned(), &client).await?;
@@ -136,15 +171,21 @@ async fn semantic_search_rust(
         .result
         .into_iter()
         .map(|p| {
-            p.payload
-                .get("colony")
+            let title = p.payload.get("title").unwrap().as_str().unwrap().to_owned();
+
+            let description = p
+                .payload
+                .get("description")
                 .unwrap()
                 .as_str()
                 .unwrap()
-                .to_owned()
+                .to_owned();
+
+            format!("Title:{}\n Description: {}", title, description)
         })
         .collect::<Vec<String>>()
         .join("\n");
+    tracing::debug!("Search results: {}", response_body);
     println!("Search results: {}", response_body);
 
     // // Return the search results

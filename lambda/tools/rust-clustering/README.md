@@ -91,12 +91,26 @@ Tools often need to make requests to external APIs, such as Google Maps API. Thi
 The following code snippet shows how to initialize the API key.
 
 ```rust
-let client = aws_sdk_secretsmanager::Client::new(&shared_config);
-let name: &str = "/ai-agent/api-keys";
-let resp = client.get_secret_value().secret_id(name).send().await?;
-let api_key_secret: String = resp.secret_string().unwrap_or("No value!".to_string());
-let secret_json: serde_json::Value = serde_json::from_str(&resp.secret_string().unwrap_or_default()).expect("Failed to parse JSON");
-let api_key_secret: String = secret_json["API_KEY_XXX"].as_str().unwrap_or("No value!").to_string();
+    // Handle Secrets
+    let region_provider = RegionProviderChain::default_provider().or_else("us-west-2");
+    let shared_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+        .region(region_provider)
+        .load()
+        .await;
+    let secrets_client = aws_sdk_secretsmanager::Client::new(&shared_config);
+    let name: &str = "/ai-agent/TOOL_NAME";
+    let resp = secrets_client
+        .get_secret_value()
+        .secret_id(name)
+        .send()
+        .await?;
+    let secret_json: serde_json::Value =
+        serde_json::from_str(&resp.secret_string().unwrap_or_default())
+            .expect("Failed to parse JSON");
+    let api_key_value: String = secret_json["TOOL_API_KEY"]
+        .as_str()
+        .unwrap_or("No value!")
+        .to_string();
 ```
 
 ## Prerequisites
