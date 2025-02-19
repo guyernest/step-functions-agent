@@ -168,6 +168,19 @@ Please note that each Lambda function is implemented in a dedicated directory an
 
 Each tool is implemented using a Lambda function in a dedicated directory, and has its own build requirements and dependencies. You can see more examples and documentation in the [lambda/tools](lambda/tools) folder.
 
+### Using Cookiecutter
+
+The project includes a set of [cookiecutters](https://github.com/cookiecutter/cookiecutter) to help you create new tools. You can find them in the [lambda/cookiecutter](lambda/cookiecutter) folder. The cookiecutters are available for Python, TypeScript, and Rust.
+
+To use a cookiecutter, run the following command:
+
+```shell
+cd lambda/tools
+cookiecutter ../cookiecutter/python # or typescript, or rust
+```
+
+### Building from scratch
+
 A tool should know how to parse the tool input, and return the tool output. The tool input is passed to the tool as a JSON object, and the tool output is returned as a JSON object. For example, the following [Lambda function](lambda/tools/db-interface/index.py) implements two tools: `get_db_schema` and `execute_sql_query`:
 
 ```python
