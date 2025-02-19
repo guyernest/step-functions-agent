@@ -1,4 +1,3 @@
-use aws_config::{BehaviorVersion, SdkConfig};
 use lambda_runtime::{tracing, Error, LambdaEvent};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -30,9 +29,12 @@ pub struct ToolUseResponse {
     pub content: String,
 }
 
+use anyhow::{Context, Result};
+
 async fn {{cookiecutter.tool_name}}(
     {{cookiecutter.input_param_name}}: Type,
-) -> Result<Vec<Type>, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<Vec<Type>> {
+    // Your tool function logic here
     Ok(vec![Type::default()])
 }
 
@@ -56,7 +58,8 @@ pub(crate) async fn function_handler(event: LambdaEvent<Value>) -> Result<ToolUs
             // Call tool function
             let result_part_1 = {{cookiecutter.tool_name}}(
                 payload.input["{{cookiecutter.input_param_name}}"].as_str().unwrap().to_string()
-            ).await?;
+            ).await
+            .context("Internal tool function failed to execute.")?;
 
 
             result = serde_json::to_string(&serde_json::json!({

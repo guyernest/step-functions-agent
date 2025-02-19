@@ -1,0 +1,24 @@
+# template.yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Resources:
+  # Clusting using HDBScan in Rust
+  ClusteringRust:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: rust-cargolambda
+    Properties:
+      CodeUri: .
+      Handler: bootstrap
+      Runtime: provided.al2
+      Timeout: 90
+      MemorySize: 128
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: ClusteringRust
+      Architectures:
+        - arm64
+      Policies:
+        - SecretsManagerRead
+        - AWSLambdaBasicExecutionRole

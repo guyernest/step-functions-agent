@@ -88,7 +88,27 @@ Please note that the `--arm64` flag is needed to build for ARM64, as we want to 
 
 Read more about building your lambda function in [the Cargo Lambda documentation](https://www.cargo-lambda.info/commands/build.html).
 
+Alternatively, you can use the SAM CLI to build the project:
+
+```bash
+sam build
+```
+
 ## Testing
+
+### Cargo test or nextest
+
+You can run the tests using `cargo test` or `nextest` for faster test execution:
+
+```bash
+cargo test run
+```
+
+or
+
+```bash
+cargo nextest run
+```
 
 ### AWS SAM CLI
 
