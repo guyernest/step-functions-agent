@@ -24,7 +24,9 @@ This directory contains the implementation of the tools {{cookiecutter.tool_name
 
 The tools are:
 
-* `{{cookiecutter.tool_name}}`: {{cookiecutter.tool_description}}.
+{% for name in cookiecutter.tool_functions.functions_names %}
+* `{{name}}`: {{cookiecutter.tool_description}}.
+{% endfor %}
 
 ## Setup
 

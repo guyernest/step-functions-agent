@@ -1,7 +1,20 @@
 {
     "tool_name": "EarthQuakeQuery",
     "tool_description": "Query interface to the USGS Earthquake Catalog API",
+    "tool_functions": {
+        "functions_names": [
+            "{{ cookiecutter.tool_name | to_snake_case }}"
+        ] 
+    },
     "input_param_name": "start_date",
     "input_param_description": "The start date of the query in YYYY-MM-DD format",
-    "input_test_value": "2024-01-01"
+    "input_test_value": "2024-01-01",
+    "__prompts__": {
+        "tool_name": "Select your tool package name",
+        "tool_description": "Describe the main functionality of the tool set",
+        "tool_functions": "If you want more than one function in your tool set, list them here as list in json format",
+        "input_param_name": "Name of the input parameter",
+        "input_param_description": "Description of the input parameter"
+    },
+    "_extensions": ["local_extensions.FunctionNamesExtension"]
 }

@@ -1,6 +1,7 @@
 # This lambda function will be used as a tool {{cookiecutter.tool_name}} for the AI Agent platform
 
 # Imports for Tool
+import json
 
 # Imports for Lambda
 from aws_lambda_powertools import Logger
@@ -12,7 +13,8 @@ logger = Logger(level="INFO")
 tracer = Tracer()
 
 # Tool Functions
-def {{cookiecutter.tool_name}}(
+{% for name in cookiecutter.tool_functions.functions_names %}
+def {{name}}(
     {{cookiecutter.input_param_name}}: str
     ) -> str:
     """{{cookiecutter.tool_description}}.
@@ -32,6 +34,7 @@ def {{cookiecutter.tool_name}}(
         return json.dumps(result, indent=2)
     except Exception as e:
         return f"Error executing query: {str(e)}"
+{% endfor %}
 
 
 @tracer.capture_method
@@ -43,8 +46,10 @@ def lambda_handler(event, context):
 
     logger.info(f"Tool name: {tool_name}")
     match tool_name:
-        case '{{cookiecutter.tool_name}}':
-            result = {{cookiecutter.tool_name}}(tool_input['{{cookiecutter.input_param_name}}'])
+        {% for name in cookiecutter.tool_functions.functions_names %}
+        case '{{name}}':
+            result = {{name}}(tool_input['{{cookiecutter.input_param_name}}'])
+        {% endfor %}
 
         # Add more tools functions here as needed
 
@@ -61,9 +66,12 @@ def lambda_handler(event, context):
     }
 
 if __name__ == "__main__":
+
+    {% for name in cookiecutter.tool_functions.functions_names %}
+    # Test {{name}} function
     # Test event 
     test_event = {
-        "name": "{{cookiecutter.tool_name}}",
+        "name": "{{name}}",
         "id": "execute_unique_id",
         "input": {
             "{{cookiecutter.input_param_name}}": "{{cookiecutter.input_test_value}}"
@@ -72,7 +80,7 @@ if __name__ == "__main__":
     }
         
     # Call lambda handler with test events
-    print("\nTesting tool:")
+    print("\nTesting tool {{name}}:")
     response = lambda_handler(test_event, None)
     print(response)
-    
+    {% endfor %}
