@@ -26,7 +26,7 @@ class SemanticSearchAgentStack(Stack):
                 key, value = line.strip().split("=", 1)
                 secret_values[key] = SecretValue.unsafe_plain_text(value)
                 # Decide if you add a secret or as a parameter
-                if key.endswith("_API_KEY") or key.endswith("_KEY"):
+                if key.endswith("_KEY"):
                     api_key_secret = secretsmanager.Secret(self, "SemanticSearchToolAPIKeysSecret", 
                         secret_name="/ai-agent/semantic_search",
                         secret_object_value=secret_values,
