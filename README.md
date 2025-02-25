@@ -1,4 +1,4 @@
-# Executing AI Agents in AWS Step Functions
+# Building and Operating AI Agents in AWS Step Functions
 
 > 📦 **Enterprise AI Agent Framework**
 >
@@ -233,8 +233,22 @@ The LLM caller is implemented using a Lambda function. The LLM caller is called 
 
 However, the tool usage is very similar to other LLM, such as FAIR [Llama](https://github.com/meta-llama/llama-models/blob/main/models/llama3_3/prompt_format.md#json-based-tool-calling), Amazon [Nova](https://docs.aws.amazon.com/nova/latest/userguide/prompting-tools-function.html), etc.
 
+### API Keys
+
+The API keys are stored in AWS Secrets Manager, after they are uploaded from the local `.env` file by the first `cdk deploy` command.
+
+```text
+ANTHROPIC_API_KEY=your_anthropic_api_key
+OPENAI_API_KEY=your_openai_api_key
+AI21_API_KEY=your_ai21_api_key
+GEMINI_API_KEY=your_gemini_api_key
+... other API keys
+```
+
+### Lambda Function
+
 ```python
-ANTHROPIC_API_KEY = json.loads(parameters.get_secret("/ai-agent/ANTHROPIC_API_KEY"))["ANTHROPIC_API_KEY"]
+ANTHROPIC_API_KEY = json.loads(parameters.get_secret("/ai-agent/api-keys"))["ANTHROPIC_API_KEY"]
 anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 def lambda_handler(event, context):
@@ -358,6 +372,11 @@ In the CDK stack we define the tools by following the following steps:
 ## Create the AI Agent Step Function
 
 ```python
+
+        system_prompt = """
+        You are an expert business analyst with deep knowledge of SQL and visualization code in Python. Your job is to help users understand and analyze their internal baseball data. You have access to a set of tools, but only use them when needed. You also have access to a tool that allows execution of python code. Use it to generate the visualizations in your analysis. - the python code runs in jupyter notebook. - every time you call `execute_python` tool, the python code is executed in a separate cell. it's okay to multiple calls to `execute_python`. - display visualizations using matplotlib directly in the notebook. don't worry about saving the visualizations to a file. - you can run any python code you want, everything is running in a secure sandbox environment.
+        """
+
         agent_flow = ConfigurableStepFunctionsConstruct(
             self,
             "AIStateMachine",
@@ -365,7 +384,7 @@ In the CDK stack we define the tools by following the following steps:
             llm_caller=call_llm_lambda_function,
             provider=LLMProviderEnum.ANTHROPIC,
             tools=tools,
-            system_prompt="You are an expert business analyst with deep knowledge of SQL and visualization code in Python. Your job is to help users understand and analyze their internal baseball data. You have access to a set of tools, but only use them when needed. You also have access to a tool that allows execution of python code. Use it to generate the visualizations in your analysis. - the python code runs in jupyter notebook. - every time you call `execute_python` tool, the python code is executed in a separate cell. it's okay to multiple calls to `execute_python`. - display visualizations using matplotlib directly in the notebook. don't worry about saving the visualizations to a file. - you can run any python code you want, everything is running in a secure sandbox environment.",
+            system_prompt=system_prompt,
             output_schema={
                 "type": "object",
                 "properties": {

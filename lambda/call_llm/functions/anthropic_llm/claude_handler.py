@@ -6,7 +6,7 @@ from common.config import get_api_keys
 
 from typing import List, Dict
 
-MODEL_ID = "claude-3-5-sonnet-20241022"
+MODEL_ID = "claude-3-7-sonnet-latest"
 
 class ClaudeLLM(BaseLLM):
     def __init__(self):
