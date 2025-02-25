@@ -188,7 +188,7 @@ class SQLAgentStack(Stack):
             tracing= _lambda.Tracing.ACTIVE,
         )
 
-        # Creating the Call LLM lambda function for DeepSeek through OpenRouter API
+        # Creating the Call LLM lambda function for DeepSeek
         call_llm_lambda_function_deepseek = _lambda_python.PythonFunction(
             self, 
             "CallLLMDeepSeek",
@@ -200,6 +200,26 @@ class SQLAgentStack(Stack):
             timeout=Duration.seconds(90),
             memory_size=256,
             index="deepseek_lambda.py",
+            handler="lambda_handler",
+            layers=[llm_layer],
+            architecture=_lambda.Architecture.ARM_64,
+            log_group=log_group,
+            role=call_llm_lambda_role,
+            tracing= _lambda.Tracing.ACTIVE,
+        )
+
+        # Creating the Call LLM lambda function for XAI (Groq) 
+        call_llm_lambda_function_xai = _lambda_python.PythonFunction(
+            self, 
+            "CallLLMXAI",
+            function_name="CallLLMXAI",
+            # Name of the Lambda function that will be used by the agents to find the function.
+            description="Lambda function to Call LLM (XAI) with messages history and tools.",
+            entry="lambda/call_llm/functions/openai_llm",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            timeout=Duration.seconds(90),
+            memory_size=256,
+            index="xai_lambda.py",
             handler="lambda_handler",
             layers=[llm_layer],
             architecture=_lambda.Architecture.ARM_64,
@@ -459,6 +479,18 @@ class SQLAgentStack(Stack):
             output_schema=output_schema,
         )
 
+        # Create the DeepSeek agent flow
+        xai_agent_flow = ConfigurableStepFunctionsConstruct(
+            self,
+            "SQLAgentWithToolsFlowAndXAI",
+            state_machine_name="SQLAgentWithToolsFlowAndXAI",
+            state_machine_template_path="step-functions/agent-with-tools-flow-template.json",
+            llm_caller=call_llm_lambda_function_xai,
+            tools=tools,
+            system_prompt=system_prompt,
+            output_schema=output_schema,
+        )
+
         self.llm_functions = [
             call_llm_lambda_function_openai.function_name,
             call_llm_lambda_function_claude.function_name,
@@ -466,6 +498,7 @@ class SQLAgentStack(Stack):
             call_llm_lambda_function_ai21.function_name,
             call_llm_lambda_function_nova.function_name,
             call_llm_lambda_function_deepseek.function_name,
+            call_llm_lambda_function_xai.function_name,
         ]
 
         self.tool_functions = [
@@ -480,6 +513,7 @@ class SQLAgentStack(Stack):
             jamba_agent_flow.state_machine_name,
             nova_agent_flow.state_machine_name,
             deepseek_agent_flow.state_machine_name,
+            xai_agent_flow.state_machine_name
         ]
 
         self.log_group_name = log_group.log_group_name
