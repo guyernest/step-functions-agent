@@ -110,7 +110,7 @@ The tools return the output as a JSON object, with the result in the `content` f
 
 The web scraper supports various navigation actions:
 
-```javascript
+```json
 // Click a link or button
 { "type": "click", "selector": "#submit-button", "waitForNavigation": true }
 
@@ -140,7 +140,7 @@ The web scraper supports various navigation actions:
 
 You can extract different types of content using CSS selectors:
 
-```javascript
+```json
 "extractSelectors": {
   // Extract text content from container elements
   "containers": [".article-header", ".article-body", ".footer"],
@@ -169,7 +169,7 @@ The scraper includes several features to make web pages render correctly:
 
 You can also capture screenshots:
 
-```javascript
+```json
 // Screenshot a specific element
 "screenshotSelector": ".main-content"
 
@@ -179,10 +179,9 @@ You can also capture screenshots:
 
 ### Direct URL Navigation
 
-For sites with complex forms or search functionality, it's often better to navigate directly to 
-the target URL rather than trying to fill out forms. For example, to get weather for New York:
+For sites with complex forms or search functionality, it's often better to navigate directly to the target URL rather than trying to fill out forms. For example, to get weather for New York:
 
-```javascript
+```json
 // Instead of this (which might not work due to form behavior):
 "actions": [
   { "type": "type", "selector": "#searchbox", "text": "New York, NY" },
@@ -193,9 +192,169 @@ the target URL rather than trying to fill out forms. For example, to get weather
 "url": "https://forecast.weather.gov/MapClick.php?lat=40.7142&lon=-74.0059"
 ```
 
-## Complete Example
+## Using the Web Scraper Tool with LLMs
 
-Here's a complete example that navigates to BBC, clicks on the sports section, and extracts content:
+### Tool Interface for LLMs
+
+You can use this tool to navigate websites, interact with web pages, and extract content. The web_scrape tool has the following interface:
+
+```javascript
+{
+  "id": "unique_id",           // Unique identifier for this tool usage
+  "name": "web_scrape",        // Must be "web_scrape" to use this tool
+  "input": {
+    "url": "https://example.com",  // Starting URL
+    
+    // Optional list of navigation actions to perform in sequence
+    "actions": [
+      { 
+        "type": "click|search|type|wait|...",  // Action type
+        // Additional parameters based on action type
+      }
+    ],
+    
+    // Optional selectors to extract content
+    "extractSelectors": {
+      "containers": ["#main", ".article"], // Text containers
+      "text": [".title", "p"],            // Text elements
+      "links": ["a.menu", "nav a"],       // Link elements
+      "images": ["img.hero", ".gallery img"] // Image elements
+    },
+    
+    // Optional screenshot requests
+    "screenshotSelector": ".main-content", // Screenshot specific element
+    "fullPageScreenshot": true            // Take full page screenshot
+  }
+}
+```
+
+### Guidelines for LLMs Using This Tool
+
+1. **Exploration Phase**:
+
+* Start with a basic request to understand the site structure
+* Request a full page screenshot to see the visual layout
+* Examine HTML content to identify key selectors and elements
+* Look for forms, navigation elements, and content containers
+
+1. **Refinement Phase**:
+
+* Create more targeted requests with specific selectors
+* Use navigation actions to reach deeper content
+* Extract only the relevant information
+* Create a reusable script for similar future tasks
+
+1. **Documentation Phase**:
+
+* Document the selectors and navigation steps that worked
+* Create a template for similar websites
+* Note any challenges or anti-bot measures encountered
+
+### Example: Exploring an Unknown Website
+
+1. **Initial Exploration**:
+
+   ```json
+   {
+     "id": "explore_1",
+     "name": "web_scrape",
+     "input": {
+       "url": "https://example-news-site.com",
+       "fullPageScreenshot": true
+     }
+   }
+   ```
+
+1. **Analyze Results**:
+
+* Examine the screenshot to identify UI elements
+* Look at the HTML structure to find key selectors
+* Identify search forms, navigation menus, and content areas
+
+1. **Targeted Navigation**:
+
+   ```json
+   {
+     "id": "explore_2",
+     "name": "web_scrape",
+     "input": {
+       "url": "https://example-news-site.com",
+       "actions": [
+         { "type": "click", "selector": ".menu-item-technology" }
+       ],
+       "extractSelectors": {
+         "containers": [".article-list"],
+         "links": [".article-title a"]
+       }
+     }
+   }
+   ```
+
+1. **Create Reusable Template**:
+
+   ```json
+   {
+     "id": "reusable_template",
+     "name": "web_scrape",
+     "input": {
+       "url": "https://example-news-site.com",
+       "actions": [
+         { "type": "type", "selector": "#search-input", "text": "{SEARCH_TERM}" },
+         { "type": "click", "selector": "#search-button" },
+         { "type": "waitForSelector", "selector": ".search-results" }
+       ],
+       "extractSelectors": {
+         "containers": [".search-results"],
+         "links": [".result-item a"],
+         "text": [".result-summary"]
+       }
+     }
+   }
+   ```
+
+### Use Case Examples
+
+#### News Article Extraction
+
+```json
+{
+  "id": "news_1",
+  "name": "web_scrape",
+  "input": {
+    "url": "https://news-website.com/article/12345",
+    "extractSelectors": {
+      "containers": [".article-content", ".article-header"],
+      "text": ["h1.title", ".byline", ".published-date"],
+      "images": [".featured-image"]
+    }
+  }
+}
+```
+
+#### E-commerce Product Search
+
+```json
+{
+  "id": "ecommerce_1",
+  "name": "web_scrape",
+  "input": {
+    "url": "https://shop-website.com",
+    "actions": [
+      { "type": "type", "selector": "#search", "text": "wireless headphones" },
+      { "type": "click", "selector": ".search-button" },
+      { "type": "waitForSelector", "selector": ".product-grid" }
+    ],
+    "extractSelectors": {
+      "containers": [".product-item"],
+      "text": [".product-title", ".product-price"],
+      "links": [".product-link"],
+      "images": [".product-image"]
+    }
+  }
+}
+```
+
+#### Sports Scores Extraction
 
 ```json
 {
@@ -251,10 +410,11 @@ sam build && sam local invoke WebScraperFunction --event tests/test-event.json
 ```
 
 Additional test events are available in the `tests` directory:
-- `test-event.json` - Basic example.com test
-- `bbc-sports-news.json` - BBC Sports navigation test
-- `bbc-news-article.json` - BBC News article search test
-- `navigation-example.json` - Weather.gov navigation test
+
+* `test-event.json` - Basic example.com test
+* `bbc-sports-news.json` - BBC Sports navigation test
+* `bbc-news-article.json` - BBC News article search test
+* `navigation-example.json` - Weather.gov navigation test
 
 ## Deployment
 
