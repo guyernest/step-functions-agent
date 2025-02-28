@@ -23,7 +23,10 @@ web-scraper/
 
 The tools are:
 
-* `web_scrape`: Initial implementation of the web scraping tool using URL, Search Query, and CSS Selector as input.
+* `web_scrape`: Web scraping tool that supports complex navigation actions and content extraction:
+  * Navigate websites using various interactions (click, search, hover, etc.)
+  * Extract structured content (text, links, images)
+  * Take full page or element screenshots
 
 ## Input and output
 
@@ -31,26 +34,32 @@ The Lambda function for the tools receive the input as a JSON object, and return
 
 ```typescript
 export const handler: Handler = async (event, context) => {
-
     logger.info("Received event", { event });
-    const tool_use = event
-    const tool_name = tool_use["name"]
-    const tool_input = tool_use["input"]
+    const tool_use = event;
+    const tool_name = tool_use["name"];
 
     try {
-        let result: string
+        let result: string;
         switch (tool_name) {
             case "web_scrape": {
-                const { url, selectors, searchTerm } = tool_use.input as {
+                // Input structure with navigation actions and extraction selectors
+                const input = tool_use.input as {
                     url: string;
-                    searchTerm: string;
-                    selectors?: {
-                        searchInput?: string;
-                        searchButton?: string;
-                        resultContainer?: string;
+                    actions?: Array<{
+                        type: 'search' | 'click' | 'hover' | 'select' | 'type' | 'wait' | 'waitForSelector' | 'clickAndWaitForSelector';
+                        [key: string]: any;
+                    }>;
+                    extractSelectors?: {
+                        containers?: string[];
+                        text?: string[];
+                        links?: string[];
+                        images?: string[];
                     };
-                }
-                result = await handleSearchResults(url, searchTerm, selectors);
+                    screenshotSelector?: string;
+                    fullPageScreenshot?: boolean;
+                };
+                
+                result = await handleWebScrape(input);
             break;
           }
           ...
@@ -64,6 +73,19 @@ The tools return the output as a JSON object, with the result in the `content` f
 
 ```typescript
         ...
+        // The result is a JSON string containing the extracted content
+        // {
+        //   status: 'success',
+        //   url: 'https://example.com',
+        //   content: {
+        //     containers: [{ selector: '.header', content: 'Example Domain' }, ...],
+        //     text: [{ selector: 'p', content: ['Example text content', ...] }, ...],
+        //     links: [{ selector: 'a', content: [{ href: 'https://example.com/link', text: 'Link text' }, ...] }, ...],
+        //     images: [{ selector: 'img', content: [{ src: 'https://example.com/image.jpg', alt: 'Image alt text' }, ...] }, ...],
+        //     screenshot: 'data:image/png;base64,...' // (if requested)
+        //   }
+        // }
+        
         logger.info("Result", { result });
         return {
             "type": "tool_result",
@@ -72,6 +94,7 @@ The tools return the output as a JSON object, with the result in the `content` f
             "content": result
         }
       } catch (error) {
+        logger.error("Error in handler", { error });
         return {
             "type": "tool_result",
             "name": tool_name,
@@ -79,6 +102,126 @@ The tools return the output as a JSON object, with the result in the `content` f
             "content": `Error: ${error instanceof Error ? error.message : String(error)}`
         }
       }
+```
+
+## Web Scraper Features
+
+### Navigation Actions
+
+The web scraper supports various navigation actions:
+
+```javascript
+// Click a link or button
+{ "type": "click", "selector": "#submit-button", "waitForNavigation": true }
+
+// Search using a form
+{ "type": "search", "searchInput": "#search-box", "searchButton": "#search-submit", "searchTerm": "query" }
+
+// Click and wait for a specific element to appear
+{ "type": "clickAndWaitForSelector", "clickSelector": ".load-more", "waitForSelector": ".results-item" }
+
+// Hover over an element (useful for dropdown menus)
+{ "type": "hover", "selector": ".dropdown-menu" }
+
+// Select an option from a dropdown
+{ "type": "select", "selector": "#country-select", "value": "USA" }
+
+// Type text into an input field
+{ "type": "type", "selector": "#username", "text": "johndoe" }
+
+// Wait for a specific amount of time (in milliseconds)
+{ "type": "wait", "timeMs": 2000 }
+
+// Wait for a specific element to appear
+{ "type": "waitForSelector", "selector": ".lazy-loaded-content" }
+```
+
+### Content Extraction
+
+You can extract different types of content using CSS selectors:
+
+```javascript
+"extractSelectors": {
+  // Extract text content from container elements
+  "containers": [".article-header", ".article-body", ".footer"],
+  
+  // Extract text from elements (returns an array of text content for each matching element)
+  "text": [".news-item h3", ".product-price"],
+  
+  // Extract links with their href and text
+  "links": ["nav a", ".pagination a"],
+  
+  // Extract images with their src and alt attributes
+  "images": [".gallery img", ".product-image"]
+}
+```
+
+### Browser Configuration
+
+The scraper includes several features to make web pages render correctly:
+
+1. **User-Agent**: Sets a realistic browser user-agent to avoid being blocked by sites
+2. **Extra Headers**: Adds common browser headers like Accept, Accept-Language, etc.
+3. **Wait Times**: Configurable wait times for page loads and element rendering
+4. **Error Handling**: Graceful handling of navigation issues with useful debug information
+
+### Screenshots
+
+You can also capture screenshots:
+
+```javascript
+// Screenshot a specific element
+"screenshotSelector": ".main-content"
+
+// Screenshot the entire page
+"fullPageScreenshot": true
+```
+
+### Direct URL Navigation
+
+For sites with complex forms or search functionality, it's often better to navigate directly to 
+the target URL rather than trying to fill out forms. For example, to get weather for New York:
+
+```javascript
+// Instead of this (which might not work due to form behavior):
+"actions": [
+  { "type": "type", "selector": "#searchbox", "text": "New York, NY" },
+  { "type": "click", "selector": "#submit" }
+]
+
+// Use direct URL navigation instead:
+"url": "https://forecast.weather.gov/MapClick.php?lat=40.7142&lon=-74.0059"
+```
+
+## Complete Example
+
+Here's a complete example that navigates to BBC, clicks on the sports section, and extracts content:
+
+```json
+{
+  "id": "bbc_sports_1",
+  "name": "web_scrape",
+  "input": {
+    "url": "https://www.bbc.com",
+    "actions": [
+      {
+        "type": "click",
+        "selector": "a[href*='sport']",
+        "waitForNavigation": true
+      },
+      {
+        "type": "wait",
+        "timeMs": 1000
+      }
+    ],
+    "extractSelectors": {
+      "containers": [".gs-c-promo-heading", ".gs-c-promo-summary"],
+      "links": [".gs-c-promo-heading a"],
+      "images": [".gs-c-promo-image img"]
+    },
+    "fullPageScreenshot": true
+  }
+}
 ```
 
 ## Building
@@ -92,17 +235,26 @@ npm run build
 
 ## Testing
 
-To test the Lambda function locally, run the following command:
+To test the Lambda function locally, you can use the provided local test script:
 
 ```bash
 npm run test
 ```
 
-or using SAM CLI:
+This script uses your local Chrome/Chromium installation to run the web scraper directly, without requiring the Lambda environment or SAM CLI.
+
+You can also test using SAM CLI:
 
 ```bash
 cd lambda/tools/web-scraper
-sam build && sam local invoke WebScraperFunction --event tests/test-event.json```
+sam build && sam local invoke WebScraperFunction --event tests/test-event.json
+```
+
+Additional test events are available in the `tests` directory:
+- `test-event.json` - Basic example.com test
+- `bbc-sports-news.json` - BBC Sports navigation test
+- `bbc-news-article.json` - BBC News article search test
+- `navigation-example.json` - Weather.gov navigation test
 
 ## Deployment
 
