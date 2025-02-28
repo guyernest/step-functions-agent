@@ -3,8 +3,8 @@
     "name": "web_scrape",
     "input": {
         "url": "https://example.com",
-        "selectors": {
-            "resultContainer": "h1"
+        "extractSelectors": {
+            "containers": ["h1", "p"]
         }
     }
 }
