@@ -170,7 +170,32 @@ async function getBrowser() {
     }
 }
 
-async function handleWebScrape(input: ScraperInput) {
+async function handleWebScrape(input: ScraperInput): Promise<string> {
+    // Create a timeout promise that rejects after 25 seconds
+    const timeoutPromise = new Promise<string>((_, reject) => {
+        setTimeout(() => {
+            reject(new Error('Operation timed out after 25 seconds. Some selectors may not exist on the page.'));
+        }, 25000);
+    });
+    
+    // Execute the scraping operation with the timeout
+    try {
+        return await Promise.race([
+            executeWebScrape(input),
+            timeoutPromise
+        ]);
+    } catch (error) {
+        logger.error('Web scrape operation timed out or failed', { error });
+        return JSON.stringify({
+            status: 'error',
+            url: input.url,
+            error: error instanceof Error ? error.message : String(error),
+            message: 'The operation timed out. This may happen when selectors do not exist on the page or the page is taking too long to load.'
+        }, null, 2);
+    }
+}
+
+async function executeWebScrape(input: ScraperInput): Promise<string> {
     const browser = await getBrowser();
     logger.info("Using browser", { browser });
 
@@ -196,10 +221,25 @@ async function handleWebScrape(input: ScraperInput) {
         });
 
         logger.info(`Navigating to ${input.url}`);
-        await page.goto(input.url, {
-            waitUntil: 'networkidle0',
-            timeout: 30000
-        });
+        try {
+            await page.goto(input.url, {
+                // Using 'domcontentloaded' is faster than 'networkidle0' and less likely to time out
+                waitUntil: 'domcontentloaded',
+                timeout: 15000 // Shorter timeout to fail faster
+            });
+            logger.info(`Initial page load complete for ${input.url}`);
+            
+            // Wait a bit for any dynamic content to load
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (error) {
+            logger.warn(`Initial page.goto failed with error: ${error instanceof Error ? error.message : String(error)}`);
+            logger.info('Retrying with less restrictive options...');
+            
+            // Retry with even less restrictive options
+            await page.goto(input.url, {
+                timeout: 15000
+            });
+        }
 
         // Execute all navigation actions in sequence
         if (input.actions && input.actions.length > 0) {
@@ -307,17 +347,26 @@ async function handleWebScrape(input: ScraperInput) {
                 
                 for (const selector of input.extractSelectors.containers) {
                     try {
-                        logger.info(`Waiting for selector: ${selector}`);
-                        await page.waitForSelector(selector, { timeout: 10000 });
-                        logger.info(`Found selector: ${selector}`);
+                        logger.info(`Checking for selector existence: ${selector}`);
+                        // Just check if the selector exists without waiting
+                        const exists = await page.$(selector) !== null;
                         
-                        const textContent = await page.$eval(selector, (el) => el.textContent || '');
-                        logger.info(`Extracted content from ${selector}: ${textContent.substring(0, 50)}...`);
-                        
-                        extractedContent.containers.push({
-                            selector,
-                            content: textContent.trim()
-                        });
+                        if (exists) {
+                            logger.info(`Found selector: ${selector}`);
+                            const textContent = await page.$eval(selector, (el) => el.textContent || '');
+                            logger.info(`Extracted content from ${selector}: ${textContent.substring(0, 50)}...`);
+                            
+                            extractedContent.containers.push({
+                                selector,
+                                content: textContent.trim()
+                            });
+                        } else {
+                            logger.warn(`Selector not found: ${selector}`);
+                            extractedContent.containers.push({
+                                selector,
+                                error: `Selector not found on page`
+                            });
+                        }
                     } catch (error) {
                         logger.warn(`Error extracting content from container ${selector}:`, { error });
                         extractedContent.containers.push({
@@ -334,13 +383,24 @@ async function handleWebScrape(input: ScraperInput) {
                 
                 for (const selector of input.extractSelectors.text) {
                     try {
-                        const texts = await page.$$eval(selector, elements => 
-                            elements.map(el => el.textContent || '')
-                        );
-                        extractedContent.text.push({
-                            selector,
-                            content: texts.map(t => t.trim()).filter(t => t)
-                        });
+                        // Check if selector exists first
+                        const elements = await page.$$(selector);
+                        
+                        if (elements.length > 0) {
+                            const texts = await page.$$eval(selector, elements => 
+                                elements.map(el => el.textContent || '')
+                            );
+                            extractedContent.text.push({
+                                selector,
+                                content: texts.map(t => t.trim()).filter(t => t)
+                            });
+                        } else {
+                            logger.warn(`No elements found for text selector: ${selector}`);
+                            extractedContent.text.push({
+                                selector,
+                                error: `No elements found matching this selector`
+                            });
+                        }
                     } catch (error) {
                         logger.warn(`Error extracting text from ${selector}:`, { error });
                         extractedContent.text.push({
@@ -357,19 +417,30 @@ async function handleWebScrape(input: ScraperInput) {
                 
                 for (const selector of input.extractSelectors.links) {
                     try {
-                        const links = await page.$$eval(selector, (elements: Element[]) => 
-                            elements.map(el => {
-                                const anchor = el as HTMLAnchorElement;
-                                return {
-                                    href: anchor.href,
-                                    text: anchor.textContent?.trim() || ''
-                                };
-                            })
-                        );
-                        extractedContent.links.push({
-                            selector,
-                            content: links
-                        });
+                        // Check if selector exists first
+                        const elements = await page.$$(selector);
+                        
+                        if (elements.length > 0) {
+                            const links = await page.$$eval(selector, (elements: Element[]) => 
+                                elements.map(el => {
+                                    const anchor = el as HTMLAnchorElement;
+                                    return {
+                                        href: anchor.href,
+                                        text: anchor.textContent?.trim() || ''
+                                    };
+                                })
+                            );
+                            extractedContent.links.push({
+                                selector,
+                                content: links
+                            });
+                        } else {
+                            logger.warn(`No elements found for link selector: ${selector}`);
+                            extractedContent.links.push({
+                                selector,
+                                error: `No elements found matching this selector`
+                            });
+                        }
                     } catch (error) {
                         logger.warn(`Error extracting links from ${selector}:`, { error });
                         extractedContent.links.push({
@@ -386,19 +457,30 @@ async function handleWebScrape(input: ScraperInput) {
                 
                 for (const selector of input.extractSelectors.images) {
                     try {
-                        const images = await page.$$eval(selector, (elements: Element[]) => 
-                            elements.map(el => {
-                                const img = el as HTMLImageElement;
-                                return {
-                                    src: img.src,
-                                    alt: img.alt || ''
-                                };
-                            })
-                        );
-                        extractedContent.images.push({
-                            selector,
-                            content: images
-                        });
+                        // Check if selector exists first
+                        const elements = await page.$$(selector);
+                        
+                        if (elements.length > 0) {
+                            const images = await page.$$eval(selector, (elements: Element[]) => 
+                                elements.map(el => {
+                                    const img = el as HTMLImageElement;
+                                    return {
+                                        src: img.src,
+                                        alt: img.alt || ''
+                                    };
+                                })
+                            );
+                            extractedContent.images.push({
+                                selector,
+                                content: images
+                            });
+                        } else {
+                            logger.warn(`No elements found for image selector: ${selector}`);
+                            extractedContent.images.push({
+                                selector,
+                                error: `No elements found matching this selector`
+                            });
+                        }
                     } catch (error) {
                         logger.warn(`Error extracting images from ${selector}:`, { error });
                         extractedContent.images.push({
@@ -465,10 +547,12 @@ async function handleWebScrape(input: ScraperInput) {
             content: extractedContent.html || extractedContent 
         };
         
+        await browser.close();
         return JSON.stringify(result, null, 2);
 
-    } finally {
+    } catch (error) {
         await browser.close();
+        throw error;
     }
 }
 
@@ -497,11 +581,34 @@ export const handler: Handler<ToolEvent, ToolResponse> = async (event) => {
         };
     } catch (error) {
         logger.error("Error in handler", { error });
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        // Check if this is a timeout error and provide better guidance
+        const isTimeoutError = errorMessage.includes('timeout') || 
+                             errorMessage.includes('Timed out');
+        
+        let userFriendlyMessage = `Error: ${errorMessage}`;
+        
+        if (isTimeoutError) {
+            userFriendlyMessage = JSON.stringify({
+                status: 'error',
+                url: tool_use.input.url,
+                error: errorMessage,
+                suggestions: [
+                    "Some of the CSS selectors you provided might not exist on the page",
+                    "Try using more general selectors like 'body', 'h1', '.main', '#content'", 
+                    "Simplify your request by reducing the number of selectors",
+                    "Check if the website has anti-scraping measures",
+                    "The page might be very large or have complex scripts causing slow loading"
+                ]
+            }, null, 2);
+        }
+        
         return {
             "type": "tool_result",
             "name": tool_name,
             "tool_use_id": tool_use["id"],
-            "content": `Error: ${error instanceof Error ? error.message : String(error)}`
+            "content": userFriendlyMessage
         };
     }
 }
