@@ -24,11 +24,42 @@ class ClaudeLLM(BaseLLM):
                         if "type" in part and part["type"] == "tool_result":  # tool_use
                             del part["name"]
 
+        # Format system with cache_control
+        if isinstance(system, str):
+            # If it's a single string, convert to list format with cache_control
+            system_formatted = [
+                {
+                    "type": "text",
+                    "text": system,
+                    "cache_control": {"type": "ephemeral"}
+                }
+            ]
+        elif isinstance(system, list) and system:
+            # If it's already a list, add cache_control to last element
+            system_formatted = system.copy()
+            if "cache_control" not in system_formatted[-1]:
+                system_formatted[-1] = {**system_formatted[-1], "cache_control": {"type": "ephemeral"}}
+        elif isinstance(system, dict):
+            # If it's a dict, add cache_control directly to it
+            system_formatted = {**system, "cache_control": {"type": "ephemeral"}}
+        else:
+            # Fallback case
+            system_formatted = system
+        
+        # Add cache_control to the last tool if tools exist
+        tools_formatted = []
+        if tools and isinstance(tools, list):
+            tools_formatted = tools.copy()
+            if tools_formatted:
+                if "cache_control" not in tools_formatted[-1]:
+                    tools_formatted[-1] = {**tools_formatted[-1], "cache_control": {"type": "ephemeral"}}
+        else:
+            tools_formatted = tools
 
         return {
-            "system": system,
+            "system": system_formatted,
+            "tools": tools_formatted,
             "messages": messages,
-            "tools": tools,
             "max_tokens": 4096
         }
     
@@ -74,6 +105,7 @@ class ClaudeLLM(BaseLLM):
     
     def generate_response(self, system: str, messages: List[Dict], tools: List[Dict]) -> Dict:
         prepared_messages = self.prepare_messages(system, messages, tools)
+        print("prepared_messages", prepared_messages)
         response = self.client.messages.create(
             model=MODEL_ID,
             **prepared_messages
