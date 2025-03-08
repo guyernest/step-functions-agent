@@ -1,0 +1,128 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Lambda function with Lambda Runtime API Proxy extension for x86_64
+
+Parameters:
+  DeploymentStage:
+    Type: String
+    Default: dev
+    Description: Deployment stage name
+    AllowedValues:
+      - dev
+      - test
+      - prod
+  
+  AgentContextTableName:
+    Type: String
+    Default: AgentContext
+    Description: Name of the DynamoDB table to store large content
+  
+  MaxContentSize:
+    Type: Number
+    Default: 5000
+    Description: Maximum size of content fields before storing in DynamoDB
+    
+  # Add a parameter to control whether to create the DynamoDB table
+  CreateDynamoDBTable:
+    Type: String
+    Default: "true"
+    Description: Whether to create the DynamoDB table or not (set to 'false' if the table already exists)
+    AllowedValues:
+      - "true"
+      - "false"
+
+Conditions:
+  ShouldCreateTable: !Equals [!Ref CreateDynamoDBTable, "true"]
+
+Resources:
+  # DynamoDB table for storing large content (only created if CreateDynamoDBTable is true)
+  AgentContextTable:
+    Type: AWS::DynamoDB::Table
+    Condition: ShouldCreateTable
+    Properties:
+      TableName: !Ref AgentContextTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: expires_at
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: LambdaRuntimeAPIProxy
+        - Key: Environment
+          Value: !Ref DeploymentStage
+
+  # The Lambda Layer for our x86_64 extension
+  ProxyExtensionLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub "lambda-runtime-api-proxy-x86-${DeploymentStage}"
+      Description: Lambda Runtime API Proxy extension for x86_64
+      ContentUri: ./extension-x86.zip
+      CompatibleRuntimes:
+        - python3.9
+        - python3.10
+        - python3.11
+        - python3.12
+        - nodejs16.x
+        - nodejs18.x
+        - nodejs20.x
+        - java11
+        - java17
+        - java21
+        - provided
+        - provided.al2
+        - provided.al2023
+      CompatibleArchitectures:
+        - x86_64
+      RetentionPolicy: Retain
+
+  # Python Lambda function to test the Runtime API Proxy extension on x86_64
+  ProxyTestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "lambda-runtime-api-proxy-test-x86-${DeploymentStage}"
+      CodeUri: tests/
+      Handler: test_function.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+      Timeout: 30
+      MemorySize: 128
+      Layers:
+        - !Ref ProxyExtensionLayer
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          LRAP_DEBUG: "true"
+          AWS_LAMBDA_EXEC_WRAPPER: /opt/extensions/lrap-wrapper/wrapper
+          AGENT_CONTEXT_TABLE: !Ref AgentContextTableName
+          MAX_CONTENT_SIZE: !Ref MaxContentSize
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AgentContextTableName
+      Tags:
+        Project: LambdaRuntimeAPIProxy
+        Environment: !Ref DeploymentStage
+        Architecture: x86_64
+
+Outputs:
+  ProxyTestFunctionArn:
+    Description: "Test Lambda Function ARN (x86_64)"
+    Value: !GetAtt ProxyTestFunction.Arn
+  ProxyTestFunctionName:
+    Description: "Test Lambda Function Name (x86_64)"
+    Value: !Ref ProxyTestFunction
+  ProxyTestFunctionRole:
+    Description: "IAM Role created for Test function (x86_64)"
+    Value: !GetAtt ProxyTestFunctionRole.Arn
+  ProxyExtensionLayerArn:
+    Description: "Lambda Runtime API Proxy Extension Layer ARN (x86_64)"
+    Value: !Ref ProxyExtensionLayer
