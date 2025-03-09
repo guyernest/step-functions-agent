@@ -6,6 +6,7 @@ from aws_cdk import (
     aws_iam as iam
 )
 from constructs import Construct
+from cdklabs.generative_ai_cdk_constructs import bedrock
 
 class Tool:
     def __init__(
@@ -47,6 +48,7 @@ class ConfigurableStepFunctionsConstruct(Construct):
         llm_caller: lambda_.Function,
         tools: List[Tool] = [],
         system_prompt: str = None,
+        managed_prompt: bedrock.Prompt = None,
         output_schema: Dict[str, Any] = None,
         **kwargs
     ) -> None:
@@ -63,7 +65,8 @@ class ConfigurableStepFunctionsConstruct(Construct):
         self._configure_llm_call(
             state_machine_def, 
             llm_caller, 
-            system_prompt
+            system_prompt,
+            managed_prompt,
         )
 
         # Update the state machine definition with tools configuration
@@ -78,7 +81,8 @@ class ConfigurableStepFunctionsConstruct(Construct):
         # Create the state machine role with permissions for all tool Lambda functions
         role = self._create_state_machine_role(
             llm_caller, 
-            [tool.get_lambda_function() for tool in tools]
+            [tool.get_lambda_function() for tool in tools],
+            managed_prompt
         )
 
         # Create the state machine
@@ -99,9 +103,11 @@ class ConfigurableStepFunctionsConstruct(Construct):
         self, 
         definition: Dict[str, Any], 
         llm_caller: lambda_.Function,
-        system_prompt: str = None
+        system_prompt: str = None,
+        managed_prompt: bedrock.Prompt = None,
     ) -> None:
         """Configure the state machine definition with the provided LLM caller"""
+        
         # Update the LLM call state with the provided LLM caller
         llm_state = definition["States"]["Call LLM"]
         llm_state["Arguments"]["FunctionName"] = llm_caller.function_arn
@@ -111,6 +117,16 @@ class ConfigurableStepFunctionsConstruct(Construct):
         # Update system prompt if provided
         if system_prompt:
             payload["system"] = system_prompt
+
+        # Update the Get Prompt step with the ID of the prompt
+        if managed_prompt:
+            get_prompt_state = definition["States"]["Get Agent Prompt"]
+            get_prompt_state["Arguments"]["PromptIdentifier"] = managed_prompt.prompt_id
+            payload["system"] = "{% $system %}"
+        else:
+            del definition["States"]["Get Agent Prompt"]
+            definition["StartAt"] = "Call LLM"
+
 
     def _configure_tools(
         self, 
@@ -233,7 +249,8 @@ class ConfigurableStepFunctionsConstruct(Construct):
     def _create_state_machine_role(
         self, 
         call_llm: lambda_.Function, 
-        tools: List[lambda_.Function]
+        tools: List[lambda_.Function],
+        managed_prompt: bedrock.Prompt = None
     ) -> iam.Role:
         """Create IAM role with permissions for all tool Lambda functions"""
         role = iam.Role(
@@ -246,6 +263,15 @@ class ConfigurableStepFunctionsConstruct(Construct):
         # Add Lambda invoke permissions for each tool
         for tool in tools:
             tool.grant_invoke(role)
+
+        # Add Prompt management permissions
+        if managed_prompt:
+            role.add_to_policy(
+                iam.PolicyStatement(
+                    actions=["bedrock:GetPrompt"],
+                    resources=[managed_prompt.prompt_arn]
+                )
+            )
 
         # Add CloudWatch metrics permissions
         role.add_to_policy(

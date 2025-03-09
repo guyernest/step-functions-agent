@@ -23,8 +23,6 @@ attrs==24.2.0
     #   jsii
 aws-cdk-asset-awscli-v1==2.2.214
     # via aws-cdk-lib
-aws-cdk-asset-kubectl-v20==2.1.3
-    # via aws-cdk-lib
 aws-cdk-asset-node-proxy-agent-v6==2.1.0
     # via aws-cdk-lib
 aws-cdk-aws-apprunner-alpha==2.171.0a0
@@ -33,15 +31,17 @@ aws-cdk-aws-lambda-go-alpha==2.171.0a0
     # via -r requirements.in
 aws-cdk-aws-lambda-python-alpha==2.171.0a0
     # via -r requirements.in
-aws-cdk-cloud-assembly-schema==38.0.1
+aws-cdk-cloud-assembly-schema==40.7.0
     # via aws-cdk-lib
-aws-cdk-lib==2.171.0
+aws-cdk-lib==2.182.0
     # via
     #   -r requirements.in
     #   aws-cdk-aws-apprunner-alpha
     #   aws-cdk-aws-lambda-go-alpha
     #   aws-cdk-aws-lambda-python-alpha
     #   cdk-monitoring-constructs
+    #   cdk-nag
+    #   cdklabs-generative-ai-cdk-constructs
 aws-lambda-powertools==3.3.0
     # via -r requirements.in
 backcall==0.2.0
@@ -55,6 +55,10 @@ botocore==1.35.81
 cattrs==24.1.2
     # via jsii
 cdk-monitoring-constructs==9.1.3
+    # via -r requirements.in
+cdk-nag==2.35.40
+    # via cdklabs-generative-ai-cdk-constructs
+cdklabs-generative-ai-cdk-constructs==0.1.296
     # via -r requirements.in
 certifi==2024.8.30
     # via
@@ -73,6 +77,8 @@ constructs==10.4.2
     #   aws-cdk-aws-lambda-python-alpha
     #   aws-cdk-lib
     #   cdk-monitoring-constructs
+    #   cdk-nag
+    #   cdklabs-generative-ai-cdk-constructs
 debugpy==1.8.9
     # via ipykernel
 decorator==5.1.1
@@ -127,10 +133,9 @@ jmespath==1.0.1
     #   aws-lambda-powertools
     #   boto3
     #   botocore
-jsii==1.105.0
+jsii==1.108.0
     # via
     #   aws-cdk-asset-awscli-v1
-    #   aws-cdk-asset-kubectl-v20
     #   aws-cdk-asset-node-proxy-agent-v6
     #   aws-cdk-aws-apprunner-alpha
     #   aws-cdk-aws-lambda-go-alpha
@@ -138,6 +143,8 @@ jsii==1.105.0
     #   aws-cdk-cloud-assembly-schema
     #   aws-cdk-lib
     #   cdk-monitoring-constructs
+    #   cdk-nag
+    #   cdklabs-generative-ai-cdk-constructs
     #   constructs
 jupyter-client==8.6.3
     # via ipykernel
@@ -177,7 +184,6 @@ ptyprocess==0.7.0
 publication==0.0.3
     # via
     #   aws-cdk-asset-awscli-v1
-    #   aws-cdk-asset-kubectl-v20
     #   aws-cdk-asset-node-proxy-agent-v6
     #   aws-cdk-aws-apprunner-alpha
     #   aws-cdk-aws-lambda-go-alpha
@@ -185,6 +191,8 @@ publication==0.0.3
     #   aws-cdk-cloud-assembly-schema
     #   aws-cdk-lib
     #   cdk-monitoring-constructs
+    #   cdk-nag
+    #   cdklabs-generative-ai-cdk-constructs
     #   constructs
     #   jsii
 pure-eval==0.2.3
@@ -248,7 +256,6 @@ traitlets==5.14.3
 typeguard==2.13.3
     # via
     #   aws-cdk-asset-awscli-v1
-    #   aws-cdk-asset-kubectl-v20
     #   aws-cdk-asset-node-proxy-agent-v6
     #   aws-cdk-aws-apprunner-alpha
     #   aws-cdk-aws-lambda-go-alpha
@@ -256,6 +263,8 @@ typeguard==2.13.3
     #   aws-cdk-cloud-assembly-schema
     #   aws-cdk-lib
     #   cdk-monitoring-constructs
+    #   cdk-nag
+    #   cdklabs-generative-ai-cdk-constructs
     #   constructs
     #   jsii
 typing-extensions==4.12.2

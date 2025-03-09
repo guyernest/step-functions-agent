@@ -1,0 +1,15 @@
+#!/bin/sh
+#
+# 
+# Entrypoint for Lambda sandbox runtime. 
+# This is a simplified version that only works for one architecture.
+#
+# This script, when deployed as a layer, must be named the same as crate::EXTENSION_NAME (main.rs)
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+#
+
+# Execute the extension binary
+args=("$@")
+exec /opt/lrap "${args[@]}"

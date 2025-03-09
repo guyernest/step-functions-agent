@@ -5,6 +5,7 @@ import aws_cdk as cdk
 from aws_cdk import Tags
 
 from step_functions_agent.step_functions_sql_agent_stack import SQLAgentStack
+from step_functions_agent.step_functions_test_agent_stack import TestAgentStack
 from step_functions_agent.step_functions_financial_agent_stack import FinancialAgentStack
 from step_functions_agent.step_functions_googlemap_agent_stack import GoogleMapAgentStack
 from step_functions_agent.step_functions_clustering_agent_stack import ClusteringAgentStack
@@ -24,6 +25,7 @@ from step_functions_agent.step_functions_semantic_search_agent_stack import Sema
 
 app = cdk.App()
 sqlAgentStack = SQLAgentStack(app, "SQLAgentStack")
+testAgentStack = TestAgentStack(app, "TestAgentStack")
 financialAgentStack = FinancialAgentStack(app, "FinancialAgentStack")
 googlemapAgentStack = GoogleMapAgentStack(app, "GoogleMapAgentStack")
 clusteringAgentStack = ClusteringAgentStack(app, "ClusteringAgentStack")
@@ -55,6 +57,7 @@ docsStack = AgentDocsStack(app, "AgentDocsStack")
 Tags.of(app).add("application", "ai-agents")
 
 Tags.of(sqlAgentStack).add("project", "sql-ai-agent")
+Tags.of(testAgentStack).add("project", "test-ai-agent")
 Tags.of(financialAgentStack).add("project", "financial-ai-agent")
 Tags.of(googlemapAgentStack).add("project", "googlemap-ai-agent")
 Tags.of(clusteringAgentStack).add("project", "clustering-ai-agent")
