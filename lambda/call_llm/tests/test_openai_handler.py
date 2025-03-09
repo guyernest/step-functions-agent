@@ -6,7 +6,7 @@ from functions.openai_llm.openai_lambda import lambda_handler
 @pytest.fixture
 def input_event():
     return {
-        "system": "You are a helpful AI assistant with a set of tools to answer user questions. Please call the tools in parallel to reduce latency.",
+        "system": "You are a helpful AI assistant with a set of tools to answer user questions. Please call as many tools in parallel as you can to reduce latency.",
         "messages": [
             {
                 "role": "user",
