@@ -1,0 +1,37 @@
+{
+    "id": "unique_tool_use_id",
+    "input": {
+        "url": "https://www.weather.gov",
+        "info_type": "weather_forecast",
+        "script": {
+            "url": "https://www.weather.gov",
+            "actions": [
+                {
+                    "type": "type",
+                    "selector": "#inputstring",
+                    "text": "New York, NY"
+                },
+                {
+                    "type": "click",
+                    "selector": "#btnSearch"
+                },
+                {
+                    "type": "wait",
+                    "timeMs": 2000
+                },
+                {
+                    "type": "waitForSelector",
+                    "selector": "#detailed-forecast"
+                }
+            ],
+            "extractSelectors": {
+                "containers": ["#detailed-forecast", ".forecast-label", ".forecast-text", ".temp"],
+                "links": [".forecast-icon a"],
+                "images": [".forecast-icon img"]
+            },
+            "fullPageScreenshot": true
+        }
+    },
+    "name": "save_extraction_script",
+    "type": "tool_use"
+}
