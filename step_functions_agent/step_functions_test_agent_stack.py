@@ -7,9 +7,9 @@ from aws_cdk import (
     aws_s3 as s3,
     aws_lambda_python_alpha as _lambda_python,
     aws_logs as logs,
-    aws_stepfunctions as sfn,
 )
 from constructs import Construct
+from cdklabs.generative_ai_cdk_constructs import bedrock
 from .ai_agent_construct_from_json import ConfigurableStepFunctionsConstruct, Tool
 
 class TestAgentStack(Stack):
@@ -93,12 +93,12 @@ class TestAgentStack(Stack):
             self, "CallLLMLambdaWithExtension",
             # Name of the Lambda function that will be used by the agents to find the function.
             function_name="CallLLMWithExtension",
-            description="Lambda function to Call LLM (GPT) with messages history, tools and long content support.",
-            entry="lambda/call_llm/functions/openai_llm",
+            description="Lambda function to Call LLM (Claude) with messages history, tools and long content support.",
+            entry="lambda/call_llm/functions/anthropic_llm",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.seconds(90),
             memory_size=256,
-            index="openai_lambda.py",
+            index="claude_lambda.py",
             handler="lambda_handler",
             layers=[
                 llm_layer,
@@ -213,7 +213,8 @@ class TestAgentStack(Stack):
                 "AGENT_CONTEXT_TABLE": dynamodb_long_content_table.table_name,
                 "AWS_LAMBDA_EXEC_WRAPPER": "/opt/extensions/lrap-wrapper/wrapper",
             },
-            architecture=_lambda.Architecture.X86_64,  # Using x86_64 for better compatibility with dependencies
+            # Let's test if it can run on ARM
+            architecture=_lambda.Architecture.ARM_64,
             log_group=log_group,
             role=code_interpreter_lambda_role,
             tracing= _lambda.Tracing.ACTIVE,
@@ -299,6 +300,25 @@ class TestAgentStack(Stack):
             ]
         }
 
+        # Create a prompt variant with the system prompt
+        prompt_variant = bedrock.PromptVariant.chat(
+            variant_name="BaseballDataAnalysis",
+            model=bedrock.BedrockFoundationModel.ANTHROPIC_CLAUDE_3_5_SONNET_V1_0,
+            system=system_prompt,
+            messages=[
+                bedrock.ChatMessage.user("Who are the top earners in 2004?")
+            ]
+        )
+
+        # Create the prompt with the variant
+        prompt = bedrock.Prompt(
+            self, "BaseballDataAnalysisPrompt",
+            prompt_name="BaseballDataAnalysisPrompt",
+            description="Prompt for analyzing baseball data with system instructions.",
+            default_variant=prompt_variant,
+            variants=[prompt_variant]
+        )
+
         test_agent_flow = ConfigurableStepFunctionsConstruct(
             self, 
             "TestAgentWithToolsFlowAndClaude",
@@ -307,6 +327,7 @@ class TestAgentStack(Stack):
             llm_caller=call_llm_lambda_function, 
             tools=tools,
             system_prompt=system_prompt,
+            managed_prompt=prompt,
             output_schema=output_schema,
         )
 
