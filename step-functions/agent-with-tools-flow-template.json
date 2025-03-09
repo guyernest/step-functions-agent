@@ -1,8 +1,20 @@
 {
   "Comment": "AI Agent Implementation",
   "QueryLanguage": "JSONata",
-  "StartAt": "Call LLM",
+  "StartAt": "Get Agent Prompt",
   "States": {
+    "Get Agent Prompt": {
+      "Type": "Task",
+      "Arguments": {
+        "PromptIdentifier": "XXXXX"
+      },
+      "Resource": "arn:aws:states:::aws-sdk:bedrockagent:getPrompt",
+      "Next": "Call LLM",
+      "Assign": {
+        "system": "{% $states.result.Variants[0].TemplateConfiguration.Chat.System[0].Text %}"
+      },
+      "Output": "{% $states.input %}"
+    },
     "Call LLM": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
