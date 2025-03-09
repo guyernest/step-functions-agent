@@ -1,0 +1,8 @@
+{
+    "id": "unique_tool_use_id",
+    "input": {
+        "url": "https://example.com"
+    },
+    "name": "get_site_schema",
+    "type": "tool_use"
+}

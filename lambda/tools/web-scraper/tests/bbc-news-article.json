@@ -1,0 +1,29 @@
+{
+    "id": "bbc_article_1",
+    "name": "web_scrape",
+    "input": {
+        "url": "https://www.bbc.com",
+        "actions": [
+            {
+                "type": "search",
+                "searchInput": "input[name='q']",
+                "searchButton": "button[type='submit']",
+                "searchTerm": "climate change"
+            },
+            {
+                "type": "wait",
+                "timeMs": 2000
+            },
+            {
+                "type": "clickAndWaitForSelector",
+                "clickSelector": ".PromoContent a",
+                "waitForSelector": "article"
+            }
+        ],
+        "extractSelectors": {
+            "containers": ["article h1", "article p", ".ArticleWrapper"],
+            "images": ["article img"]
+        },
+        "screenshotSelector": "article"
+    }
+}

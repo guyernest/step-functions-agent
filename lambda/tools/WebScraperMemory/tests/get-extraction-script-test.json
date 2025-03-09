@@ -1,0 +1,9 @@
+{
+    "id": "unique_tool_use_id",
+    "input": {
+        "url": "https://www.weather.gov",
+        "info_type": "weather_forecast"
+    },
+    "name": "get_extraction_script",
+    "type": "tool_use"
+}

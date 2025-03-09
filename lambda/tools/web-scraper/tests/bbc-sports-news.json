@@ -1,0 +1,24 @@
+{
+    "id": "bbc_sports_1",
+    "name": "web_scrape",
+    "input": {
+        "url": "https://www.bbc.com",
+        "actions": [
+            {
+                "type": "click",
+                "selector": "a[href*='sport']",
+                "waitForNavigation": true
+            },
+            {
+                "type": "wait",
+                "timeMs": 1000
+            }
+        ],
+        "extractSelectors": {
+            "containers": [".gs-c-promo-heading", ".gs-c-promo-summary"],
+            "links": [".gs-c-promo-heading a"],
+            "images": [".gs-c-promo-image img"]
+        },
+        "fullPageScreenshot": true
+    }
+}

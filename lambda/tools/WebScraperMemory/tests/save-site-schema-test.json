@@ -1,0 +1,14 @@
+{
+    "id": "unique_tool_use_id",
+    "input": {
+        "url": "https://example.com",
+        "info_types": ["product_ingredients", "product_reviews", "product_details"],
+        "site_metadata": {
+            "site_name": "Example Store",
+            "site_type": "e-commerce",
+            "product_page_pattern": "/product/.*"
+        }
+    },
+    "name": "save_site_schema",
+    "type": "tool_use"
+}

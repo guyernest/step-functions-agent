@@ -1,0 +1,29 @@
+# template.yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Resources:
+  # WebScraperMemory tool in Rust
+  WebScraperMemory:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: rust-cargolambda
+    Properties:
+      CodeUri: .
+      Handler: bootstrap
+      Runtime: provided.al2023
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: WebScraperMemory
+          SCHEMAS_TABLE_NAME: WebScraperSchemas
+          SCRIPTS_TABLE_NAME: WebScraperScripts
+      Architectures:
+        - arm64
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - DynamoDBCrudPolicy:
+            TableName: WebScraperSchemas
+        - DynamoDBCrudPolicy:
+            TableName: WebScraperScripts
