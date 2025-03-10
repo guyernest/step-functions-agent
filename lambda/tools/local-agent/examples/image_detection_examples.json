@@ -1,0 +1,112 @@
+{
+  "name": "Image Detection Examples",
+  "description": "Demonstrates different ways to use image detection in automation scripts",
+  "abort_on_error": true,
+  "actions": [
+    {
+      "type": "launch",
+      "app": "TextEdit",
+      "wait": 2.0,
+      "description": "Launch TextEdit application (on macOS)"
+    },
+    {
+      "type": "wait",
+      "seconds": 1.0,
+      "description": "Wait for the application to open"
+    },
+    
+    {
+      "type": "comment",
+      "description": "PATTERN 1: Direct image clicking (Recommended for most cases)"
+    },
+    {
+      "type": "click",
+      "image": "New_Document_Button.png",
+      "confidence": 0.9,
+      "description": "PATTERN 1: Click directly on an image (simplest method)"
+    },
+    {
+      "type": "wait",
+      "seconds": 1.0,
+      "description": "Wait for new document"
+    },
+    {
+      "type": "type",
+      "text": "Pattern 1: This is the simplest way to click on an element by image.\n\nEquivalent to pyautogui.click('image.png') in Python",
+      "interval": 0.05,
+      "description": "Type explanation text"
+    },
+    {
+      "type": "wait",
+      "seconds": 1.0,
+      "description": "Pause to see the result"
+    },
+    
+    {
+      "type": "comment",
+      "description": "PATTERN 2: Two-step locate then click (for more complex logic)"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["command", "n"],
+      "description": "Open a new document for second example"
+    },
+    {
+      "type": "wait",
+      "seconds": 1.0,
+      "description": "Wait for new document"
+    },
+    {
+      "type": "locateimage",
+      "image": "New_Document_Button.png",
+      "confidence": 0.8,
+      "move_cursor": true,
+      "description": "PATTERN 2: First locate the image (stores position for later)"
+    },
+    {
+      "type": "type",
+      "text": "Pattern 2: This demonstrates first locating an image, then using the stored position.\n\nUseful when you need to:\n- First check if an element exists\n- Perform multiple actions at the same location\n- Make decisions based on found images",
+      "interval": 0.05,
+      "description": "Type explanation text"
+    },
+    {
+      "type": "wait",
+      "seconds": 1.0,
+      "description": "Pause to see the result"
+    },
+    
+    {
+      "type": "comment",
+      "description": "Additional features of locateimage"
+    },
+    {
+      "type": "locateimage",
+      "image": "New_Document_Button.png",
+      "confidence": 0.8,
+      "click_after_locate": true,
+      "description": "Locate and automatically click in one action (combining patterns)"
+    },
+    {
+      "type": "wait",
+      "seconds": 1.0,
+      "description": "Wait for new document"
+    },
+    {
+      "type": "type",
+      "text": "Pattern 3: You can also locate and click in one step with click_after_locate: true",
+      "interval": 0.05,
+      "description": "Type explanation text"
+    },
+    {
+      "type": "wait",
+      "seconds": 2.0,
+      "description": "Pause to see the result"
+    },
+    
+    {
+      "type": "hotkey",
+      "keys": ["command", "q"],
+      "description": "Quit application"
+    }
+  ]
+}
