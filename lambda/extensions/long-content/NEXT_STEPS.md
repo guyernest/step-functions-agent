@@ -1,44 +1,44 @@
-# CI/CD Setup - Next Steps
+# CI/CD Setup - Complete
 
-The CI/CD pipeline for building Lambda Extensions is now configured. Here's what has been set up:
+The CI/CD pipeline for building Lambda Extensions is now configured and ready to use. Here's what has been set up:
 
 ## Files Created/Modified
 
 1. **GitHub Actions Workflow**
    - Created at repository root: `.github/workflows/lambda-extension-build.yml`
    - This workflow will notify when changes to the Lambda extension are detected
-   - It doesn't actually trigger CodeBuild, but serves as documentation/notification
+   - It serves as documentation/notification for builds
 
-2. **AWS CodeBuild buildspec.yml**
-   - Located at: `lambda/extensions/long-content/buildspec.yml`
-   - Defines the build steps for both x86_64 and ARM64 extensions
+2. **Root-level buildspec.yml**
+   - Created at repository root: `buildspec.yml`
+   - Contains all build instructions for both x86_64 and ARM64 extensions
    - Uses region and account-specific S3 bucket names
 
 3. **README.md**
    - Updated with CI/CD information in the "CI/CD Pipeline" section
 
-## Remaining Setup Tasks
+## How the Pipeline Works
 
-1. **Configure AWS CodeBuild Webhook**
-   - Open the AWS CodeBuild console
-   - Select project: `arn:aws:codebuild:us-west-2:672915487120:project/step-functions-agent`
-   - Configure webhook to GitHub repository:
-     - Go to Edit → Source → GitHub
-     - Connect to your GitHub account
-     - Choose "Rebuild every time a code change is pushed to this repository"
-     - Optional: Add filter to trigger only on changes to `lambda/extensions/long-content/**`
+1. When code is pushed to the repository, GitHub webhook notifies CodeBuild
+2. CodeBuild reads the buildspec.yml at the root of the repository 
+3. The buildspec.yml file:
+   - Installs all necessary dependencies
+   - Builds both ARM64 and x86_64 extensions using the Makefile
+   - Creates a region and account-specific S3 bucket
+   - Uploads the built extensions to this bucket
 
-2. **Verify CodeBuild Service Role Permissions**
-   - Ensure the CodeBuild service role has these permissions:
-     - `s3:PutObject` and `s3:CreateBucket` for storing build artifacts
-     - `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents` for logging
-     - `sts:GetCallerIdentity` to determine the account ID
+4. The GitHub Actions workflow provides a notification that a build should be triggered
+   - It doesn't perform the actual build
+   - It provides a link to monitor build status
 
-3. **Test the Pipeline**
-   - Make a small change to a file in `lambda/extensions/long-content`
-   - Commit and push to GitHub
-   - Verify CodeBuild is triggered and builds successfully
-   - Check the S3 bucket for the extension ZIP files
+## Testing the Pipeline
+
+To verify everything is working:
+1. Make a small change to a file in `lambda/extensions/long-content`
+2. Commit and push to GitHub
+3. Monitor the GitHub Actions workflow execution
+4. Check the build status in CodeBuild console
+5. After a successful build, verify the extensions are in the S3 bucket
 
 ## Using Built Extensions
 
