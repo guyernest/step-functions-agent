@@ -11,18 +11,13 @@ phases:
   install:
     runtime-versions:
       python: 3.9
-      nodejs: 18  # Include for TypeScript/Node.js builds
-      golang: 1.21  # Include for Go builds
-      java: corretto17  # Include for Java builds
+      nodejs: 18
+      golang: 1.21
+      java: corretto17
     commands:
-      # Check which build type we're running
       - echo "Building component type: ${BUILD_TYPE}"
-      
-      # Install common dependencies
       - yum update -y
       - pip install --upgrade pip
-      
-      # Install specific dependencies based on BUILD_TYPE
       - |
         if [[ "$BUILD_TYPE" == *"lambda-extension"* || "$BUILD_TYPE" == *"rust"* ]]; then
           # Install Rust
@@ -37,11 +32,7 @@ phases:
           rustup target add aarch64-unknown-linux-musl
           rustup target add x86_64-unknown-linux-musl
         fi
-      
-      # Install AWS SAM CLI for Lambda packaging
       - pip install aws-sam-cli
-      
-      # Install CDK dependencies for stack builds
       - |
         if [[ "$BUILD_TYPE" == *"-stack"* ]]; then
           pip install -r requirements.txt
@@ -49,7 +40,6 @@ phases:
 
   build:
     commands:
-      # Execute build commands based on BUILD_TYPE
       - |
         # SQL Agent Stack
         if [ "$BUILD_TYPE" == "sql-stack" ]; then
@@ -96,7 +86,6 @@ phases:
       
   post_build:
     commands:
-      # Get AWS account ID and region for S3 bucket name
       - |
         AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
         AWS_REGION=$AWS_DEFAULT_REGION
@@ -105,7 +94,6 @@ phases:
         echo "Using S3 bucket: $S3_BUCKET"
         export AWS_ACCOUNT_ID AWS_REGION S3_BUCKET
       
-      # Check if bucket exists or create it
       - |
         echo "Checking if bucket $S3_BUCKET exists..."
         if aws s3 ls "s3://$S3_BUCKET" >/dev/null 2>&1; then
@@ -115,7 +103,6 @@ phases:
           aws s3 mb "s3://$S3_BUCKET" || echo "Bucket may already exist, continuing..."
         fi
       
-      # Handle upload for each build type
       - |
         # SQL Agent Stack
         if [ "$BUILD_TYPE" == "sql-stack" ]; then
@@ -196,39 +183,26 @@ phases:
           cd ../../..
           
           echo "Lambda code available at s3://$S3_BUCKET/lambda/web-scraper-memory/"
-        
-        # Add other build types as needed
-        
         fi
 
 artifacts:
   files:
-    # SQL Agent Stack artifacts
     - cdk-templates/**/*
-    # Lambda Extension artifacts
     - lambda/extensions/long-content/extension-arm.zip
     - lambda/extensions/long-content/extension-x86.zip
-    # TypeScript Lambda artifacts
     - lambda/tools/web-scraper/dist/**/*
     - lambda/tools/web-scraper/lambda.zip
-    # Python Lambda artifacts
     - lambda/tools/db-interface/lambda.zip
-    # Rust Lambda artifacts
     - lambda/tools/WebScraperMemory/lambda.zip
   discard-paths: no
   base-directory: '.'
 
 cache:
   paths:
-    # Rust caches
     - '/root/.cargo/registry/**/*'
     - '/root/.cargo/git/**/*'
-    # Python cache
     - '/root/.cache/pip/**/*'
-    # Node.js cache
     - 'lambda/tools/web-scraper/node_modules/**/*'
-    # Go cache
     - '/root/.cache/go-build/**/*'
     - '/go/pkg/mod/**/*'
-    # Java cache
     - '/root/.m2/**/*'
