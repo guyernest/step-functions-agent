@@ -1,0 +1,52 @@
+version: 0.2
+
+# This is a router buildspec that can dynamically run different build processes
+# based on environment variables set in the CodeBuild project.
+#
+# Example usage:
+# - Set BUILD_TYPE=cdk and STACK_NAME=SQLAgentStack in the CodeBuild project to build CDK stack
+# - Set BUILD_TYPE=lambda, LAMBDA_LANGUAGE=python, and LAMBDA_DIR=lambda/tools/db-interface to build a Lambda function
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.9
+    commands:
+      # Determine which buildspec to use based on environment variables
+      - |
+        if [ "$BUILD_TYPE" = "cdk" ]; then
+          echo "Running CDK stack build for $STACK_NAME"
+          cp buildspec-templates/cdk/buildspec-template.yml buildspec-temp.yml
+          # Replace placeholder values
+          sed -i "s/STACK_NAME/$STACK_NAME/g" buildspec-temp.yml
+          sed -i "s/STACK_NAME_LOWERCASE/${STACK_NAME,,}/g" buildspec-temp.yml
+        elif [ "$BUILD_TYPE" = "lambda" ]; then
+          echo "Running Lambda build for $LAMBDA_LANGUAGE function in $LAMBDA_DIR"
+          cp buildspec-templates/lambda/buildspec-${LAMBDA_LANGUAGE}-lambda.yml buildspec-temp.yml
+          # Replace placeholder values
+          sed -i "s|LAMBDA_DIR|$LAMBDA_DIR|g" buildspec-temp.yml
+          LAMBDA_NAME=$(basename "$LAMBDA_DIR")
+          sed -i "s/LAMBDA_NAME/$LAMBDA_NAME/g" buildspec-temp.yml
+        elif [ "$BUILD_TYPE" = "lambda-extension" ]; then
+          echo "Running Lambda extension build"
+          cp buildspec-templates/lambda/buildspec-lambda-extension.yml buildspec-temp.yml
+        else
+          echo "Error: Unknown BUILD_TYPE: $BUILD_TYPE"
+          exit 1
+        fi
+      
+      # Debug: Show the generated buildspec
+      - cat buildspec-temp.yml
+      
+      # Execute the generated buildspec
+      - buildspec-exec buildspec-temp.yml
+      
+  build:
+    commands:
+      - echo "This build phase doesn't run - execution is delegated to the generated buildspec"
+      
+  post_build:
+    commands:
+      - echo "This post_build phase doesn't run - execution is delegated to the generated buildspec"
+
+# Note: The artifacts will be collected by the executed buildspec
