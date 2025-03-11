@@ -1,7 +1,5 @@
 version: 0.2
 
-# Router buildspec for Step Functions Agent project
-
 phases:
   install:
     runtime-versions:
@@ -10,106 +8,98 @@ phases:
       golang: 1.21
       java: corretto17
     commands:
-    - echo "Building component type: ${BUILD_TYPE}"
-    - yum update -y
-    - pip install --upgrade pip
-    - echo "Installing specific dependencies for ${BUILD_TYPE}"
-    - if [[ "$BUILD_TYPE" == *"lambda-extension"* || "$BUILD_TYPE" == *"rust"* ]]; then curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y; fi
-    - if [[ "$BUILD_TYPE" == *"lambda-extension"* || "$BUILD_TYPE" == *"rust"* ]]; then source $HOME/.cargo/env; fi
-    - if [[ "$BUILD_TYPE" == *"lambda-extension"* || "$BUILD_TYPE" == *"rust"* ]]; then yum install -y zip cmake gcc gcc-c++ make openssl-devel; fi
-    - if [[ "$BUILD_TYPE" == *"lambda-extension"* || "$BUILD_TYPE" == *"rust"* ]]; then pip install cargo-lambda; fi
-    - if [[ "$BUILD_TYPE" == *"lambda-extension"* || "$BUILD_TYPE" == *"rust"* ]]; then rustup target add aarch64-unknown-linux-musl; fi
-    - if [[ "$BUILD_TYPE" == *"lambda-extension"* || "$BUILD_TYPE" == *"rust"* ]]; then rustup target add x86_64-unknown-linux-musl; fi
-    - pip install aws-sam-cli
-    - if [[ "$BUILD_TYPE" == *"-stack"* ]]; then pip install -r requirements.txt; fi
-
+      - echo "Building component type: ${BUILD_TYPE}"
+      - yum update -y
+      - pip install --upgrade pip
+      - echo "Installing specific dependencies for ${BUILD_TYPE}"
+      - if [[ "$BUILD_TYPE" == *"lambda-extension"* || "$BUILD_TYPE" == *"rust"* ]]; then curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y; fi
+      - if [[ "$BUILD_TYPE" == *"lambda-extension"* || "$BUILD_TYPE" == *"rust"* ]]; then source $HOME/.cargo/env; fi
+      - if [[ "$BUILD_TYPE" == *"lambda-extension"* || "$BUILD_TYPE" == *"rust"* ]]; then yum install -y zip cmake gcc gcc-c++ make openssl-devel; fi
+      - if [[ "$BUILD_TYPE" == *"lambda-extension"* || "$BUILD_TYPE" == *"rust"* ]]; then pip install cargo-lambda; fi
+      - if [[ "$BUILD_TYPE" == *"lambda-extension"* || "$BUILD_TYPE" == *"rust"* ]]; then rustup target add aarch64-unknown-linux-musl; fi
+      - if [[ "$BUILD_TYPE" == *"lambda-extension"* || "$BUILD_TYPE" == *"rust"* ]]; then rustup target add x86_64-unknown-linux-musl; fi
+      - pip install aws-sam-cli
+      - if [[ "$BUILD_TYPE" == *"-stack"* ]]; then pip install -r requirements.txt; fi
   build:
     commands:
-    - echo "Starting build for ${BUILD_TYPE}"
-    - if [ "$BUILD_TYPE" == "sql-stack" ]; then echo "Building SQL Agent Stack..."; fi
-    - if [ "$BUILD_TYPE" == "sql-stack" ]; then python -m cdk synth SQLAgentStack --output cdk-templates; fi
-    - if [ "$BUILD_TYPE" == "sql-stack" ]; then ls -la cdk-templates; fi
-    - if [ "$BUILD_TYPE" == "lambda-extension" ]; then echo "Building Lambda Extension..."; fi
-    - if [ "$BUILD_TYPE" == "lambda-extension" ]; then cd lambda/extensions/long-content; fi
-    - if [ "$BUILD_TYPE" == "lambda-extension" ]; then sed -i 's/^.*strip.*$/\t@echo "Skipping strip command for cross-compiled binaries..."/' Makefile; fi
-    - if [ "$BUILD_TYPE" == "lambda-extension" ]; then make build; fi
-    - if [ "$BUILD_TYPE" == "lambda-extension" ]; then cd ../../..; fi
-    - if [ "$BUILD_TYPE" == "web-scraper" ]; then echo "Building Web Scraper Lambda..."; fi
-    - if [ "$BUILD_TYPE" == "web-scraper" ]; then cd lambda/tools/web-scraper; fi
-    - if [ "$BUILD_TYPE" == "web-scraper" ]; then npm install; fi
-    - if [ "$BUILD_TYPE" == "web-scraper" ]; then npm run build; fi
-    - if [ "$BUILD_TYPE" == "web-scraper" ]; then cd ../../..; fi
-    - if [ "$BUILD_TYPE" == "db-interface" ]; then echo "Building DB Interface Lambda..."; fi
-    - if [ "$BUILD_TYPE" == "db-interface" ]; then cd lambda/tools/db-interface; fi
-    - if [ "$BUILD_TYPE" == "db-interface" ]; then pip install -r requirements.txt; fi
-    - if [ "$BUILD_TYPE" == "db-interface" ]; then cd ../../..; fi
-    - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then echo "Building WebScraperMemory Lambda..."; fi
-    - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then cd lambda/tools/WebScraperMemory; fi
-    - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then cargo lambda build --release --arm64; fi
-    - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then cd ../../..; fi
-    - |+
-      if [ "$BUILD_TYPE" != "sql-stack" ] && [ "$BUILD_TYPE" != "lambda-extension" ] && [ "$BUILD_TYPE" != "web-scraper" ] && [ "$BUILD_TYPE" != "db-interface" ] && [ "$BUILD_TYPE" != "web-scraper-memory" ]; then 
-        echo "Error: Unknown BUILD_TYPE: $BUILD_TYPE"
-        exit 1
-      fi
-            
+      - echo "Starting build for ${BUILD_TYPE}"
+      - if [ "$BUILD_TYPE" == "sql-stack" ]; then echo "Building SQL Agent Stack..."; fi
+      - if [ "$BUILD_TYPE" == "sql-stack" ]; then python -m cdk synth SQLAgentStack --output cdk-templates; fi
+      - if [ "$BUILD_TYPE" == "sql-stack" ]; then ls -la cdk-templates; fi
+      - if [ "$BUILD_TYPE" == "lambda-extension" ]; then echo "Building Lambda Extension..."; fi
+      - if [ "$BUILD_TYPE" == "lambda-extension" ]; then cd lambda/extensions/long-content; fi
+      - if [ "$BUILD_TYPE" == "lambda-extension" ]; then sed -i 's/^.*strip.*$/\t@echo "Skipping strip command for cross-compiled binaries..."/' Makefile; fi
+      - if [ "$BUILD_TYPE" == "lambda-extension" ]; then make build; fi
+      - if [ "$BUILD_TYPE" == "lambda-extension" ]; then cd ../../..; fi
+      - if [ "$BUILD_TYPE" == "web-scraper" ]; then echo "Building Web Scraper Lambda..."; fi
+      - if [ "$BUILD_TYPE" == "web-scraper" ]; then cd lambda/tools/web-scraper; fi
+      - if [ "$BUILD_TYPE" == "web-scraper" ]; then npm install; fi
+      - if [ "$BUILD_TYPE" == "web-scraper" ]; then npm run build; fi
+      - if [ "$BUILD_TYPE" == "web-scraper" ]; then cd ../../..; fi
+      - if [ "$BUILD_TYPE" == "db-interface" ]; then echo "Building DB Interface Lambda..."; fi
+      - if [ "$BUILD_TYPE" == "db-interface" ]; then cd lambda/tools/db-interface; fi
+      - if [ "$BUILD_TYPE" == "db-interface" ]; then pip install -r requirements.txt; fi
+      - if [ "$BUILD_TYPE" == "db-interface" ]; then cd ../../..; fi
+      - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then echo "Building WebScraperMemory Lambda..."; fi
+      - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then cd lambda/tools/WebScraperMemory; fi
+      - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then cargo lambda build --release --arm64; fi
+      - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then cd ../../..; fi
+      - if [ "$BUILD_TYPE" != "sql-stack" ] && [ "$BUILD_TYPE" != "lambda-extension" ] && [ "$BUILD_TYPE" != "web-scraper" ] && [ "$BUILD_TYPE" != "db-interface" ] && [ "$BUILD_TYPE" != "web-scraper-memory" ]; then echo "Error Unknown BUILD_TYPE: $BUILD_TYPE"; exit 1; fi
   post_build:
     commands:
-    - echo "Starting post-build for ${BUILD_TYPE}"
-    - AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-    - AWS_REGION=$AWS_DEFAULT_REGION
-    - echo "Using AWS Region: $AWS_REGION"
-    - S3_BUCKET="step-functions-agent-artifacts-${AWS_REGION}-${AWS_ACCOUNT_ID}"
-    - echo "Using S3 bucket: $S3_BUCKET"
-    - export AWS_ACCOUNT_ID AWS_REGION S3_BUCKET
-    - echo "Checking if bucket $S3_BUCKET exists..."
-    - if aws s3 ls "s3://$S3_BUCKET" >/dev/null 2>&1; then echo "Bucket $S3_BUCKET already exists."; else echo "Creating bucket $S3_BUCKET..."; aws s3 mb "s3://$S3_BUCKET" || echo "Bucket may already exist, continuing..."; fi
-    - if [ "$BUILD_TYPE" == "sql-stack" ]; then aws s3api put-object --bucket $S3_BUCKET --key cloudformation/sql-agent/ --content-length 0 || true; fi
-    - if [ "$BUILD_TYPE" == "sql-stack" ] && [ -d "cdk-templates" ]; then echo "Uploading CloudFormation template..."; aws s3 cp cdk-templates/ s3://${S3_BUCKET}/cloudformation/sql-agent/ --recursive; else if [ "$BUILD_TYPE" == "sql-stack" ]; then echo "CloudFormation template not found, synth may have failed"; exit 1; fi; fi
-    - if [ "$BUILD_TYPE" == "sql-stack" ]; then echo "CloudFormation template available at s3://$S3_BUCKET/cloudformation/sql-agent/"; fi
-    - if [ "$BUILD_TYPE" == "lambda-extension" ]; then aws s3api put-object --bucket $S3_BUCKET --key lambda-layers/ --content-length 0 || true; fi
-    - if [ "$BUILD_TYPE" == "lambda-extension" ]; then cd lambda/extensions/long-content; fi
-    - if [ "$BUILD_TYPE" == "lambda-extension" ] && [ -f extension-arm.zip ]; then echo "Uploading ARM extension..."; aws s3 cp extension-arm.zip s3://${S3_BUCKET}/lambda-layers/; else if [ "$BUILD_TYPE" == "lambda-extension" ]; then echo "ARM zip not found, skipping upload"; fi; fi
-    - if [ "$BUILD_TYPE" == "lambda-extension" ] && [ -f extension-x86.zip ]; then echo "Uploading x86 extension..."; aws s3 cp extension-x86.zip s3://${S3_BUCKET}/lambda-layers/; else if [ "$BUILD_TYPE" == "lambda-extension" ]; then echo "x86 zip not found, skipping upload"; fi; fi
-    - if [ "$BUILD_TYPE" == "lambda-extension" ]; then cd ../../..; fi
-    - if [ "$BUILD_TYPE" == "lambda-extension" ]; then echo "Lambda extensions available at s3://$S3_BUCKET/lambda-layers/"; fi
-    - if [ "$BUILD_TYPE" == "web-scraper" ]; then aws s3api put-object --bucket $S3_BUCKET --key lambda/web-scraper/ --content-length 0 || true; fi
-    - if [ "$BUILD_TYPE" == "web-scraper" ]; then cd lambda/tools/web-scraper; fi
-    - if [ "$BUILD_TYPE" == "web-scraper" ]; then zip -r lambda.zip dist/; fi
-    - if [ "$BUILD_TYPE" == "web-scraper" ]; then aws s3 cp lambda.zip s3://${S3_BUCKET}/lambda/web-scraper/lambda.zip; fi
-    - if [ "$BUILD_TYPE" == "web-scraper" ]; then cd ../../..; fi
-    - if [ "$BUILD_TYPE" == "web-scraper" ]; then echo "Lambda code available at s3://$S3_BUCKET/lambda/web-scraper/"; fi
-    - if [ "$BUILD_TYPE" == "db-interface" ]; then aws s3api put-object --bucket $S3_BUCKET --key lambda/db-interface/ --content-length 0 || true; fi
-    - if [ "$BUILD_TYPE" == "db-interface" ]; then cd lambda/tools/db-interface; fi
-    - if [ "$BUILD_TYPE" == "db-interface" ]; then zip -r lambda.zip *.py; fi
-    - if [ "$BUILD_TYPE" == "db-interface" ]; then aws s3 cp lambda.zip s3://${S3_BUCKET}/lambda/db-interface/lambda.zip; fi
-    - if [ "$BUILD_TYPE" == "db-interface" ]; then cd ../../..; fi
-    - if [ "$BUILD_TYPE" == "db-interface" ]; then echo "Lambda code available at s3://$S3_BUCKET/lambda/db-interface/"; fi
-    - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then aws s3api put-object --bucket $S3_BUCKET --key lambda/web-scraper-memory/ --content-length 0 || true; fi
-    - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then cd lambda/tools/WebScraperMemory; fi
-    - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then zip -j lambda.zip target/lambda/release/bootstrap; fi
-    - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then aws s3 cp lambda.zip s3://${S3_BUCKET}/lambda/web-scraper-memory/lambda.zip; fi
-    - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then cd ../../..; fi
-    - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then echo "Lambda code available at s3://$S3_BUCKET/lambda/web-scraper-memory/"; fi
-
+      - echo "Starting post-build for ${BUILD_TYPE}"
+      - AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - AWS_REGION=$AWS_DEFAULT_REGION
+      - echo "Using AWS Region: $AWS_REGION"
+      - S3_BUCKET="step-functions-agent-artifacts-${AWS_REGION}-${AWS_ACCOUNT_ID}"
+      - echo "Using S3 bucket: $S3_BUCKET"
+      - export AWS_ACCOUNT_ID AWS_REGION S3_BUCKET
+      - echo "Checking if bucket $S3_BUCKET exists..."
+      - if aws s3 ls "s3://$S3_BUCKET" >/dev/null 2>&1; then echo "Bucket $S3_BUCKET already exists."; else echo "Creating bucket $S3_BUCKET..."; aws s3 mb "s3://$S3_BUCKET" || echo "Bucket may already exist, continuing..."; fi
+      - if [ "$BUILD_TYPE" == "sql-stack" ]; then aws s3api put-object --bucket $S3_BUCKET --key cloudformation/sql-agent/ --content-length 0 || true; fi
+      - if [ "$BUILD_TYPE" == "sql-stack" ] && [ -d "cdk-templates" ]; then echo "Uploading CloudFormation template..."; aws s3 cp cdk-templates/ s3://${S3_BUCKET}/cloudformation/sql-agent/ --recursive; else if [ "$BUILD_TYPE" == "sql-stack" ]; then echo "CloudFormation template not found, synth may have failed"; exit 1; fi; fi
+      - if [ "$BUILD_TYPE" == "sql-stack" ]; then echo "CloudFormation template available at s3://$S3_BUCKET/cloudformation/sql-agent/"; fi
+      - if [ "$BUILD_TYPE" == "lambda-extension" ]; then aws s3api put-object --bucket $S3_BUCKET --key lambda-layers/ --content-length 0 || true; fi
+      - if [ "$BUILD_TYPE" == "lambda-extension" ]; then cd lambda/extensions/long-content; fi
+      - if [ "$BUILD_TYPE" == "lambda-extension" ] && [ -f extension-arm.zip ]; then echo "Uploading ARM extension..."; aws s3 cp extension-arm.zip s3://${S3_BUCKET}/lambda-layers/; else if [ "$BUILD_TYPE" == "lambda-extension" ]; then echo "ARM zip not found, skipping upload"; fi; fi
+      - if [ "$BUILD_TYPE" == "lambda-extension" ] && [ -f extension-x86.zip ]; then echo "Uploading x86 extension..."; aws s3 cp extension-x86.zip s3://${S3_BUCKET}/lambda-layers/; else if [ "$BUILD_TYPE" == "lambda-extension" ]; then echo "x86 zip not found, skipping upload"; fi; fi
+      - if [ "$BUILD_TYPE" == "lambda-extension" ]; then cd ../../..; fi
+      - if [ "$BUILD_TYPE" == "lambda-extension" ]; then echo "Lambda extensions available at s3://$S3_BUCKET/lambda-layers/"; fi
+      - if [ "$BUILD_TYPE" == "web-scraper" ]; then aws s3api put-object --bucket $S3_BUCKET --key lambda/web-scraper/ --content-length 0 || true; fi
+      - if [ "$BUILD_TYPE" == "web-scraper" ]; then cd lambda/tools/web-scraper; fi
+      - if [ "$BUILD_TYPE" == "web-scraper" ]; then zip -r lambda.zip dist/; fi
+      - if [ "$BUILD_TYPE" == "web-scraper" ]; then aws s3 cp lambda.zip s3://${S3_BUCKET}/lambda/web-scraper/lambda.zip; fi
+      - if [ "$BUILD_TYPE" == "web-scraper" ]; then cd ../../..; fi
+      - if [ "$BUILD_TYPE" == "web-scraper" ]; then echo "Lambda code available at s3://$S3_BUCKET/lambda/web-scraper/"; fi
+      - if [ "$BUILD_TYPE" == "db-interface" ]; then aws s3api put-object --bucket $S3_BUCKET --key lambda/db-interface/ --content-length 0 || true; fi
+      - if [ "$BUILD_TYPE" == "db-interface" ]; then cd lambda/tools/db-interface; fi
+      - if [ "$BUILD_TYPE" == "db-interface" ]; then zip -r lambda.zip *.py; fi
+      - if [ "$BUILD_TYPE" == "db-interface" ]; then aws s3 cp lambda.zip s3://${S3_BUCKET}/lambda/db-interface/lambda.zip; fi
+      - if [ "$BUILD_TYPE" == "db-interface" ]; then cd ../../..; fi
+      - if [ "$BUILD_TYPE" == "db-interface" ]; then echo "Lambda code available at s3://$S3_BUCKET/lambda/db-interface/"; fi
+      - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then aws s3api put-object --bucket $S3_BUCKET --key lambda/web-scraper-memory/ --content-length 0 || true; fi
+      - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then cd lambda/tools/WebScraperMemory; fi
+      - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then zip -j lambda.zip target/lambda/release/bootstrap; fi
+      - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then aws s3 cp lambda.zip s3://${S3_BUCKET}/lambda/web-scraper-memory/lambda.zip; fi
+      - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then cd ../../..; fi
+      - if [ "$BUILD_TYPE" == "web-scraper-memory" ]; then echo "Lambda code available at s3://$S3_BUCKET/lambda/web-scraper-memory/"; fi
 artifacts:
   files:
-  - cdk-templates/**/*
-  - lambda/extensions/long-content/extension-arm.zip
-  - lambda/extensions/long-content/extension-x86.zip
-  - lambda/tools/web-scraper/dist/**/*
-  - lambda/tools/web-scraper/lambda.zip
-  - lambda/tools/db-interface/lambda.zip
-  - lambda/tools/WebScraperMemory/lambda.zip
+    - cdk-templates/**/*
+    - lambda/extensions/long-content/extension-arm.zip
+    - lambda/extensions/long-content/extension-x86.zip
+    - lambda/tools/web-scraper/dist/**/*
+    - lambda/tools/web-scraper/lambda.zip
+    - lambda/tools/db-interface/lambda.zip
+    - lambda/tools/WebScraperMemory/lambda.zip
   discard-paths: no
   base-directory: '.'
-
 cache:
   paths:
-  - '/root/.cargo/registry/**/*'
-  - '/root/.cargo/git/**/*'
-  - '/root/.cache/pip/**/*'
-  - 'lambda/tools/web-scraper/node_modules/**/*'
-  - '/root/.cache/go-build/**/*'
-  - '/go/pkg/mod/**/*'
-  - '/root/.m2/**/*'
+    - '/root/.cargo/registry/**/*'
+    - '/root/.cargo/git/**/*'
+    - '/root/.cache/pip/**/*'
+    - 'lambda/tools/web-scraper/node_modules/**/*'
+    - '/root/.cache/go-build/**/*'
+    - '/go/pkg/mod/**/*'
+    - '/root/.m2/**/*'
