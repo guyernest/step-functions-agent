@@ -1,0 +1,54 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      rust: latest
+    commands:
+      # Install required dependencies
+      - apt-get update && apt-get install -y zip cmake pkg-config libssl-dev musl-tools
+      # Install AWS SAM CLI
+      - pip install aws-sam-cli
+      # Install cargo-lambda
+      - pip install cargo-lambda
+      # Setup cross-compilation for ARM64
+      - rustup target add aarch64-unknown-linux-musl
+      - rustup target add x86_64-unknown-linux-musl
+
+  build:
+    commands:
+      # Navigate to the lambda extension directory
+      - cd lambda/extensions/long-content
+      # Build both extensions
+      - make build
+      
+  post_build:
+    commands:
+      # Get AWS account ID and region for S3 bucket name
+      - export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - export AWS_REGION=$(aws configure get region)
+      - export S3_BUCKET="step-functions-agent-artifacts-${AWS_REGION}-${AWS_ACCOUNT_ID}"
+      
+      # Create S3 bucket if it doesn't exist
+      - aws s3api head-bucket --bucket ${S3_BUCKET} 2>/dev/null || aws s3 mb s3://${S3_BUCKET} --region ${AWS_REGION}
+      
+      # Upload the extension ZIP files to S3
+      # We're already in lambda/extensions/long-content from the build phase
+      - aws s3 cp extension-arm.zip s3://${S3_BUCKET}/lambda-layers/
+      - aws s3 cp extension-x86.zip s3://${S3_BUCKET}/lambda-layers/
+      
+      # Output the S3 URLs for the extension ZIPs
+      - echo "ARM64 extension available at s3://${S3_BUCKET}/lambda-layers/extension-arm.zip"
+      - echo "x86_64 extension available at s3://${S3_BUCKET}/lambda-layers/extension-x86.zip"
+
+artifacts:
+  files:
+    - lambda/extensions/long-content/extension-arm.zip
+    - lambda/extensions/long-content/extension-x86.zip
+  discard-paths: no
+
+cache:
+  paths:
+    - '/root/.cargo/registry/**/*'
+    - '/root/.cargo/git/**/*'
+    - 'lambda/extensions/long-content/target/**/*'
