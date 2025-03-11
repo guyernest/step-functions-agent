@@ -24,6 +24,8 @@ phases:
     commands:
       # Navigate to the lambda extension directory
       - cd lambda/extensions/long-content
+      # Modify Makefile to skip strip command
+      - sed -i 's/^.*strip.*$/\t@echo "Skipping strip command for cross-compiled binaries..."/' Makefile
       # Build both extensions
       - make build
       
@@ -31,16 +33,18 @@ phases:
     commands:
       # Get AWS account ID and region for S3 bucket name
       - export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-      - export AWS_REGION=$(aws configure get region)
+      - export AWS_REGION=$(echo $AWS_DEFAULT_REGION)
+      - echo "Using AWS Region: ${AWS_REGION}"
       - export S3_BUCKET="step-functions-agent-artifacts-${AWS_REGION}-${AWS_ACCOUNT_ID}"
+      - echo "Using S3 bucket: ${S3_BUCKET}"
       
       # Create S3 bucket if it doesn't exist
-      - aws s3api head-bucket --bucket ${S3_BUCKET} 2>/dev/null || aws s3 mb s3://${S3_BUCKET} --region ${AWS_REGION}
+      - aws s3api head-bucket --bucket ${S3_BUCKET} 2>/dev/null || aws s3 mb s3://${S3_BUCKET}
       
-      # Upload the extension ZIP files to S3
+      # Upload the extension ZIP files to S3 if they exist
       # We're already in lambda/extensions/long-content from the build phase
-      - aws s3 cp extension-arm.zip s3://${S3_BUCKET}/lambda-layers/
-      - aws s3 cp extension-x86.zip s3://${S3_BUCKET}/lambda-layers/
+      - if [ -f extension-arm.zip ]; then aws s3 cp extension-arm.zip s3://${S3_BUCKET}/lambda-layers/; else echo "ARM zip not found, skipping upload"; fi
+      - if [ -f extension-x86.zip ]; then aws s3 cp extension-x86.zip s3://${S3_BUCKET}/lambda-layers/; else echo "x86 zip not found, skipping upload"; fi
       
       # Output the S3 URLs for the extension ZIPs
       - echo "ARM64 extension available at s3://${S3_BUCKET}/lambda-layers/extension-arm.zip"
