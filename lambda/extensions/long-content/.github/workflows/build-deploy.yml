@@ -1,0 +1,29 @@
+name: Trigger AWS CodeBuild for Lambda Extensions
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'lambda/extensions/long-content/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'lambda/extensions/long-content/**'
+  workflow_dispatch:
+
+jobs:
+  trigger_codebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger AWS CodeBuild (Manual Notification)
+        run: |
+          echo "Triggered build for Lambda Extensions"
+          echo "This workflow doesn't actually trigger CodeBuild automatically."
+          echo "AWS CodeBuild should be configured with a webhook to this GitHub repository."
+          echo ""
+          echo "CodeBuild project: arn:aws:codebuild:us-west-2:672915487120:project/step-functions-agent"
+          echo "CodeBuild will use its service role for all AWS permissions."
+          echo ""
+          echo "After successful build, extensions will be available at:"
+          echo "ARM64: s3://step-functions-agent-artifacts-{region}-{account-id}/lambda-layers/extension-arm.zip"
+          echo "x86_64: s3://step-functions-agent-artifacts-{region}-{account-id}/lambda-layers/extension-x86.zip"

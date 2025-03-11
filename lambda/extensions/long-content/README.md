@@ -223,6 +223,86 @@ When the Lambda Runtime API Proxy extension processes events and responses, it a
 
 These markers can help you verify that the proxy is correctly processing your function's events and responses.
 
+## CI/CD Pipeline
+
+This project includes an automated CI/CD pipeline using AWS CodeBuild that builds the extensions for both ARM64 and x86_64 architectures.
+
+### Architecture
+
+The CI/CD pipeline uses AWS CodeBuild to automatically build the extensions whenever code is pushed to the repository. The process works as follows:
+
+1. CodeBuild is configured with a webhook to the GitHub repository
+2. When code is pushed, CodeBuild pulls the latest code
+3. CodeBuild runs the build process defined in `buildspec.yml`
+4. The built extension ZIPs are stored in an S3 bucket with a region and account-specific name
+5. The extensions can then be deployed as Lambda layers
+
+### AWS CodeBuild Setup
+
+The CodeBuild project has already been created:
+```
+arn:aws:codebuild:us-west-2:672915487120:project/step-functions-agent
+```
+
+To configure the webhook connection to GitHub:
+
+1. Open the AWS CodeBuild console
+2. Select the project "step-functions-agent"
+3. Choose "Edit" > "Source"
+4. Under "Source provider", select "GitHub"
+5. Connect to your GitHub account if not already connected
+6. Select the repository
+7. Under "Webhook", choose "Rebuild every time a code change is pushed to this repository"
+8. Optional: Add filters to only trigger on changes to the `lambda/extensions/long-content` directory
+
+### CodeBuild Service Role Permissions
+
+The CodeBuild service role needs these permissions:
+
+- `s3:PutObject` and `s3:CreateBucket` for storing build artifacts
+- `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents` for logging
+- `sts:GetCallerIdentity` to determine the account ID
+
+### Build Process
+
+The build process is defined in `buildspec.yml` and includes:
+
+1. Installing required dependencies (Rust, cargo-lambda, AWS SAM CLI)
+2. Building the extensions for both architectures using the Makefile
+3. Storing the built extensions in an S3 bucket with name pattern:
+   ```
+   step-functions-agent-artifacts-{region}-{account-id}
+   ```
+
+### Using the Built Extensions
+
+After a successful build, the extension layer ZIPs are available at:
+```
+s3://step-functions-agent-artifacts-{region}-{account-id}/lambda-layers/extension-arm.zip
+s3://step-functions-agent-artifacts-{region}-{account-id}/lambda-layers/extension-x86.zip
+```
+
+You can use these ZIPs to create Lambda layers using the AWS CLI:
+```bash
+# For ARM64
+aws lambda publish-layer-version \
+  --layer-name lambda-runtime-api-proxy-arm \
+  --description "Lambda Runtime API Proxy Extension for ARM64" \
+  --license-info "MIT" \
+  --content S3Bucket=step-functions-agent-artifacts-{region}-{account-id},S3Key=lambda-layers/extension-arm.zip \
+  --compatible-runtimes provided provided.al2 nodejs14.x nodejs16.x nodejs18.x python3.9 python3.10 python3.11 java11 java17 \
+  --compatible-architectures arm64
+
+# For x86_64
+aws lambda publish-layer-version \
+  --layer-name lambda-runtime-api-proxy-x86 \
+  --description "Lambda Runtime API Proxy Extension for x86_64" \
+  --license-info "MIT" \
+  --content S3Bucket=step-functions-agent-artifacts-{region}-{account-id},S3Key=lambda-layers/extension-x86.zip \
+  --compatible-runtimes provided provided.al2 nodejs14.x nodejs16.x nodejs18.x python3.9 python3.10 python3.11 java11 java17 \
+  --compatible-architectures x86_64
+```
+
 ## Useful links
 
 * [AWS Lambda Extension API docs](https://docs.aws.amazon.com/lambda/latest/dg/runtimes-extensions-api.html)
