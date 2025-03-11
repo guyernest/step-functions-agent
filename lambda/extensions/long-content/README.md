@@ -227,24 +227,25 @@ These markers can help you verify that the proxy is correctly processing your fu
 
 This project includes an automated CI/CD pipeline using AWS CodeBuild that builds the extensions for both ARM64 and x86_64 architectures.
 
-### Architecture
+### CI/CD Architecture
 
-The CI/CD pipeline uses AWS CodeBuild to automatically build the extensions whenever code is pushed to the repository. The process works as follows:
+The CI/CD pipeline uses GitHub Actions and AWS CodeBuild to automatically build the extensions whenever code is pushed to the repository. The process works as follows:
 
-1. CodeBuild is configured with a webhook to the GitHub repository
-2. When code is pushed, CodeBuild pulls the latest code
-3. CodeBuild runs the build process defined in `buildspec.yml`
+1. GitHub Actions workflow detects changes in the `lambda/extensions/long-content` directory
+2. AWS CodeBuild is triggered via a webhook (configured in the CodeBuild project)
+3. CodeBuild pulls the latest code and runs the build process defined in `buildspec.yml`
 4. The built extension ZIPs are stored in an S3 bucket with a region and account-specific name
 5. The extensions can then be deployed as Lambda layers
 
 ### AWS CodeBuild Setup
 
 The CodeBuild project has already been created:
-```
+
+```text
 arn:aws:codebuild:us-west-2:672915487120:project/step-functions-agent
 ```
 
-To configure the webhook connection to GitHub:
+To configure the web hook connection to GitHub:
 
 1. Open the AWS CodeBuild console
 2. Select the project "step-functions-agent"
@@ -259,9 +260,9 @@ To configure the webhook connection to GitHub:
 
 The CodeBuild service role needs these permissions:
 
-- `s3:PutObject` and `s3:CreateBucket` for storing build artifacts
-- `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents` for logging
-- `sts:GetCallerIdentity` to determine the account ID
+* `s3:PutObject` and `s3:CreateBucket` for storing build artifacts
+* `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents` for logging
+* `sts:GetCallerIdentity` to determine the account ID
 
 ### Build Process
 
@@ -270,19 +271,22 @@ The build process is defined in `buildspec.yml` and includes:
 1. Installing required dependencies (Rust, cargo-lambda, AWS SAM CLI)
 2. Building the extensions for both architectures using the Makefile
 3. Storing the built extensions in an S3 bucket with name pattern:
-   ```
+
+   ```text
    step-functions-agent-artifacts-{region}-{account-id}
    ```
 
 ### Using the Built Extensions
 
 After a successful build, the extension layer ZIPs are available at:
-```
+
+```text
 s3://step-functions-agent-artifacts-{region}-{account-id}/lambda-layers/extension-arm.zip
 s3://step-functions-agent-artifacts-{region}-{account-id}/lambda-layers/extension-x86.zip
 ```
 
 You can use these ZIPs to create Lambda layers using the AWS CLI:
+
 ```bash
 # For ARM64
 aws lambda publish-layer-version \
