@@ -1,0 +1,40 @@
+name: Lambda Extensions - Build Notification
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'lambda/extensions/long-content/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'lambda/extensions/long-content/**'
+  workflow_dispatch:
+
+jobs:
+  notify_trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Notify About CodeBuild
+        run: |
+          echo "=== Lambda Extension Build Notification ==="
+          echo ""
+          echo "Changes detected in lambda/extensions/long-content"
+          echo ""
+          echo "IMPORTANT: This workflow only serves as a notification."
+          echo "AWS CodeBuild must be separately configured with a webhook to GitHub."
+          echo ""
+          echo "CodeBuild project: arn:aws:codebuild:us-west-2:672915487120:project/step-functions-agent"
+          echo ""
+          echo "To set up the webhook:"
+          echo "1. Open the AWS CodeBuild console"
+          echo "2. Select project: step-functions-agent"
+          echo "3. Go to Edit → Source → GitHub"
+          echo "4. Configure webhook to trigger on changes to this repository"
+          echo ""
+          echo "After successful build, extensions will be available at:"
+          echo "s3://step-functions-agent-artifacts-{region}-{account-id}/lambda-layers/extension-arm.zip"
+          echo "s3://step-functions-agent-artifacts-{region}-{account-id}/lambda-layers/extension-x86.zip"
