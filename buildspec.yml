@@ -18,12 +18,14 @@ phases:
     - if [[ "$BUILD_TYPE" == *"lambda-extension"* || "$BUILD_TYPE" == *"rust"* ]]; then rustup target add x86_64-unknown-linux-musl; fi
     - pip install aws-sam-cli
     - if [[ "$BUILD_TYPE" == *"-stack"* ]]; then pip install -r requirements.txt; fi
+    - if [[ "$BUILD_TYPE" == *"-stack"* ]]; then npm install -g aws-cdk; fi
+    - if [[ "$BUILD_TYPE" == *"-stack"* ]]; then node --version; npm --version; cdk --version; fi
 
   build:
     commands:
     - echo Starting build for ${BUILD_TYPE}
     - if [ "$BUILD_TYPE" = "sql-stack" ]; then echo Building SQL Agent Stack; fi
-    - if [ "$BUILD_TYPE" = "sql-stack" ]; then python -m cdk synth SQLAgentStack --output cdk-templates; fi
+    - if [ "$BUILD_TYPE" = "sql-stack" ]; then cdk synth SQLAgentStack --output cdk-templates; fi
     - if [ "$BUILD_TYPE" = "sql-stack" ]; then ls -la cdk-templates; fi
     - if [ "$BUILD_TYPE" = "lambda-extension" ]; then echo Building Lambda Extension; fi
     - if [ "$BUILD_TYPE" = "lambda-extension" ]; then cd lambda/extensions/long-content; fi
