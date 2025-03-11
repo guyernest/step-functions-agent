@@ -9,8 +9,9 @@ phases:
       - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
       - source $HOME/.cargo/env
       
-      # Install required dependencies
-      - apt-get update && apt-get install -y zip cmake pkg-config libssl-dev musl-tools
+      # Install required dependencies for Amazon Linux
+      - yum update -y
+      - yum install -y zip cmake gcc gcc-c++ make openssl-devel
       # Install AWS SAM CLI
       - pip install aws-sam-cli
       # Install cargo-lambda
