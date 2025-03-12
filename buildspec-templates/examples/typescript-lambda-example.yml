@@ -1,0 +1,90 @@
+version: 0.2
+
+# Example buildspec for a TypeScript Lambda function
+# This shows how to use the template for a specific Lambda function
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 18
+      python: 3.9
+    commands:
+      # Update system packages
+      - yum update -y
+      
+      # Install AWS SAM CLI
+      - pip install aws-sam-cli
+      
+      # Navigate to the Lambda directory
+      - cd lambda/tools/web-scraper
+      
+      # Install npm dependencies
+      - npm install
+      
+  build:
+    commands:
+      # Navigate to the Lambda directory
+      - cd lambda/tools/web-scraper
+      
+      # Build TypeScript
+      - npm run build
+      
+      # Package with SAM (if there's a template.yaml)
+      - sam package --output-template-file packaged.yaml --s3-bucket ${S3_BUCKET}
+      
+  post_build:
+    commands:
+      # Get AWS account ID and region for S3 bucket name
+      - |
+        AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        AWS_REGION=$AWS_DEFAULT_REGION
+        echo "Using AWS Region: $AWS_REGION"
+        S3_BUCKET="step-functions-agent-artifacts-${AWS_REGION}-${AWS_ACCOUNT_ID}"
+        echo "Using S3 bucket: $S3_BUCKET"
+        export AWS_ACCOUNT_ID AWS_REGION S3_BUCKET
+      
+      # Check if bucket exists or create it
+      - |
+        echo "Checking if bucket $S3_BUCKET exists..."
+        # Try to access the bucket and ignore errors
+        if aws s3 ls "s3://$S3_BUCKET" >/dev/null 2>&1; then
+          echo "Bucket $S3_BUCKET already exists."
+        else
+          echo "Creating bucket $S3_BUCKET..."
+          # Ignore errors from bucket creation
+          aws s3 mb "s3://$S3_BUCKET" || echo "Bucket may already exist, continuing..."
+        fi
+        
+        # Make sure the lambda directory exists
+        aws s3api put-object --bucket $S3_BUCKET --key lambda/web-scraper/ --content-length 0 || true
+      
+      # Upload the Lambda code to S3
+      - |
+        cd lambda/tools/web-scraper
+        echo "Uploading Lambda code..."
+        
+        # Create a zip file of the dist directory and upload it to S3
+        zip -r lambda.zip dist/
+        aws s3 cp lambda.zip s3://${S3_BUCKET}/lambda/web-scraper/lambda.zip
+        
+        # Upload packaged template if available
+        if [ -f packaged.yaml ]; then
+          aws s3 cp packaged.yaml s3://${S3_BUCKET}/lambda/web-scraper/packaged.yaml
+        fi
+      
+      # Output the S3 URLs
+      - |
+        echo "Build complete!"
+        echo "Lambda code available at s3://$S3_BUCKET/lambda/web-scraper/lambda.zip"
+
+artifacts:
+  files:
+    - lambda/tools/web-scraper/dist/**/*
+    - lambda/tools/web-scraper/lambda.zip
+    - lambda/tools/web-scraper/packaged.yaml
+  discard-paths: no
+  base-directory: '.'
+
+cache:
+  paths:
+    - 'lambda/tools/web-scraper/node_modules/**/*'

@@ -1,0 +1,74 @@
+version: 0.2
+
+# Template for creating buildspec files for CDK stacks
+# Replace STACK_NAME with the actual stack name
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.9
+    commands:
+      # Update system packages
+      - yum update -y
+      
+      # Install required dependencies
+      - pip install --upgrade pip
+      - pip install -r requirements.txt
+      
+  build:
+    commands:
+      # Run CDK synth to generate CloudFormation template for the specific stack
+      - python -m cdk synth STACK_NAME --output cdk-templates
+      
+      # Print the generated template
+      - ls -la cdk-templates
+      
+  post_build:
+    commands:
+      # Get AWS account ID and region for S3 bucket name
+      - |
+        AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        AWS_REGION=$AWS_DEFAULT_REGION
+        echo "Using AWS Region: $AWS_REGION"
+        S3_BUCKET="step-functions-agent-artifacts-${AWS_REGION}-${AWS_ACCOUNT_ID}"
+        echo "Using S3 bucket: $S3_BUCKET"
+        export AWS_ACCOUNT_ID AWS_REGION S3_BUCKET
+      
+      # Check if bucket exists or create it
+      - |
+        echo "Checking if bucket $S3_BUCKET exists..."
+        # Try to access the bucket and ignore errors
+        if aws s3 ls "s3://$S3_BUCKET" >/dev/null 2>&1; then
+          echo "Bucket $S3_BUCKET already exists."
+        else
+          echo "Creating bucket $S3_BUCKET..."
+          # Ignore errors from bucket creation
+          aws s3 mb "s3://$S3_BUCKET" || echo "Bucket may already exist, continuing..."
+        fi
+        # Make sure the cloudformation directory exists
+        aws s3api put-object --bucket $S3_BUCKET --key cloudformation/ --content-length 0 || true
+      
+      # Upload the CloudFormation template to S3
+      - |
+        if [ -d "cdk-templates" ]; then 
+          echo "Uploading CloudFormation template..."
+          aws s3 cp cdk-templates/ s3://${S3_BUCKET}/cloudformation/STACK_NAME_LOWERCASE/ --recursive
+        else 
+          echo "CloudFormation template not found, synth may have failed"
+          exit 1
+        fi
+      
+      # Output the S3 URL for the CloudFormation template
+      - |
+        echo "Build complete!"
+        echo "CloudFormation template available at s3://$S3_BUCKET/cloudformation/STACK_NAME_LOWERCASE/"
+
+artifacts:
+  files:
+    - cdk-templates/**/*
+  discard-paths: no
+  base-directory: '.'
+
+cache:
+  paths:
+    - '/root/.cache/pip/**/*'
