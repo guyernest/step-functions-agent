@@ -1,0 +1,100 @@
+version: 0.2
+
+# Template for building a Rust Lambda function
+# Replace LAMBDA_DIR with the actual directory path, e.g., lambda/tools/WebScraperMemory
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.9
+    commands:
+      # Install Rust
+      - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      - source $HOME/.cargo/env
+      
+      # Install required dependencies for Amazon Linux
+      - yum update -y
+      - yum install -y zip cmake gcc gcc-c++ make openssl-devel
+      
+      # Install AWS SAM CLI and cargo-lambda
+      - pip install aws-sam-cli cargo-lambda
+      
+      # Setup cross-compilation for ARM64
+      - rustup target add aarch64-unknown-linux-musl
+      - rustup target add x86_64-unknown-linux-musl
+
+  build:
+    commands:
+      # Navigate to the Lambda directory
+      - cd LAMBDA_DIR
+      
+      # Build with cargo-lambda
+      - cargo lambda build --release --arm64
+      
+      # If there's a template.yaml, package with SAM
+      - |
+        if [ -f template.yaml ]; then
+          sam package --output-template-file packaged.yaml --s3-bucket ${S3_BUCKET}
+        fi
+      
+  post_build:
+    commands:
+      # Get AWS account ID and region for S3 bucket name
+      - |
+        AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        AWS_REGION=$AWS_DEFAULT_REGION
+        echo "Using AWS Region: $AWS_REGION"
+        S3_BUCKET="step-functions-agent-artifacts-${AWS_REGION}-${AWS_ACCOUNT_ID}"
+        echo "Using S3 bucket: $S3_BUCKET"
+        export AWS_ACCOUNT_ID AWS_REGION S3_BUCKET
+      
+      # Check if bucket exists or create it
+      - |
+        echo "Checking if bucket $S3_BUCKET exists..."
+        # Try to access the bucket and ignore errors
+        if aws s3 ls "s3://$S3_BUCKET" >/dev/null 2>&1; then
+          echo "Bucket $S3_BUCKET already exists."
+        else
+          echo "Creating bucket $S3_BUCKET..."
+          # Ignore errors from bucket creation
+          aws s3 mb "s3://$S3_BUCKET" || echo "Bucket may already exist, continuing..."
+        fi
+        
+        # Make sure the lambda directory exists
+        aws s3api put-object --bucket $S3_BUCKET --key lambda/LAMBDA_NAME/ --content-length 0 || true
+      
+      # Upload the Lambda artifacts to S3
+      - |
+        cd LAMBDA_DIR
+        echo "Uploading Lambda artifacts..."
+        
+        # Upload packaged template if available
+        if [ -f packaged.yaml ]; then
+          aws s3 cp packaged.yaml s3://${S3_BUCKET}/lambda/LAMBDA_NAME/packaged.yaml
+        fi
+        
+        # Upload bootstrap binary if available
+        if [ -f target/lambda/release/bootstrap ]; then
+          # Create a deployment package
+          zip -j lambda.zip target/lambda/release/bootstrap
+          aws s3 cp lambda.zip s3://${S3_BUCKET}/lambda/LAMBDA_NAME/lambda.zip
+        fi
+      
+      # Output the S3 URLs
+      - |
+        echo "Build complete!"
+        echo "Lambda artifacts available at s3://$S3_BUCKET/lambda/LAMBDA_NAME/"
+
+artifacts:
+  files:
+    - LAMBDA_DIR/target/lambda/release/bootstrap
+    - LAMBDA_DIR/lambda.zip
+    - LAMBDA_DIR/packaged.yaml
+  discard-paths: no
+  base-directory: '.'
+
+cache:
+  paths:
+    - '/root/.cargo/registry/**/*'
+    - '/root/.cargo/git/**/*'
+    - 'LAMBDA_DIR/target/**/*'

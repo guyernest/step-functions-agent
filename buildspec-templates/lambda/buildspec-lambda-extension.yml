@@ -1,0 +1,95 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.9
+    commands:
+      # Install Rust
+      - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      - source $HOME/.cargo/env
+      
+      # Install required dependencies for Amazon Linux
+      - yum update -y
+      - yum install -y zip cmake gcc gcc-c++ make openssl-devel
+      # Install AWS SAM CLI
+      - pip install aws-sam-cli
+      # Install cargo-lambda
+      - pip install cargo-lambda
+      # Setup cross-compilation for ARM64
+      - rustup target add aarch64-unknown-linux-musl
+      - rustup target add x86_64-unknown-linux-musl
+
+  build:
+    commands:
+      # Navigate to the lambda extension directory
+      - cd lambda/extensions/long-content
+      # Modify Makefile to skip strip command
+      - sed -i 's/^.*strip.*$/\t@echo "Skipping strip command for cross-compiled binaries..."/' Makefile
+      # Build both extensions
+      - make build
+      
+  post_build:
+    commands:
+      # Get AWS account ID and region for S3 bucket name
+      - |
+        AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        AWS_REGION=$AWS_DEFAULT_REGION
+        echo "Using AWS Region: $AWS_REGION"
+        S3_BUCKET="step-functions-agent-artifacts-${AWS_REGION}-${AWS_ACCOUNT_ID}"
+        echo "Using S3 bucket: $S3_BUCKET"
+        export AWS_ACCOUNT_ID AWS_REGION S3_BUCKET
+      
+      # Check if bucket exists or create it
+      - |
+        echo "Checking if bucket $S3_BUCKET exists..."
+        # Try to access the bucket and ignore errors
+        if aws s3 ls "s3://$S3_BUCKET" >/dev/null 2>&1; then
+          echo "Bucket $S3_BUCKET already exists."
+        else
+          echo "Creating bucket $S3_BUCKET..."
+          # Ignore errors from bucket creation
+          aws s3 mb "s3://$S3_BUCKET" || echo "Bucket may already exist, continuing..."
+        fi
+        # Make sure the lambda-layers directory exists
+        aws s3api put-object --bucket $S3_BUCKET --key lambda-layers/ --content-length 0 || true
+      
+      # Upload the extension ZIP files to S3 if they exist
+      - |
+        # Make sure we're in the right directory
+        cd lambda/extensions/long-content 2>/dev/null || true
+        echo "Current directory: $(pwd)"
+        ls -la
+        
+        if [ -f extension-arm.zip ]; then 
+          echo "Uploading ARM extension..."
+          aws s3 cp extension-arm.zip s3://${S3_BUCKET}/lambda-layers/
+        else 
+          echo "ARM zip not found, skipping upload"
+        fi
+        
+        if [ -f extension-x86.zip ]; then 
+          echo "Uploading x86 extension..."
+          aws s3 cp extension-x86.zip s3://${S3_BUCKET}/lambda-layers/
+        else 
+          echo "x86 zip not found, skipping upload"
+        fi
+      
+      # Output the S3 URLs for the extension ZIPs
+      - |
+        echo "Build complete!"
+        echo "ARM64 extension available at s3://$S3_BUCKET/lambda-layers/extension-arm.zip"
+        echo "x86_64 extension available at s3://$S3_BUCKET/lambda-layers/extension-x86.zip"
+
+artifacts:
+  files:
+    - lambda/extensions/long-content/extension-arm.zip
+    - lambda/extensions/long-content/extension-x86.zip
+  discard-paths: no
+  base-directory: '.'
+
+cache:
+  paths:
+    - '/root/.cargo/registry/**/*'
+    - '/root/.cargo/git/**/*'
+    - 'lambda/extensions/long-content/target/**/*'
