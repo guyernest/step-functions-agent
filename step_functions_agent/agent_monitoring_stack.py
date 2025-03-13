@@ -34,48 +34,82 @@ class AgentMonitoringStack(Stack):
         # Adding the token metrics
         high_level_facade.add_medium_header('Token Metrics')
 
-        metric_factory = high_level_facade.create_metric_factory()
+        # metric_factory = high_level_facade.create_metric_factory()
 
-        input_tokens_metrics = [
-            metric_factory.create_metric(
-                metric_name='InputTokens',
-                namespace="AI-Agents",
-                dimensions_map={
-                    "state_machine_name": agent_name,
-                },
-                label=f'Input Tokens - {agent_name}',
-                statistic=MetricStatistic.N,
-                period=Duration.minutes(5),
+        # input_tokens_metrics = [
+        #     metric_factory.create_metric(
+        #         metric_name='InputTokens',
+        #         namespace="AI-Agents",
+        #         dimensions_map={
+        #             "state_machine_name": agent_name,
+        #         },
+        #         label=f'Input Tokens - {agent_name}',
+        #         statistic=MetricStatistic.N,
+        #         period=Duration.minutes(5),
+        #     )
+        #     for agent_name in agents
+        # ]
+
+        # output_tokens_metrics = [
+        #     metric_factory.create_metric(
+        #         metric_name='OutputTokens',
+        #         namespace="AI-Agents",
+        #         dimensions_map={
+        #             "state_machine_name": agent_name,
+        #         },
+        #         label=f'Output Tokens - {agent_name}',
+        #         statistic=MetricStatistic.SUM,
+        #         period=Duration.minutes(5),
+        #     )
+        #     for agent_name in agents
+        # ]
+
+        # token_usage_group = CustomMetricGroup(
+        #     metrics=(
+        #         input_tokens_metrics +
+        #         output_tokens_metrics
+        #     ), 
+        #     title='Token Usage'
+        # )
+        # high_level_facade.monitor_custom(
+        #     metric_groups=[token_usage_group], 
+        #     human_readable_name='LLM Token Usage', 
+        #     alarm_friendly_name='Tokens',
+        # )
+
+        for agent in agents:
+            high_level_facade.add_medium_header(f'Agent: {agent}')
+
+             # Create the query
+            input_tokens_query = cloudwatch.MathExpression(
+                expression=f"SELECT SUM(InputTokens) FROM \"AI-Agents\" WHERE state_machine_name = '{agent}' GROUP BY model",
+                label="Input Tokens"  # Label that will appear on the dashboard
             )
-            for agent_name in agents
-        ]
 
-        output_tokens_metrics = [
-            metric_factory.create_metric(
-                metric_name='OutputTokens',
-                namespace="AI-Agents",
-                dimensions_map={
-                    "state_machine_name": agent_name,
-                },
-                label=f'Output Tokens - {agent_name}',
-                statistic=MetricStatistic.SUM,
-                period=Duration.minutes(5),
+            input_tokens_widget = cloudwatch.GraphWidget(
+                title="Top Models by Input Tokens",
+                left=[input_tokens_query],
+                width=12  # Setting width to half the dashboard (24 units is full width)
             )
-            for agent_name in agents
-        ]
 
-        token_usage_group = CustomMetricGroup(
-            metrics=(
-                input_tokens_metrics +
-                output_tokens_metrics
-            ), 
-            title='Token Usage'
-        )
-        high_level_facade.monitor_custom(
-            metric_groups=[token_usage_group], 
-            human_readable_name='LLM Token Usage', 
-            alarm_friendly_name='Tokens',
-        )
+            output_tokens_query = cloudwatch.MathExpression(
+                expression=f"SELECT SUM(OutputTokens) FROM \"AI-Agents\" WHERE state_machine_name = '{agent}' GROUP BY model",
+                label="Output Tokens"  # Label that will appear on the dashboard
+            )
+
+            output_tokens_widget = cloudwatch.GraphWidget(
+                title="Top Models by Output Tokens",
+                left=[output_tokens_query],
+                width=12  # Setting width to half the dashboard
+            )
+
+            # Add them as a row 
+            high_level_facade.add_widget(
+                cloudwatch.Row(
+                    input_tokens_widget,
+                    output_tokens_widget
+                )
+            )
 
         # Calculate the total cost of tokens. We use the model dimensions to get the cost per token.
         # We use the input and output tokens to calculate the cost.
@@ -87,18 +121,18 @@ class AgentMonitoringStack(Stack):
             # Create the math expression
         math_expression = cloudwatch.MathExpression(
             expression="""
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens gpt-4o', 'Sum')) * 2.50 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens gpt-4o', 'Sum')) * 10.00 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens gpt-4o-mini', 'Sum')) * 0.15 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens gpt-4o-mini', 'Sum')) * 0.60 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens claude-3-5-sonnet-20241022', 'Sum')) * 3.00 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens claude-3-5-sonnet-20241022', 'Sum')) * 15.00 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens gemini-2.0-flash', 'Sum')) * 0.10 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens gemini-2.0-flash', 'Sum')) * 0.40 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens amazon.nova-pro', 'Sum')) * 0.8 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens amazon.nova-pro', 'Sum')) * 3.20 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens grok-2', 'Sum')) * 2.0 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens grok-2', 'Sum')) * 10.00 / 1_000_000
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens gpt-4o', 'Sum')) * 2.50 / 10^6 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens gpt-4o', 'Sum')) * 10.00 / 10^6 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens gpt-4o-mini', 'Sum')) * 0.15 / 10^6 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens gpt-4o-mini', 'Sum')) * 0.60 / 10^6 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens claude sonnet', 'Sum')) * 3.00 / 10^6 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens claude sonnet', 'Sum')) * 15.00 / 10^6 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens gemini-2.0-flash', 'Sum')) * 0.10 / 10^6 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens gemini-2.0-flash', 'Sum')) * 0.40 / 10^6 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens amazon.nova-pro', 'Sum')) * 0.8 / 10^6 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens amazon.nova-pro', 'Sum')) * 3.20 / 10^6 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens grok-2', 'Sum')) * 2.0 / 10^6 +
+            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens grok-2', 'Sum')) * 10.00 / 10^6
             """,
             label="Cost Calculation"  # Label that will appear on the dashboard
         )
