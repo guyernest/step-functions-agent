@@ -23,7 +23,7 @@ class OpenAILLM(BaseLLM):
                         "name": tool["name"],
                         "description": tool["description"],
                         # Unpack the input_schema if it exists, otherwise don't include the parameters key
-                        **({"parameters": tool["input_schema"]} if tool["input_schema"]["properties"] != {} else {"parameters": { }})
+                        **({"parameters": tool["input_schema"]} if tool["input_schema"]["properties"] != {} else { "type": "object", "properties": {} })
                     }
             } for tool in tools
         ] if tools else []
