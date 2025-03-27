@@ -197,7 +197,7 @@ class SQLAgentStack(Stack):
             description="Lambda function to Call LLM (DeepSeek) with messages history and tools.",
             entry="lambda/call_llm/functions/openai_llm",
             runtime=_lambda.Runtime.PYTHON_3_12,
-            timeout=Duration.seconds(90),
+            timeout=Duration.seconds(120),
             memory_size=256,
             index="deepseek_lambda.py",
             handler="lambda_handler",
