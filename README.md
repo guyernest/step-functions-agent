@@ -625,6 +625,59 @@ The security of the AI Agent is a critical aspect of the implementation. The fol
 2. [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
 3. [AWS CDK](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html)
 
+## Building and Testing with Make
+
+This project includes a comprehensive Makefile to simplify the build and test process for all components. The Makefile handles multiple programming languages and provides various targets for building, testing, and deployment preparation.
+
+### Main Make Targets
+
+```bash
+make              # Runs all steps (clean, setup, build, test)
+make setup        # Sets up all environments and creates .env file
+make build        # Builds all lambda functions
+make test         # Runs tests for all components
+make clean        # Cleans build artifacts and temporary files
+make deploy-prep  # Prepares for deployment (clean, setup, build, test)
+```
+
+### Language-Specific Targets
+
+For building specific language components:
+```bash
+make build-python      # Build Python lambda functions
+make build-typescript  # Build TypeScript lambda functions
+make build-rust        # Build Rust lambda functions
+make build-java        # Build Java lambda functions
+make build-go         # Build Go lambda functions
+```
+
+For running tests for specific languages:
+```bash
+make test-python      # Run Python tests
+make test-typescript  # Run TypeScript tests
+make test-rust       # Run Rust tests
+make test-java       # Run Java tests
+make test-go         # Run Go tests
+```
+
+### Environment Setup
+
+The `make setup` command will:
+1. Create a .env file if it doesn't exist (you need to update it with your actual API keys)
+2. Set up virtual environments for Python using uv
+3. Install dependencies for TypeScript/Node.js
+4. Build Rust projects
+5. Handle Java Maven builds
+6. Set up Go modules
+
+### Deployment Preparation
+
+Before deploying with CDK, run:
+```bash
+make deploy-prep  # This will clean, setup, build, and test everything
+cdk deploy       # Then deploy with CDK
+```
+
 ## uv Set up
 
 An easy way to deploy Lambda functions is to have a requirements.txt file in the same directory as the Lambda function (`index.py`, for example). Using `uv` is the great way to build that requirements.txt file, from the requirements.in file. For example:
