@@ -24,7 +24,7 @@ MicrosoftGraphAPI/
 
 The tools are:
 
-* `MicrosoftGraphAPI`: Interface to the Microsoft Graph API of a specific tenant..
+* `MicrosoftGraphAPI`: Interface to the Microsoft Graph API of a specific tenant. Supports both GET and POST operations.
 
 ## Setup
 
@@ -51,9 +51,54 @@ CLIENT_SECRET=your_client_secret
 
 The CDK stack will pass the secrets to the Lambda function through the secrets manager.
 
+### Permission Requirements
+
+For sending emails, your app registration in Azure AD needs the following Graph API permissions:
+- `Mail.Send` (Application permission)
+- `Mail.ReadWrite` (Application permission)
+
+For reading user data, your app needs:
+- `User.Read.All` (Application permission)
+
+Make sure to grant admin consent for these permissions in the Azure portal.
+
 ## Testing
 
 You can test the tool using Pytest as other Python code, or using the AWS SAM CLI to test the Lambda function locally.
+
+### Example: Sending Email
+
+To send an email using this tool, the AI agent would call the tool with the following input:
+
+```json
+{
+  "endpoint": "me/sendMail",
+  "method": "POST",
+  "data": {
+    "message": {
+      "subject": "Test email from AI Agent",
+      "body": {
+        "contentType": "HTML",
+        "content": "<p>This is a test email sent via Microsoft Graph API.</p>"
+      },
+      "toRecipients": [
+        {
+          "emailAddress": {
+            "address": "recipient@example.com"
+          }
+        }
+      ],
+      "ccRecipients": [
+        {
+          "emailAddress": {
+            "address": "cc-recipient@example.com"
+          }
+        }
+      ]
+    },
+    "saveToSentItems": true
+  }
+}
 
 ### Pytest
 
@@ -107,13 +152,27 @@ The CDK stack is defined with the rest of the AI Agent definition to allow full 
             input_schema={
                 "type": "object",
                 "properties": {
+                    "endpoint": {
+                        "type": "string",
+                        "description": "The Graph API endpoint to call (e.g. 'users', 'me/sendMail').",
+                    },
+                    "method": {
+                        "type": "string",
+                        "description": "HTTP method to use (GET, POST, etc.). Defaults to GET.",
+                        "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"],
+                        "default": "GET"
+                    },
+                    "data": {
+                        "type": "object",
+                        "description": "The data payload for POST/PUT/PATCH requests.",
+                    },
                     "query": {
                         "type": "string",
-                        "description": "The API query to perform.",
+                        "description": "Legacy parameter for backward compatibility. The API endpoint to perform (same as endpoint).",
                     }
                 },
                 "required": [
-                    "query",
+                    "endpoint",
                 ]
             }
         )

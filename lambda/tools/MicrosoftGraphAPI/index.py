@@ -64,38 +64,41 @@ class GraphAPIClient:
             method=method,
             url=url,
             headers=headers,
-            # json=data
+            json=data if data else None
         )
         response.raise_for_status()
         return response.json()
 
 # Tool Functions
 def MicrosoftGraphAPI(
-    query: str
+    endpoint: str,
+    method: str = "GET",
+    data: dict = None
     ) -> str:
-    """Interface to the Microsoft Graph API of a specific tenant..
+    """Interface to the Microsoft Graph API of a specific tenant.
     Args:
-        query (str): The API query to perform.
+        endpoint (str): The Graph API endpoint to call (e.g. 'users', 'me/sendMail').
+        method (str, optional): HTTP method to use (GET, POST, etc.). Defaults to GET.
+        data (dict, optional): The data payload for POST/PUT/PATCH requests.
 
     Returns:
-        str: Interface to the Microsoft Graph API of a specific tenant.,
-             or an error message if the execution fails.
+        str: Response from the Microsoft Graph API, or an error message if execution fails.
 
     Raises:
-        Exception: Any exception during query execution will be caught and returned as an error message.
+        Exception: Any exception during API execution will be caught and returned as an error message.
     """
 
     try:
         # Initialize the Graph API client
         client = GraphAPIClient(tenant_id, client_id, client_secret)
         
-        # Example: List users
-        output = client.call_graph_api(query)
+        # Call the Microsoft Graph API
+        output = client.call_graph_api(endpoint, method=method, data=data)
         logger.info(f"Output: {output}")
         result = output
         return json.dumps(result, indent=2)
     except Exception as e:
-        return f"Error executing query: {str(e)}"
+        return f"Error executing Graph API request: {str(e)}"
 
 
 @tracer.capture_method
@@ -108,7 +111,11 @@ def lambda_handler(event, context):
     logger.info(f"Tool name: {tool_name}")
     match tool_name:
         case 'MicrosoftGraphAPI':
-            result = MicrosoftGraphAPI(tool_input['query'])
+            endpoint = tool_input.get('endpoint', tool_input.get('query', ''))
+            method = tool_input.get('method', 'GET')
+            data = tool_input.get('data')
+            
+            result = MicrosoftGraphAPI(endpoint, method, data)
 
         # Add more tools functions here as needed
 
@@ -126,17 +133,52 @@ def lambda_handler(event, context):
 
 if __name__ == "__main__":
     
-    # Test event for MicrosoftGraphAPI
-    test_event = {
+    # Test event for MicrosoftGraphAPI - GET request
+    test_get_event = {
         "name": "MicrosoftGraphAPI",
         "id": "execute_unique_id",
         "input": {
-            "query": "users"
+            "endpoint": "users",
+            "method": "GET"
         },
         "type": "tool_use"
     }
     
-    # Call lambda handler with test events
-    print("\nTesting MicrosoftGraphAPI:")
-    response = lambda_handler(test_event, None)
+    # Test event for MicrosoftGraphAPI - POST request (email sending)
+    test_email_event = {
+        "name": "MicrosoftGraphAPI",
+        "id": "execute_unique_id",
+        "input": {
+            "endpoint": "me/sendMail",
+            "method": "POST",
+            "data": {
+                "message": {
+                    "subject": "Test email from Graph API Tool",
+                    "body": {
+                        "contentType": "HTML",
+                        "content": "<p>This is a test email sent via Microsoft Graph API.</p>"
+                    },
+                    "toRecipients": [
+                        {
+                            "emailAddress": {
+                                "address": "test@example.com"
+                            }
+                        }
+                    ]
+                },
+                "saveToSentItems": True
+            }
+        },
+        "type": "tool_use"
+    }
+    
+    # Call lambda handler with GET test event
+    print("\nTesting MicrosoftGraphAPI GET:")
+    response = lambda_handler(test_get_event, None)
     print(response)
+    
+    # Call lambda handler with email test event
+    print("\nTesting MicrosoftGraphAPI Email Send:")
+    # Uncomment the line below to actually test sending an email
+    # response = lambda_handler(test_email_event, None)
+    # print(response)
