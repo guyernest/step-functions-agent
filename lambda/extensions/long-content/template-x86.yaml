@@ -8,31 +8,31 @@ Parameters:
     Default: dev
     Description: Deployment stage name
     AllowedValues:
-      - dev
-      - test
-      - prod
-  
+    - dev
+    - test
+    - prod
+
   AgentContextTableName:
     Type: String
     Default: AgentContext
     Description: Name of the DynamoDB table to store large content
-  
+
   MaxContentSize:
     Type: Number
     Default: 5000
     Description: Maximum size of content fields before storing in DynamoDB
-    
+
   # Add a parameter to control whether to create the DynamoDB table
   CreateDynamoDBTable:
     Type: String
     Default: "true"
     Description: Whether to create the DynamoDB table or not (set to 'false' if the table already exists)
     AllowedValues:
-      - "true"
-      - "false"
+    - "true"
+    - "false"
 
 Conditions:
-  ShouldCreateTable: !Equals [!Ref CreateDynamoDBTable, "true"]
+  ShouldCreateTable: !Equals [ !Ref CreateDynamoDBTable, "true" ]
 
 Resources:
   # DynamoDB table for storing large content (only created if CreateDynamoDBTable is true)
@@ -43,21 +43,21 @@ Resources:
       TableName: !Ref AgentContextTableName
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: id
-          AttributeType: S
+      - AttributeName: id
+        AttributeType: S
       KeySchema:
-        - AttributeName: id
-          KeyType: HASH
+      - AttributeName: id
+        KeyType: HASH
       SSESpecification:
         SSEEnabled: true
       TimeToLiveSpecification:
         AttributeName: expires_at
         Enabled: true
       Tags:
-        - Key: Project
-          Value: LambdaRuntimeAPIProxy
-        - Key: Environment
-          Value: !Ref DeploymentStage
+      - Key: Project
+        Value: LambdaRuntimeAPIProxy
+      - Key: Environment
+        Value: !Ref DeploymentStage
 
   # The Lambda Layer for our x86_64 extension
   ProxyExtensionLayer:
@@ -77,9 +77,7 @@ Resources:
         - java11
         - java17
         - java21
-        - provided
         - provided.al2
-        - provided.al2023
       CompatibleArchitectures:
         - x86_64
       RetentionPolicy: Retain
