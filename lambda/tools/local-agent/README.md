@@ -89,18 +89,13 @@ In case of errors, the `script_output` will contain error information:
 
 ### Prerequisites
 
-* Rust 1.70 or later [Rust documentations](https://doc.rust-lang.org/cargo/getting-started/installation.html)
-
-    ```bash
-    curl https://sh.rustup.rs -sSf | sh
-    ```
-
-* Python 3.6 or later (for PyAutoGUI scripts)
-* uv package manager (for automatic dependency management) [uv documentation](https://docs.astral.sh/uv/getting-started/installation/)
-
-    ```bash
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    ```
+* **Rust 1.70 or later**: Required for building the agent. [Rust Installation Guide](https://doc.rust-lang.org/cargo/getting-started/installation.html)
+  ```bash
+  curl https://sh.rustup.rs -sSf | sh
+  ```
+* **Python 3.6 or later**: Required by `uv` to create Python virtual environments. The agent relies on `uv` for this.
+* **uv (Python Package Manager)**: The agent uses `uv` to create a dedicated Python virtual environment and install dependencies. It's also used as a fallback for script execution.
+  *   Install `uv` by following the official guide: [Astral's uv Installation](https://astral.sh/uv/install.sh) (typically `curl -LsSf https://astral.sh/uv/install.sh | sh`).
 
 #### Fine Grained IAM role
 
@@ -147,37 +142,26 @@ region=eu-west-1
    ```bash
    cargo build --release
    ```
+   *(Note: Ensure `uv` is installed and accessible in your PATH before this step if you haven't installed it yet, as mentioned in Prerequisites.)*
 
-3. Install uv if not already installed:
-
-    For macOS/Linux:
-
-    ```bash
-    curl -sSf https://astral.sh/uv/install.sh | sh
-    ```
-
-    For Windows (PowerShell):
-
-    ```powershell
-    irm https://astral.sh/uv/install.ps1 | iex
-    ```
-
-    For more detailed installation options, see the [official documentation](
-    https://docs.astral.sh/uv/getting-started/installation/)
-
-4. Configure the daemon by editing the `daemon_config.json` file in the root directory:
+3. **Configure the daemon** by editing the `daemon_config.json` file. Key settings include:
 
    ```json
    {
        "activity_arn": "arn:aws:states:us-west-2:YOUR_ACCOUNT_ID:activity:YOUR_ACTIVITY_NAME",
-       "app_path": "uv run script_executor.py",
+       "app_path": "your_legacy_app_command", // Path to the application for legacy non-Python tasks
        "poll_interval_ms": 5000,
        "worker_name": "local-agent-worker",
-       "profile_name": "PROFILE_NAME"
+       "profile_name": "PROFILE_NAME",
+       "uv_executable_path": "uv", // Optional: Path to 'uv'. Defaults to "uv" (assumes in PATH).
+       "python_script_timeout_sec": 300 // Optional: Timeout for Python scripts in seconds. Defaults to 300.
    }
    ```
+   * `uv_executable_path`: (Optional) Specifies the path to the `uv` executable. If not provided, the agent assumes `uv` is available in the system's PATH.
+   * `python_script_timeout_sec`: (Optional) Sets the maximum execution time in seconds for a Python automation script. If a script exceeds this timeout, it will be terminated. Defaults to 300 seconds if not specified.
+   * `app_path`: This field is primarily for legacy tasks that directly execute a command. For Python automation scripts, the agent uses its internal `script_executor.py`.
 
-5. Run the daemon:
+4. **Run the daemon:**
 
    ```shell
    cargo run --release
@@ -363,26 +347,48 @@ For reliable image detection, follow these guidelines:
 
 1. When the local agent receives a message in the format described above with a `script` element in the `input` object, it will automatically use the PyAutoGUI script executor
 2. The extracted script content is saved to a temporary file
-3. The agent executes the script using Python with the required PyAutoGUI dependencies
-4. Results are captured and returned to the Step Functions Activity in the same structure as the input, but with `script_output` replacing the `script` element
-5. The response maintains all other properties from the original input (such as `id` and `name`)
+3. The agent executes `script_executor.py` within this isolated virtual environment.
+4. Results are captured and returned to the Step Functions Activity in the same structure as the input, but with `script_output` replacing the `script` element.
+5. The response maintains all other properties from the original input (such as `id` and `name`).
 
-#### Dependency Management with uv
+#### Python Execution Strategy and Dependency Management
 
-The system uses `uv run` to execute the Python script with its dependencies. This approach:
+The local agent employs a hybrid strategy for executing Python automation scripts (`script_executor.py`) to ensure both robustness and efficiency:
 
-* Eliminates the need to pre*install PyAutoGUI and its dependencies
-* Ensures each execution has the exact dependencies it needs
-* Avoids conflicts with other Python packages in the system
-* Works seamlessly across different operating systems
+1.  **Virtual Environment Setup (Managed by Agent):**
+    *   On its first run, or if the dedicated environment is not found, the agent attempts to create a local Python virtual environment named `.agent_venv` in its working directory (alongside the agent executable).
+    *   It uses the `uv` executable (specified by `uv_executable_path` in `daemon_config.json`, or "uv" from PATH) to create this virtual environment.
+    *   The agent then uses `uv pip install pyautogui pillow opencv-python` to install the necessary dependencies into this `.agent_venv`.
+    *   A marker file (`.setup_complete`) is created inside `.agent_venv` upon successful setup.
+    *   This process ensures that `script_executor.py` has its dependencies readily available in a controlled environment.
 
-When execution starts, the agent will try:
+2.  **Runtime Execution:**
+    *   **Primary Method (Venv Execution):** For each script task, the agent first checks for the existence of the `.agent_venv` and the Python interpreter within it. If found and the setup marker is present, it directly executes the script using `<.agent_venv_path>/bin/python script_executor.py ...`. This is the preferred and faster method for subsequent runs.
+    *   **Fallback Method (`uv run`):** If the `.agent_venv` setup failed, is incomplete, or the venv interpreter is not found, the agent falls back to executing the script using `uv run --pip pyautogui --pip pillow --pip opencv-python script_executor.py ...`. This method ensures that the script can still run even if the persistent venv setup encounters issues, as `uv run` creates an ephemeral environment with the specified dependencies for that particular execution. This might be slightly slower for the first execution if `uv` needs to download dependencies.
 
-```bash
-uv run --pip=pyautogui --pip=pillow script_executor.py script.json
-```
+3.  **Simplified `script_executor.py`:**
+    *   The `script_executor.py` itself no longer contains any logic for self-managing dependencies (e.g., via `pip` or older `uvx` re-execution). It assumes that `pyautogui`, `Pillow`, and (optionally) `cv2` are available in the Python environment where it's executed.
 
-This creates an isolated environment with PyAutoGUI and Pillow installed, runs the script, and then cleans up automatically.
+This hybrid approach aims to provide fast script execution via a persistent local venv while maintaining robustness through the `uv run` fallback mechanism.
+
+## Current Build Status and Developer Notes
+
+**Rust 1.75.0 Build Challenges:**
+
+The Rust components of this agent currently face challenges when being built with Rust compiler version 1.75.0 (the version available in the development environment). This is primarily due to some transitive dependencies in the Rust ecosystem (particularly within the `icu` family of Unicode components and related crates) requiring newer versions of the Rust compiler (e.g., Rust 1.81+ or 1.82+).
+
+While the core dependencies in `Cargo.toml` have been pinned to very old versions that are theoretically compatible with Rust 1.75.0, Cargo's dependency resolution mechanism can still pull in newer, incompatible transitive dependencies if the `Cargo.lock` file is regenerated or not perfectly preserved. This has made achieving a consistently stable build on Rust 1.75.0 difficult.
+
+**Status of Recent Rust-Based Features:**
+
+Several recent improvements to the Rust agent's Python script execution logic have been implemented in the codebase:
+*   Reliable determination of the `script_executor.py` path.
+*   Timeout mechanism for Python script execution (configurable via `python_script_timeout_sec`).
+*   Enhanced error reporting for various script execution failures (e.g., timeouts, invalid JSON output, non-zero exit codes).
+
+However, due to the aforementioned build issues, these features **could not be fully compiled, tested, and validated** in the Rust 1.75.0 environment. The code for these features is present in `src/lib.rs`, but the agent may not build reliably without a precisely correct `Cargo.lock` file or a newer Rust compiler.
+
+Users attempting to build this agent with Rust 1.75.0 may encounter these build errors. A newer Rust compiler (e.g., 1.82+) is recommended for a smoother build experience, although this has not been explicitly tested with the currently pinned older direct dependencies.
 
 ## Testing Guide
 
@@ -445,8 +451,8 @@ These integration tests include:
 
 1. Create a test Step Functions Activity in your AWS account
 2. Set up AWS credentials locally (using `~/.aws/credentials` or environment variables)
-3. Create a test config file with the proper Activity ARN and worker name
-4. Make sure Python 3.6+ and uv are installed for PyAutoGUI script tests
+3. Create a test config file with the proper Activity ARN and worker name.
+4. Ensure Python 3.6+ and `uv` are installed for PyAutoGUI script tests, as `uv` will be used by the agent.
 
 ### CI/CD Testing Environment
 
@@ -495,3 +501,77 @@ Common issues:
 2. Use meaningful assertions that test behavior, not implementation details
 3. Mock external dependencies for predictable tests
 4. Use integration tests sparingly for critical flows only
+
+## Manual Testing of `script_executor.py` with `uv run`
+
+For isolated testing of the `script_executor.py` script, which is responsible for interpreting and executing the automation actions, you can use `uv run`. This allows you to test the Python script's logic independently of the Rust agent.
+
+### Prerequisites
+
+*   **uv**: Ensure `uv` is installed and accessible in your system's PATH. You can install it from [Astral's uv Installation Guide](https://astral.sh/uv/install.sh) (e.g., `curl -LsSf https://astral.sh/uv/install.sh | sh`).
+*   **Python**: `uv` requires a Python installation (typically 3.6+ or as per `uv`'s requirements) to create environments.
+
+### Running the Script
+
+1.  **Navigate to the agent directory:**
+    ```bash
+    cd path/to/your/lambda/tools/local-agent
+    ```
+
+2.  **Prepare an example JSON script.**
+    Create a simple JSON file (e.g., `test_script.json`) with actions you want to test.
+
+    *Example: `test_type.json` (opens Notepad/TextEdit and types)*
+    ```json
+    {
+        "actions": [
+            {
+                "type": "launch",
+                "app": "notepad" # For Windows. Use "TextEdit" for macOS, or "gedit" for some Linux distros
+            },
+            {
+                "type": "wait",
+                "seconds": 2
+            },
+            {
+                "type": "type",
+                "text": "Hello from script_executor test!",
+                "interval": 0.1
+            }
+        ]
+    }
+    ```
+
+    *Example: `test_locate_image.json` (attempts to find an image - you'll need `dummy_button.png`)*
+    ```json
+    {
+        "actions": [
+            {
+                "type": "locateimage",
+                "image": "dummy_button.png",
+                "confidence": 0.8
+            }
+        ]
+    }
+    ```
+    (For this, create a dummy `dummy_button.png` file in the same directory or provide an absolute path).
+
+3.  **Execute `script_executor.py` using `uv run`:**
+    The command installs necessary dependencies (`pyautogui`, `pillow`, `opencv-python`) into an ephemeral environment and runs the script.
+
+    ```bash
+    uv run --pip pyautogui --pip pillow --pip opencv-python python script_executor.py test_script.json
+    ```
+    Replace `test_script.json` with the path to your actual JSON script file.
+    The `opencv-python` package is optional for `script_executor.py` but included here for comprehensive testing of image location capabilities.
+
+### Observing Results
+
+*   The script will print its JSON output (results of actions, success/failure status) to standard output (your console).
+*   PyAutoGUI actions will attempt to interact with your desktop. Ensure no critical applications are active that might be inadvertently affected.
+*   For image location, ensure the target image is visible on the screen when the action runs. Debug screenshots might be saved in a `screenshots` directory if errors occur or during specific image location steps.
+
+This manual testing method is useful for:
+*   Debugging the behavior of specific actions in `script_executor.py`.
+*   Verifying image location success/failure.
+*   Testing new action types or parameters before integrating them into the full agent workflow.

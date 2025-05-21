@@ -17,6 +17,16 @@ import time
 import traceback
 from typing import Any, Dict, List, Optional, Union
 
+# Attempt to import PIL.Image for type hinting or direct use if necessary in the future.
+# PyAutoGUI itself relies on Pillow being installed.
+try:
+    from PIL import Image
+except ImportError:
+    # This is not critical for script_executor.py itself as pyautogui handles image operations,
+    # but good to note if Pillow isn't installed in the environment.
+    # The Rust layer is responsible for ensuring Pillow is in the venv.
+    pass 
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -24,97 +34,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("script_executor")
 
-def run_with_uvx():
-    """
-    Re-run this script using uvx with the required dependencies.
-    
-    This allows us to execute the script with the necessary dependencies
-    without requiring prior installation. The uvx run command will create a temporary
-    environment with the required packages and execute this script within it.
-    """
-    # Since uvx is causing issues with the 'file' vs 'open' function in some dependencies,
-    # and we can't easily fix all those dependencies, we'll use pip directly if dependencies
-    # aren't already installed.
-    
-    logger.info("Required dependencies not installed, installing with pip...")
-    try:
-        # Try to install required dependencies with pip
-        pip_cmd = [sys.executable, "-m", "pip", "install", "pyautogui", "pillow"]
-        logger.info(f"Running: {' '.join(pip_cmd)}")
-        subprocess.run(pip_cmd, check=True)
-        
-        # Try to install optional dependency, but continue if it fails
-        try:
-            opencv_cmd = [sys.executable, "-m", "pip", "install", "opencv-python"]
-            logger.info(f"Running: {' '.join(opencv_cmd)}")
-            subprocess.run(opencv_cmd, check=True)
-            logger.info("Successfully installed OpenCV")
-        except subprocess.SubprocessError as cv_error:
-            logger.warning(f"Failed to install optional dependency OpenCV: {cv_error}")
-            logger.warning("Continuing without OpenCV support")
-        
-        # Now re-run this script (which should now have dependencies available)
-        logger.info("Re-running script with installed dependencies")
-        return subprocess.run([sys.executable] + sys.argv, check=False).returncode
-    except subprocess.SubprocessError as e:
-        logger.error(f"Failed to install required dependencies with pip: {e}")
-        return 1
-
-def ensure_dependencies():
-    """Ensure all required dependencies are installed, or use uvx to run the script."""
-    required_packages = ["pyautogui", "pillow"]
-    optional_packages = ["opencv-python"]
-    
-    # Check if the script is being run by uvx
-    if os.environ.get("UV_ACTIVE") == "1":
-        try:
-            # uvx is running us - try to import required packages
-            import pyautogui
-            logger.info("Running with uvx with required dependencies available")
-            # Try to import optional packages
-            try:
-                import cv2
-                logger.info("OpenCV is also available")
-            except ImportError:
-                logger.warning("OpenCV not available but continuing anyway")
-            return True
-        except ImportError as e:
-            logger.error(f"Required dependency not available despite running with uvx: {e}")
-            return False
-    
-    # Not running with uvx - try to import directly
-    try:
-        import pyautogui
-        logger.info("Required dependencies are already installed")
-        # Try to import optional packages
-        try:
-            import cv2
-            logger.info("OpenCV is also available")
-        except ImportError:
-            logger.warning("OpenCV not available but continuing anyway")
-        return True
-    except ImportError as e:
-        logger.info(f"Required dependency not installed: {e}, trying to use uvx...")
-        
-        # Check if uvx is available
-        try:
-            subprocess.run(["uvx", "--version"], check=True, capture_output=True)
-            logger.info("uvx is available, rerunning script with dependencies")
-            
-            # Re-run this script with uvx
-            sys.exit(run_with_uvx())
-            
-        except (subprocess.SubprocessError, FileNotFoundError):
-            logger.error("uvx is not available. Please install it first.")
-            logger.error("Install with: curl -sSf https://astral.sh/uv/install.sh | sh")
-            return False
-
 class ActionExecutor:
     """Executes PyAutoGUI actions based on JSON script definitions."""
     
     def __init__(self):
-        # Import pyautogui here after ensuring dependencies
-        import pyautogui
+        import pyautogui # type: ignore
         self.pyautogui = pyautogui
         
         # Try to import OpenCV and numpy, but continue if they're not available
@@ -371,49 +295,25 @@ class ActionExecutor:
         Returns:
             Resolved absolute path to the image if found, empty string if not found
         """
-        # If it's already an absolute path, check if it exists
+        # 1. Absolute Path Check
         if os.path.isabs(image_path):
             if os.path.isfile(image_path):
+                logger.info(f"Found image at absolute path: {image_path}")
                 return image_path
             else:
-                logger.warning(f"Image not found at absolute path: {image_path}")
+                logger.error(f"Image not found at absolute path: {image_path}")
                 return ""
-        
-        # List of potential base directories to check
-        base_dirs = [
-            os.getcwd(),  # Current working directory
-            os.path.dirname(os.path.abspath(__file__)),  # Script directory
-        ]
-        
-        # Check if this is a path based on script location
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        
-        # Define potential locations where images might be found
-        potential_paths = [
-            # Original path relative to various base directories
-            *[os.path.abspath(os.path.join(base_dir, image_path)) for base_dir in base_dirs],
-            # Check without 'examples/' prefix if it starts with it (example files often include this)
-            *[os.path.abspath(os.path.join(base_dir, image_path.replace('examples/', '', 1))) 
-              for base_dir in base_dirs if image_path.startswith('examples/')],
-            # Check with 'examples/' prefix if it doesn't have it
-            *[os.path.abspath(os.path.join(base_dir, 'examples', image_path)) 
-              for base_dir in base_dirs if not image_path.startswith('examples/')],
-        ]
-        
-        # Log all potential paths for debugging
-        logger.debug(f"Checking potential image paths for: {image_path}")
-        for i, path in enumerate(potential_paths):
-            logger.debug(f"  {i+1}: {path}")
-        
-        # Check each potential path
-        for path in potential_paths:
-            if os.path.isfile(path):
-                logger.info(f"Found image at: {path}")
-                return path
-                
-        # Image not found in any location
-        logger.error(f"Image not found in any location: {image_path}")
-        logger.error(f"Checked paths: {potential_paths}")
+
+        # 2. Relative Path Resolution (relative to current working directory)
+        # The CWD is already set to the script's directory in main()
+        relative_path_check = os.path.join(os.getcwd(), image_path)
+        logger.debug(f"Checking for image at relative path (CWD: {os.getcwd()}): {relative_path_check}")
+        if os.path.isfile(relative_path_check):
+            logger.info(f"Found image at relative path: {relative_path_check}")
+            return os.path.abspath(relative_path_check) # Return absolute path for consistency
+
+        # 3. Image not found
+        logger.error(f"Image not found: {image_path}. Checked absolute path and relative to CWD ({os.getcwd()}).")
         return ""
 
     def _locate_image(self, image_path: str, confidence: float = 0.9) -> tuple:
@@ -964,10 +864,6 @@ def main():
     logger.info(f"Script directory: {os.path.dirname(os.path.abspath(__file__))}")
     logger.info(f"Python executable: {sys.executable}")
     logger.info(f"Platform: {sys.platform}")
-    
-    # Ensure we have all required dependencies
-    if not ensure_dependencies():
-        return 1
     
     executor = ActionExecutor()
     

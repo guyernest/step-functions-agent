@@ -1,51 +1,46 @@
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
-
-# Virtual environments
-.venv
-
-# UV pip install outputs
-.uv/
-.pytest_cache/
-**/.uv/
-**/__pycache__/
-
-# CDK output
-cdk.out/
-**/cdk.out/
+# General
 .DS_Store
 .env
-lambda/tools/google-maps/node_modules
-lambda/tools/stock-analyzer/target
-lambda/tools/web-research/.aws-sam
-uv.lock
-.aws-sam
-lambda/tools/books-recommender/node_modules
-lambda/tools/books-recommender/package-lock.json
-lambda/tools/google-maps/package-lock.json
-lambda/tools/web-scraper/layers/chromium/nodejs
-lambda/tools/web-scraper/layers/chromium/chromium.zip
-lambda/tools/web-scraper/node_modules
-lambda/tools/web-scraper/package-lock.json
-lambda/tools/web-scraper/samconfig.toml
-docs/package-lock.json
-lambda/tools/EarthQuakeQueryTS/node_modules
-lambda/tools/EarthQuakeQueryTS/package-lock.json
-lambda/tools/SemanticSearchRust/target
-lambda/tools/SemanticSearchRust/Cargo.lock
-lambda/tools/rust-clustering/Cargo.lock
-lambda/tools/WebScraperMemory/target
-lambda/extensions/long-content/extension-x86/extensions
-lambda/extensions/long-content/extension-arm/extensions
-lambda/extensions/long-content/target
-lambda/extensions/long-content/extension-arm.zip
-lambda/extensions/long-content/extension-x86.zip
-lambda/extensions/long-content/Cargo.lock
-lambda/tools/local-agent/Cargo.lock
-lambda/tools/local-agent/.vscode
-lambda/tools/WebScraperMemory/Cargo.lock
+*.log
+
+# Python
+**/__pycache__/
+*.py[oc]
+**/build/
+**/dist/
+**/wheels/
+**/*.egg-info/
+**/.venv/
+**/.pytest_cache/
+
+# Node.js
+**/node_modules/
+**/package-lock.json
+**/yarn.lock
+**/pnpm-lock.yaml
+
+# Rust / Cargo
+**/target/
+**/Cargo.lock
+
+# AWS SAM
+**/.aws-sam/
+**/samconfig.toml
+
+# CDK
+**/cdk.out/
+
+# UV cache / lock files
+# Note: Ignoring lock files like Cargo.lock, package-lock.json, uv.lock
+# means builds may not be perfectly reproducible across environments if dependencies
+# are not pinned in manifest files (e.g., Cargo.toml, package.json).
+# This change is based on user feedback.
+**/.uv/
+**/uv.lock
+
+# VSCode
+**/.vscode/
+
+# Specific project artifacts (if not covered above)
+# Example: lambda/tools/web-scraper/layers/chromium/chromium.zip
+# Add any other specific large build artifacts or custom output directories here if needed.

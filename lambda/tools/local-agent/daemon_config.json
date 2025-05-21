@@ -1,7 +1,9 @@
 {
     "activity_arn": "<ACTIVITY_ARN>",
-    "app_path": "uv run script_executor.py",
+    "app_path": "uv run script_executor.py", // This might be removed or repurposed later
     "poll_interval_ms": 5000,
     "worker_name": "local-agent-worker",
-    "profile_name": "<PROFILE_NAME>"
+    "profile_name": "<PROFILE_NAME>",
+    "uv_executable_path": "uv",
+    "python_script_timeout_sec": 300
 }
