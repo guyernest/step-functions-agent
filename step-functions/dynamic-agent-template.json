@@ -1,0 +1,178 @@
+{
+  "Comment": "Dynamic Agent - Loads tools from registry at runtime",
+  "QueryLanguage": "JSONata",
+  "StartAt": "Load Tools from Registry", 
+  "States": {
+    "Load Tools from Registry": {
+      "Type": "Map",
+      "Items": "TOOL_NAMES_LIST",
+      "ItemProcessor": {
+        "ProcessorConfig": {
+          "Mode": "INLINE"
+        },
+        "StartAt": "Get Tool Schema",
+        "States": {
+          "Get Tool Schema": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::dynamodb:getItem",
+            "Arguments": {
+              "TableName": "TOOL_REGISTRY_TABLE_NAME",
+              "Key": {
+                "tool_name": {"S": "{% $states.input %}"}
+              }
+            },
+            "End": true,
+            "Comment": "Load tool definition from DynamoDB",
+            "Output": {
+              "name": "{% $states.result.Item.tool_name.S %}",
+              "description": "{% $states.result.Item.description.S %}",
+              "input_schema": "{% $parse($states.result.Item.input_schema.S) %}"
+            }
+          }
+        }
+      },
+      "Next": "Call LLM",
+      "Comment": "Load all tool definitions from DynamoDB registry",
+      "Output": {
+        "messages": "{% $states.input.messages %}",
+        "tools": "{% $states.result %}"
+      },
+      "Assign": {
+        "tools": "{% $states.result %}"
+      }
+    },
+    "Call LLM": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2,
+          "JitterStrategy": "FULL"
+        }
+      ],
+      "Next": "Update Token Metrics",
+      "Arguments": {
+        "Payload": {
+          "system": "You are a helpful SQL assistant with access to a SQLite database and Python code execution. Help users query and understand their data. Use the available tools to assist with data analysis and visualization.",
+          "messages": "{% $states.input.messages %}",
+          "tools": "{% $tools %}"
+        },
+        "FunctionName": "SHARED_CLAUDE_LAMBDA_ARN"
+      },
+      "Comment": "Call the shared Claude LLM function with dynamic tools",
+      "Output": {
+        "messages": "{% $states.result.Payload.body.messages %}",
+        "metadata": "{% $states.result.Payload.body.metadata %}",
+        "function_calls": "{% $states.result.Payload.body.function_calls %}"
+      },
+      "Assign": {
+        "messages": "{% $states.result.Payload.body.messages %}"
+      }
+    },
+    "Update Token Metrics": {
+      "Type": "Task",
+      "Arguments": {
+        "Namespace": "AI-Agents",
+        "MetricData": [
+          {
+            "MetricName": "InputTokens",
+            "Value": "{% $states.input.metadata.usage.input_tokens %}",
+            "Unit": "Count",
+            "Dimensions": [
+              {
+                "Name": "model",
+                "Value": "{% $states.input.metadata.model %}"
+              },
+              {
+                "Name": "state_machine_name",
+                "Value": "{% $states.context.StateMachine.Name %}"
+              }
+            ]
+          },
+          {
+            "MetricName": "OutputTokens",
+            "Value": "{% $states.input.metadata.usage.output_tokens %}",
+            "Unit": "Count",
+            "Dimensions": [
+              {
+                "Name": "model",
+                "Value": "{% $states.input.metadata.model %}"
+              },
+              {
+                "Name": "state_machine_name",
+                "Value": "{% $states.context.StateMachine.Name %}"
+              }
+            ]
+          }
+        ]
+      },
+      "Resource": "arn:aws:states:::aws-sdk:cloudwatch:putMetricData",
+      "Next": "Is done?",
+      "Output": "{% $states.input %}"
+    },
+    "Is done?": {
+      "Type": "Choice",
+      "Default": "For each tool use",
+      "Choices": [
+        {
+          "Condition": "{% $states.input.function_calls = [] or $states.input.metadata.stop_reason in [\"end_turn\", \"stop\"] %}",
+          "Next": "Prepare Output"
+        }
+      ],
+      "Comment": "Check if LLM is done or wants to use tools"
+    },
+    "Prepare Output": {
+      "Type": "Pass",
+      "End": true,
+      "Output": {
+        "messages": "{% $states.input.messages %}",
+        "output": {
+          "answer": "{% $states.input.messages[-1].**.text ? $states.input.messages[-1].**.text : $states.input.messages[-1].**.content %}"
+        }
+      },
+      "Comment": "Extract final response"
+    },
+    "For each tool use": {
+      "Type": "Map",
+      "Items": "{% $states.input.function_calls %}",
+      "ItemProcessor": {
+        "ProcessorConfig": {
+          "Mode": "INLINE"
+        },
+        "StartAt": "Which Tool to Use?",
+        "States": {
+          "Which Tool to Use?": {
+            "Type": "Choice",
+            "Choices": "DYNAMIC_ROUTING_CHOICES",
+            "Default": "No Tool to Use (ignore)",
+            "Comment": "Dynamic routing based on agent configuration"
+          },
+          "No Tool to Use (ignore)": {
+            "Type": "Pass",
+            "End": true,
+            "Output": {},
+            "Comment": "Handle unknown tools"
+          }
+        }
+      },
+      "Next": "Append Map to Messages",
+      "Output": {
+        "messages": "{% $append($states.input.messages, [ { \"role\": \"user\", \"content\": [$filter($states.result,function($v) { $v != {} })] } ] ) %}"
+      },
+      "Comment": "Execute tools in parallel and collect results"
+    },
+    "Append Map to Messages": {
+      "Type": "Pass",
+      "Next": "Call LLM",
+      "Comment": "Continue the conversation with tool results"
+    }
+  }
+}

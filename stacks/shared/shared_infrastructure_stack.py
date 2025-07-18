@@ -1,7 +1,12 @@
 from aws_cdk import (
+    Duration,
     Stack,
     CfnOutput,
+    Fn,
     aws_dynamodb as dynamodb,
+    aws_iam as iam,
+    aws_lambda as _lambda,
+    aws_lambda_python_alpha as _lambda_python,
     RemovalPolicy
 )
 from constructs import Construct
@@ -40,10 +45,6 @@ class SharedInfrastructureStack(Stack):
             table_name=table_name,
             partition_key=dynamodb.Attribute(
                 name="tool_name",
-                type=dynamodb.AttributeType.STRING
-            ),
-            sort_key=dynamodb.Attribute(
-                name="version",
                 type=dynamodb.AttributeType.STRING
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -90,6 +91,7 @@ class SharedInfrastructureStack(Stack):
                 type=dynamodb.AttributeType.STRING
             )
         )
+
 
     def _create_stack_exports(self):
         """Create CloudFormation outputs for other stacks to import"""

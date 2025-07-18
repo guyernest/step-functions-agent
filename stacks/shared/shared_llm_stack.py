@@ -53,8 +53,8 @@ class SharedLLMStack(Stack):
 
     def _create_llm_secrets(self):
         """Create centralized LLM secrets using Lambda Powertools pattern"""
-        # Load API keys from .env file if it exists
-        env_path = Path(__file__).parent.parent.parent / '.env'
+        # Load API keys from .env.llms file if it exists
+        env_path = Path(__file__).parent.parent.parent / '.env.llms'
         if env_path.exists():
             load_dotenv(env_path)
         

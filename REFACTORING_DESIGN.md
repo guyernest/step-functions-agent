@@ -8,18 +8,23 @@ This document outlines the comprehensive refactoring plan for the AWS Step Funct
 
 ✅ **Completed**:
 - Three-module architecture implemented (Tools, LLMs, Agents)
-- DynamoDB tool registry with dynamic loading
-- Shared LLM stack with centralized secrets management
+- DynamoDB tool registry with dynamic loading (removed versioning for simplicity)
+- Shared LLM stack with centralized secrets management (.env.llms pattern)
 - Dynamic SQL agent using JSON templates with JSONata
 - Fixed Lambda layer compatibility issues (boto3/botocore versions, ARM64 support)
-- API key loading from .env file in CDK deployment
+- API key loading from tool-specific .env files (e.g., .env.execute_code)
+- Map state for tool loading instead of Lambda (better observability)
+- E2B code execution tool with tool-specific secrets
+- Standardized secret paths (/ai-agent/tools/{tool-name}/{env})
+- Removal policies for Lambda functions to fix cleanup issues
+- Fixed all three tools working with proper ARN replacements
 
 🚧 **In Progress**:
 - Migration of remaining agents to dynamic loading pattern
 - Multi-language tool examples beyond Python
 
 📋 **TODO**:
-- Tool versioning and lifecycle management
+- Tool versioning and lifecycle management (deferred for later)
 - Advanced agent patterns (multi-step reasoning, tool chaining)
 - Monitoring and observability improvements
 
@@ -69,21 +74,13 @@ This document outlines the comprehensive refactoring plan for the AWS Step Funct
 #### Primary Table: ToolRegistry
 ```json
 {
-  "tool_name": "web_scraper",           // Partition Key
-  "version": "1.0.0",                  // Sort Key
+  "tool_name": "web_scraper",           // Partition Key (no version sort key)
   "description": "Scrapes web content and extracts information",
-  "input_schema": {                    // JSON Schema for validation
-    "type": "object",
-    "properties": {
-      "url": {"type": "string", "description": "URL to scrape"},
-      "selector": {"type": "string", "description": "CSS selector"}
-    },
-    "required": ["url"]
-  },
+  "input_schema": "{\"type\": \"object\", \"properties\": {\"url\": {\"type\": \"string\", \"description\": \"URL to scrape\"}, \"selector\": {\"type\": \"string\", \"description\": \"CSS selector\"}}, \"required\": [\"url\"]}",  // Stored as JSON string
   "lambda_function_name": "tool-web-scraper-prod",  // Consistent naming
   "lambda_arn": "arn:aws:lambda:us-east-1:123456789012:function:tool-web-scraper-prod",
   "language": "python",
-  "tags": ["web", "scraping", "html"],
+  "tags": "[\"web\", \"scraping\", \"html\"]",  // Stored as JSON string
   "created_at": "2024-01-01T00:00:00Z",
   "updated_at": "2024-01-01T00:00:00Z",
   "status": "active",                  // active, deprecated, disabled
@@ -163,15 +160,13 @@ class WebScraperAgentStack(Stack):
             "Parameters": {
               "TableName": "ToolRegistry",
               "Key": {
-                "tool_name": {"S.$": "$.tool_id"},
-                "version": {"S": "latest"}
+                "tool_name": {"S.$": "$.tool_id"}
               }
             },
-            "ResultSelector": {
-              "name.$": "$.Item.tool_name.S",
-              "description.$": "$.Item.description.S", 
-              "input_schema.$": "States.StringToJson($.Item.input_schema.S)",
-              "lambda_arn.$": "$.Item.lambda_arn.S"
+            "Output": {
+              "name": "{% $states.result.Item.tool_name.S %}",
+              "description": "{% $states.result.Item.description.S %}", 
+              "input_schema": "{% $parse($states.result.Item.input_schema.S) %}"
             },
             "End": true
           }
@@ -459,6 +454,52 @@ step-functions-agent/
 - **Consistent Patterns**: Standardized approaches across all components
 - **Better Testing**: Independent testing of each module
 - **Enhanced Productivity**: Focus on business logic rather than infrastructure
+
+## Key Implementation Learnings
+
+### DynamoDB Schema Considerations
+- **JSON String Storage**: Store `input_schema` and `tags` as JSON strings rather than DynamoDB Maps/Lists
+  - Simplifies parsing with JSONata: `{% $parse($states.result.Item.input_schema.S) %}`
+  - Avoids complex DynamoDB type descriptors (M, L, S)
+  - Consistent across all tools
+
+- **Removed Versioning**: Simplified to single primary key (`tool_name`)
+  - Eliminated complexity of version management
+  - Can be added later when actually needed
+  - Simplified DynamoDB queries
+
+### Step Functions Best Practices
+- **Map State for Tool Loading**: Use native DynamoDB integration instead of Lambda
+  - Better observability in Step Functions console
+  - No Lambda cold starts or costs
+  - Simpler error handling
+
+- **JSONata Query Language**: Essential for dynamic workflows
+  - Use `Arguments` instead of `Parameters` for DynamoDB operations
+  - Parse JSON strings with `$parse()` function
+  - Pass through data with proper Output configuration
+
+### Secret Management Patterns
+- **Tool-Specific .env Files**: `.env.{tool_name}` pattern
+  - Clear separation of concerns
+  - Easy local development
+  - Consistent with tool modularity
+
+- **Standardized Secret Paths**: `/ai-agent/tools/{tool-name}/{env}`
+  - Removed redundant "secrets" suffix
+  - Avoids Secrets Manager recovery period conflicts
+  - Consistent naming convention
+
+### CDK Stack Management
+- **Explicit Removal Policies**: Add `RemovalPolicy.DESTROY` to Lambda functions
+  - Prevents orphaned resources during stack deletion
+  - Essential for development iteration
+  - Apply to both Lambda functions and secrets
+
+- **CloudFormation Exports**: Use for cross-stack references
+  - More reliable than hardcoded ARN patterns
+  - Enforces deployment order
+  - Better CDK integration
 
 ## Migration Strategy
 

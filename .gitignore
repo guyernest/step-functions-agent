@@ -20,6 +20,7 @@ cdk.out/
 **/cdk.out/
 .DS_Store
 .env
+.env.*
 lambda/tools/google-maps/node_modules
 lambda/tools/stock-analyzer/target
 lambda/tools/web-research/.aws-sam

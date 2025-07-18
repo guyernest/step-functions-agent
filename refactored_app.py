@@ -15,6 +15,7 @@ import aws_cdk as cdk
 from stacks.shared.shared_llm_stack import SharedLLMStack
 from stacks.shared.shared_infrastructure_stack import SharedInfrastructureStack
 from stacks.tools.db_interface_tool_stack import DBInterfaceToolStack
+from stacks.tools.e2b_tool_stack import E2BToolStack
 from stacks.agents.dynamic_sql_agent_stack import DynamicSQLAgentStack
 
 
@@ -67,6 +68,15 @@ def main():
         description=f"DB interface tool for {environment} environment"
     )
     
+    # E2B Tool - provides Python code execution capabilities
+    e2b_tool = E2BToolStack(
+        app,
+        f"E2BToolStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"E2B code execution tool for {environment} environment"
+    )
+    
     # Deploy agent stacks that reference shared resources
     # These are lightweight and focus only on Step Functions workflows
     
@@ -89,7 +99,7 @@ def main():
         "Architecture": "Refactored"
     }
     
-    for stack in [shared_infrastructure_stack, shared_llm_stack, db_interface_tool, dynamic_sql_agent]:
+    for stack in [shared_infrastructure_stack, shared_llm_stack, db_interface_tool, e2b_tool, dynamic_sql_agent]:
         for key, value in tags.items():
             cdk.Tags.of(stack).add(key, value)
     

@@ -2,7 +2,9 @@ from aws_cdk import (
     Duration,
     Stack,
     Fn,
+    CfnOutput,
     CustomResource,
+    RemovalPolicy,
     aws_iam as iam,
     aws_lambda as _lambda,
     aws_lambda_python_alpha as _lambda_python,
@@ -38,6 +40,9 @@ class DBInterfaceToolStack(Stack):
         
         # Register tools in DynamoDB registry
         self._register_tools_in_registry()
+        
+        # Create stack exports
+        self._create_stack_exports()
 
     def _import_shared_resources(self):
         """Import shared resources from other stacks"""
@@ -104,6 +109,9 @@ class DBInterfaceToolStack(Stack):
                 "POWERTOOLS_LOG_LEVEL": "INFO"
             }
         )
+        
+        # Apply removal policy to help with stack destruction
+        self.db_interface_lambda.apply_removal_policy(RemovalPolicy.DESTROY)
 
     def _register_tools_in_registry(self):
         """Register both SQL tools in the DynamoDB registry"""
@@ -112,7 +120,6 @@ class DBInterfaceToolStack(Stack):
         tools_specs = [
             {
                 "tool_name": "get_db_schema",
-                "version": "latest",
                 "description": "Describe the schema of the SQLite database, including table names, and column names and types.",
                 "input_schema": {
                     "type": "object",
@@ -130,7 +137,6 @@ class DBInterfaceToolStack(Stack):
             },
             {
                 "tool_name": "execute_sql_query", 
-                "version": "latest",
                 "description": "Return the query results of any valid sqlite SQL query. If the SQL query result has many rows then return only the first 5 rows.",
                 "input_schema": {
                     "type": "object",
@@ -225,10 +231,21 @@ class DBInterfaceToolStack(Stack):
                 parameters={
                     "TableName": self.tool_registry_table_name,
                     "Key": {
-                        "tool_name": {"S": tool_spec["tool_name"]},
-                        "version": {"S": tool_spec["version"]}
+                        "tool_name": {"S": tool_spec["tool_name"]}
                     }
                 }
             ),
             role=custom_resource_role
+        )
+
+    def _create_stack_exports(self):
+        """Create CloudFormation outputs for other stacks to import"""
+        
+        # Export DB interface Lambda function ARN
+        CfnOutput(
+            self, 
+            "DBInterfaceLambdaArn",
+            value=self.db_interface_lambda.function_arn,
+            export_name=f"DBInterfaceLambdaArn-{self.env_name}",
+            description="ARN of the DB interface Lambda function"
         )
