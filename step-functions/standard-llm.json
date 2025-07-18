@@ -1,0 +1,292 @@
+{
+    "Comment": "AI Agent Implementation",
+    "QueryLanguage": "JSONata",
+    "StartAt": "Call LLM",
+    "States": {
+      "Call LLM": {
+        "Type": "Task",
+        "Resource": "arn:aws:states:::lambda:invoke",
+        "Retry": [
+          {
+            "ErrorEquals": [
+              "Lambda.ServiceException",
+              "Lambda.AWSLambdaException",
+              "Lambda.SdkClientException",
+              "Lambda.TooManyRequestsException"
+            ],
+            "IntervalSeconds": 1,
+            "MaxAttempts": 3,
+            "BackoffRate": 2,
+            "JitterStrategy": "FULL"
+          }
+        ],
+        "Next": "Is done?",
+        "Arguments": {
+          "Payload": {
+            "system": "\n        You are an expert business analyst with deep knowledge of SQL and visualization code in Python. \n        Your job is to help users understand and analyze their internal baseball data. \n        You have access to a set of tools, but only use them when needed.\n        Please don't assume to know the schema of the database, and use the get_db_schema tool to learn table and column names and types before using it.\n        Please prefer to use the print_output tool to format the reply, instead of ending the turn. \n        You also have access to a tool that allows execution of python code. \n        Use it to generate the visualizations in your analysis. \n        - the python code runs in jupyter notebook. \n        - every time you call `execute_python` tool, the python code is executed in a separate cell. \n        it's okay to multiple calls to `execute_python`. \n        - display visualizations using matplotlib directly in the notebook. don't worry about saving the visualizations to a file. \n        - you can run any python code you want, everything is running in a secure sandbox environment.\n        ",
+            "messages": "{% $states.input.messages %}",
+            "tools": [
+              {
+                "name": "get_db_schema",
+                "description": "Describe the schema of the SQLite database, including table names, and column names and types.",
+                "input_schema": {
+                  "type": "object",
+                  "properties": {}
+                }
+              },
+              {
+                "name": "execute_sql_query",
+                "description": "Return the query results of the given SQL query to the SQLite database.",
+                "input_schema": {
+                  "type": "object",
+                  "properties": {
+                    "sql_query": {
+                      "type": "string",
+                      "description": "The sql query to execute against the SQLite database."
+                    }
+                  },
+                  "required": [
+                    "sql_query"
+                  ]
+                }
+              },
+              {
+                "name": "execute_python",
+                "description": "Execute python code in a Jupyter notebook cell and return the URL of the image that was created.",
+                "input_schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "The python code to execute in a single cell."
+                    }
+                  },
+                  "required": [
+                    "code"
+                  ]
+                }
+              },
+              {
+                "name": "print_output",
+                "description": "Print the output of the previous steps",
+                "input_schema": {
+                  "type": "object",
+                  "properties": {
+                    "answer": {
+                      "type": "string",
+                      "description": "The answer to the question"
+                    },
+                    "chart": {
+                      "type": "string",
+                      "description": "The URL of the chart"
+                    }
+                  },
+                  "required": [
+                    "answer",
+                    "chart"
+                  ]
+                }
+              }
+            ],
+            "model": "claude-3-5-sonnet-20241022"
+          },
+          "FunctionName": "arn:aws:lambda:us-west-2:672915487120:function:CallGeminiLLM"
+        },
+        "Comment": "The main call to the LLM. Returns the list of messages with the current call at the end, and metadata of the last call.",
+        "Output": {
+          "messages": "{% $states.result.Payload.body.messages%}",
+          "metadata": "{% $states.result.Payload.body.metadata%}",
+          "function_calls": "{% $states.result.Payload.body.function_calls%}"
+        },
+        "Assign": {
+          "messages": "{% $states.result.Payload.body.messages%}",
+          "provider": "anthropic"
+        }
+      },
+      "Is done?": {
+        "Type": "Choice",
+        "Default": "For each tool use",
+        "Choices": [
+          {
+            "Condition": "{%  $states.input.function_calls = [] or $states.input.metadata.stop_reason in [\"end_turn\", \"stop\"] %}",
+            "Next": "Prepare Output"
+          },
+          {
+            "Condition": "{% $states.input.messages[-1].**.name = \"print_output\" %}",
+            "Next": "Print Output"
+          }
+        ],
+        "Comment": "Checks if the 'stop_reason' from the LLM was a request for a 'tool_use' (except for print_output), and if so, route it to the tools path, otherwise reply to the user."
+      },
+      "Prepare Output": {
+        "Type": "Pass",
+        "End": true,
+        "Output": {
+          "messages": "{% $states.input.messages %}",
+          "output": {
+            "answer": "{% $states.input.messages[-1].content[0].text %}"
+          }
+        },
+        "Comment": "Extracts the relevant information from the flow, including all the message flow, the textual answer from the last message, and the chart that was generated during the flow."
+      },
+      "For each tool use": {
+        "Type": "Map",
+        "Items": "{% $states.input.function_calls %}",
+        "ItemProcessor": {
+          "ProcessorConfig": {
+            "Mode": "INLINE"
+          },
+          "StartAt": "Which Tool to Use?",
+          "States": {
+            "Which Tool to Use?": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Condition": "{% $states.input.**.name = \"get_db_schema\" %}",
+                  "Next": "Execute get_db_schema"
+                },
+                {
+                  "Condition": "{% $states.input.**.name = \"execute_sql_query\" %}",
+                  "Next": "Approve execute_sql_query"
+                },
+                {
+                  "Condition": "{% $states.input.**.name = \"execute_python\" %}",
+                  "Next": "Execute execute_python"
+                }
+              ],
+              "Default": "No Tool to Use (ignore)",
+              "Comment": "Check if the request is for 'tool_use' and then to which of the available tools to send it."
+            },
+            "No Tool to Use (ignore)": {
+              "Type": "Pass",
+              "End": true,
+              "Output": {},
+              "Comment": "This path handles the text replies of the LLM that decribe its thinking and don't require any tool to use."
+            },
+            "Execute get_db_schema": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Arguments": {
+                "FunctionName": "arn:aws:lambda:us-west-2:672915487120:function:DBInterface",
+                "Payload": {
+                  "name": "{% $states.input.**.name %}",
+                  "id": "{% $states.input.id %}",
+                  "input": "{% $provider = \"anthropic\" ? $states.input.input : $parse($states.input.function.arguments) %}"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException",
+                    "Lambda.TooManyRequestsException"
+                  ],
+                  "IntervalSeconds": 1,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2,
+                  "JitterStrategy": "FULL"
+                }
+              ],
+              "End": true,
+              "Comment": "Call the tool (Lambda function) get_db_schema.",
+              "Output": "{% \n  $provider = \"anthropic\" ? $states.result.Payload :  {\n    \"tool_call_id\": $states.result.Payload.tool_use_id,\n    \"role\": \"tool\",\n    \"content\": $states.result.Payload.content \n} %}"
+            },
+            "Approve execute_sql_query": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:us-west-2:672915487120:activity:HumanApprovalActivityForSQLQueryExecution",
+              "Next": "Process Approval execute_sql_query"
+            },
+            "Process Approval execute_sql_query": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Condition": "{% $states.input.approved  %}",
+                  "Next": "Execute execute_sql_query"
+                }
+              ],
+              "Default": "Handle Rejection execute_sql_query"
+            },
+            "Handle Rejection execute_sql_query": {
+              "Type": "Pass",
+              "End": true,
+              "Comment": "The tool usage was rejected by the user."
+            },
+            "Execute execute_sql_query": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Arguments": {
+                "FunctionName": "arn:aws:lambda:us-west-2:672915487120:function:DBInterface",
+                "Payload": {
+                  "name": "{% $states.input.**.name %}",
+                  "id": "{% $states.input.id %}",
+                  "input": "{% $states.input.input %}"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException",
+                    "Lambda.TooManyRequestsException"
+                  ],
+                  "IntervalSeconds": 1,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2,
+                  "JitterStrategy": "FULL"
+                }
+              ],
+              "End": true,
+              "Comment": "Call the tool (Lambda function) execute_sql_query.",
+              "Output": "{% \n  $provider = \"anthropic\" ? $states.result.Payload :  {\n    \"tool_call_id\": $states.result.Payload.tool_use_id,\n    \"role\": \"tool\",\n    \"content\": $states.result.Payload.content \n} %}"
+            },
+            "Execute execute_python": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Arguments": {
+                "FunctionName": "arn:aws:lambda:us-west-2:672915487120:function:CodeInterpreter",
+                "Payload": {
+                  "name": "{% $states.input.**.name %}",
+                  "id": "{% $states.input.id %}",
+                  "input": "{% $provider = \"anthropic\" ? $states.input.input : $parse($states.input.function.arguments) %}"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException",
+                    "Lambda.TooManyRequestsException"
+                  ],
+                  "IntervalSeconds": 1,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2,
+                  "JitterStrategy": "FULL"
+                }
+              ],
+              "End": true,
+              "Comment": "Call the tool (Lambda function) execute_python.",
+              "Output": "{% \n  $provider = \"anthropic\" ? $states.result.Payload :  {\n    \"tool_call_id\": $states.result.Payload.tool_use_id,\n    \"role\": \"tool\",\n    \"content\": $states.result.Payload.content \n} %}"
+            }
+          }
+        },
+        "Next": "Append Map to Messages",
+        "Output": {
+          "messages": "{% $provider = \"anthropic\" ? $append($states.input.messages, [ {  \"role\": \"user\",    \"content\": [$filter($states.result,function($v) { $v != {} })] } ] ) : $append($states.input.messages, [$filter($states.result,function($v) { $v != {} })]) %}"
+        },
+        "Comment": "The reply of the LLM can include one or more 'tool_use' request, and we can apply them in parallel."
+      },
+      "Append Map to Messages": {
+        "Type": "Pass",
+        "Next": "Call LLM",
+        "Comment": "Gather the replies of the different tools and call the LLM to continue the agent flow."
+      },
+      "Print Output": {
+        "Type": "Pass",
+        "End": true,
+        "Output": "{% \n(\n  $printMessage := $states.input.function_calls[**.name = \"print_output\"];\n  $printOutput :=  $printMessage.input;\n  \n  $newMessage := $printOutput.{\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"tool_result\",\n          \"tool_use_id\": $printMessage.id,\n          \"content\":  $map($keys($), function($key) { $string($[$key]) })\n        }\n      ]\n  };\n\n  {      \n    \"messages\": $append($messages, $newMessage),\n    \"output\": $printOutput \n  }\n)\n %}"
+      }
+    }
+  }

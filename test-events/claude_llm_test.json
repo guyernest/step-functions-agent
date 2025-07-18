@@ -1,0 +1,33 @@
+{
+  "system": "You are an expert business analyst with deep knowledge of SQL. Your job is to help users understand and analyze their database. You have access to a set of tools, but only use them when needed. Please don't assume to know the schema of the database, and use the get_db_schema tool to learn table and column names and types before using it.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What tables are in the database?"
+    }
+  ],
+  "tools": [
+    {
+      "name": "get_db_schema",
+      "description": "Describe the schema of the SQLite database, including table names, and column names and types.",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "execute_sql_query",
+      "description": "Return the query results of any valid sqlite SQL query. If the SQL query result has many rows then return only the first 5 rows.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "sql_query": {
+            "type": "string",
+            "description": "The sql query to execute. If the SQL query result has many rows then return only the first 5 rows."
+          }
+        },
+        "required": ["sql_query"]
+      }
+    }
+  ]
+}

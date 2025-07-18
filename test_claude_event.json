@@ -1,0 +1,10 @@
+{
+  "system": "You are a helpful AI assistant with a set of tools to answer user questions. Please call the tools in parallel to reduce latency.",
+  "messages": [
+    {
+      "role": "user", 
+      "content": "What is 2 + 3?"
+    }
+  ],
+  "tools": []
+}

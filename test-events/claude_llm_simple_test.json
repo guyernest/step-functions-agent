@@ -1,0 +1,10 @@
+{
+  "system": "You are a helpful assistant.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What is 2 + 2?"
+    }
+  ],
+  "tools": []
+}

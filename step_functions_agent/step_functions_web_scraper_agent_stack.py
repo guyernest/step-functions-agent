@@ -1,8 +1,11 @@
 from aws_cdk import (
     Duration,
     Stack,
+    aws_dynamodb as dynamodb,
+    aws_logs as logs,
     aws_iam as iam,
     aws_lambda as _lambda,
+    aws_lambda_python_alpha as _lambda_python,
     aws_lambda_nodejs as nodejs_lambda,
     BundlingOptions,
     DockerImage
@@ -15,18 +18,104 @@ class WebScraperAgentStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        ####### Call LLM Lambda   ######
-
-        # Since we already have the previous agent, we can reuse the same function
-
-        # TODO - Get the function name from the previous agent
-        call_llm_function_name = "CallClaudeLLM"
-
-        # Define the Lambda function
-        call_llm_lambda_function = _lambda.Function.from_function_name(
+        ## Create the DynamoDB table for the long content extension
+        dynamodb_long_content_table = dynamodb.Table(
             self, 
-            "CallLLM", 
-            call_llm_function_name
+            "LongContentDynamoDBTable",
+            table_name=f"LongContentDynamoDBTable-{self.account}-{self.region}",
+            partition_key=dynamodb.Attribute(
+                name="id", 
+                type=dynamodb.AttributeType.STRING
+            ),
+            # Adding TTL for the records to be deleted after 1 hour
+            time_to_live_attribute="ttl",
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST
+        )
+
+        ## Call LLM Lambda with long content extension  ######
+
+        ### Create Log Group to be used by the lambdas and step functions
+        log_group = logs.LogGroup(
+            self, 
+            "WebScraperAgentLogGroup", 
+            retention=logs.RetentionDays.ONE_WEEK
+        )
+
+        # The default execution role for the lambda
+        call_llm_lambda_role = iam.Role(
+            self,
+            "CallLLMLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AWSLambdaBasicExecutionRole"
+                ),
+            ],
+        )
+
+        # Grant the lambda access to the secrets with the API keys for the LLM
+        call_llm_lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "ssm:GetParameter",
+                    "secretsmanager:GetSecretValue"
+                ],
+                resources=[
+                    f"arn:aws:ssm:{self.region}:{self.account}:parameter/ai-agent/*",
+                    f"arn:aws:secretsmanager:{self.region}:{self.account}:secret:/ai-agent/api-keys*"
+                ]
+            )
+        )
+
+        dynamodb_long_content_table.grant_read_write_data(call_llm_lambda_role)
+
+        call_llm_function_name = "CallClaudeLLMwithExtension"
+
+        llm_layer = _lambda_python.PythonLayerVersion(
+            self, "LLMLayer",
+            entry="lambda/call_llm/lambda_layer/python",
+            compatible_runtimes=[_lambda.Runtime.PYTHON_3_12],
+            compatible_architectures=[_lambda.Architecture.ARM_64],
+            description="A layer for the LLM Lambda functions",
+        )
+
+        ### Get the extension layer from its name (we will create it here later)
+        # TODO: Create the extension layer in the CDK stacks
+
+        extension_layer_arm_version = 17
+
+        extension_layer_arm = _lambda.LayerVersion.from_layer_version_arn(
+            self,
+            "ExtensionLayerArm",
+            layer_version_arn=f"arn:aws:lambda:{self.region}:{self.account}:layer:lambda-runtime-api-proxy-arm-dev:{extension_layer_arm_version}"
+        )
+
+        ### Define the Lambda function
+        call_llm_lambda_function = _lambda_python.PythonFunction(
+            self, 
+            "CallLLMLambdaClaude",
+            # Name of the Lambda function that will be used by the agents to find the function.
+            function_name=call_llm_function_name,
+            description="Lambda function to Call LLM (Anthropic) with messages history, tools, and long content extension.",
+            entry="lambda/call_llm/functions/anthropic_llm",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            timeout=Duration.seconds(90),
+            memory_size=256,
+            index="claude_lambda.py",
+            handler="lambda_handler",
+            layers=[
+                llm_layer,
+                extension_layer_arm
+            ],
+            environment={
+                "AGENT_CONTEXT_TABLE": dynamodb_long_content_table.table_name,
+                "AWS_LAMBDA_EXEC_WRAPPER": "/opt/extensions/lrap-wrapper/wrapper",
+            },
+            architecture=_lambda.Architecture.ARM_64,
+            log_group=log_group,
+            role=call_llm_lambda_role,
+            tracing= _lambda.Tracing.ACTIVE,
         )
 
         ### Tools Lambda Functions
@@ -78,6 +167,15 @@ class WebScraperAgentStack(Stack):
             ],
         )
 
+        dynamodb_long_content_table.grant_read_write_data(web_scraper_lambda_role)
+
+        extension_layer_x86_version = 8
+        extension_layer_x86 = _lambda.LayerVersion.from_layer_version_arn(
+            self,
+            "ExtensionLayerX86",
+            layer_version_arn=f"arn:aws:lambda:{self.region}:{self.account}:layer:lambda-runtime-api-proxy-x86-dev:{extension_layer_x86_version}"
+        )
+
         ## Web Scraper Tools in Typescript
         # TypeScript Lambda
         web_scraper_lambda = nodejs_lambda.NodejsFunction(
@@ -89,7 +187,14 @@ class WebScraperAgentStack(Stack):
             code=_lambda.Code.from_asset("lambda/tools/web-scraper/dist"),
             # entry="lambda/tools/web-scraper/src/index.ts", 
             handler="index.handler",  # Name of the exported function
-            layers=[chromium_layer],
+            layers=[
+                chromium_layer,
+                extension_layer_x86
+            ],
+            environment={
+                "AGENT_CONTEXT_TABLE": dynamodb_long_content_table.table_name,
+                "AWS_LAMBDA_EXEC_WRAPPER": "/opt/extensions/lrap-wrapper/wrapper",
+            },
             runtime=_lambda.Runtime.NODEJS_18_X,
             memory_size=512,            
             # Optional: Bundle settings
@@ -97,6 +202,7 @@ class WebScraperAgentStack(Stack):
                 minify=True,
                 source_map=True,
             ),
+            log_group=log_group,
             role=web_scraper_lambda_role,
             tracing=_lambda.Tracing.ACTIVE,
         )
@@ -290,3 +396,5 @@ class WebScraperAgentStack(Stack):
         self.agent_flows = [
             web_scraper_agent_flow.state_machine_name,
         ]
+
+        self.log_group_name = log_group.log_group_name

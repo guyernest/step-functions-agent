@@ -1,0 +1,197 @@
+{
+  "Comment": "Refactored SQL Agent - Uses Shared LLM Stack",
+  "QueryLanguage": "JSONata",
+  "StartAt": "Call LLM",
+  "States": {
+    "Call LLM": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2,
+          "JitterStrategy": "FULL"
+        }
+      ],
+      "Next": "Update Token Metrics",
+      "Arguments": {
+        "Payload": {
+          "system": "You are a helpful SQL assistant with access to a SQLite database. Help users query and understand their data. Please don't assume to know the schema of the database, and use the get_db_schema tool to learn table and column names and types before using it.",
+          "messages": "{% $states.input.messages %}",
+          "tools": [
+            {
+              "name": "get_db_schema",
+              "description": "Describe the schema of the SQLite database, including table names, and column names and types.",
+              "input_schema": {
+                "type": "object",
+                "properties": {}
+              }
+            },
+            {
+              "name": "execute_sql_query",
+              "description": "Return the query results of any valid sqlite SQL query. If the SQL query result has many rows then return only the first 5 rows.",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "sql_query": {
+                    "type": "string",
+                    "description": "The sql query to execute. If the SQL query result has many rows then return only the first 5 rows."
+                  }
+                },
+                "required": ["sql_query"]
+              }
+            }
+          ]
+        },
+        "FunctionName": "SHARED_CLAUDE_LAMBDA_ARN"
+      },
+      "Comment": "Call the shared Claude LLM function",
+      "Output": {
+        "messages": "{% $states.result.Payload.body.messages%}",
+        "metadata": "{% $states.result.Payload.body.metadata%}",
+        "function_calls": "{% $states.result.Payload.body.function_calls%}"
+      },
+      "Assign": {
+        "messages": "{% $states.result.Payload.body.messages%}"
+      }
+    },
+    "Update Token Metrics": {
+      "Type": "Task",
+      "Arguments": {
+        "Namespace": "AI-Agents",
+        "MetricData": [
+          {
+            "MetricName": "InputTokens",
+            "Value": "{% $states.input.metadata.usage.input_tokens %}",
+            "Unit": "Count",
+            "Dimensions": [
+              {
+                "Name": "model",
+                "Value": "{% $states.input.metadata.model %}"
+              },
+              {
+                "Name": "state_machine_name",
+                "Value": "{% $states.context.StateMachine.Name %}"
+              }
+            ]
+          },
+          {
+            "MetricName": "OutputTokens",
+            "Value": "{% $states.input.metadata.usage.output_tokens %}",
+            "Unit": "Count",
+            "Dimensions": [
+              {
+                "Name": "model",
+                "Value": "{% $states.input.metadata.model %}"
+              },
+              {
+                "Name": "state_machine_name",
+                "Value": "{% $states.context.StateMachine.Name %}"
+              }
+            ]
+          }
+        ]
+      },
+      "Resource": "arn:aws:states:::aws-sdk:cloudwatch:putMetricData",
+      "Next": "Is done?",
+      "Output": "{%  $states.input  %}"
+    },
+    "Is done?": {
+      "Type": "Choice",
+      "Default": "For each tool use",
+      "Choices": [
+        {
+          "Condition": "{%  $states.input.function_calls = [] or $states.input.metadata.stop_reason in [\"end_turn\", \"stop\"] %}",
+          "Next": "Prepare Output"
+        }
+      ],
+      "Comment": "Check if LLM is done or wants to use tools"
+    },
+    "Prepare Output": {
+      "Type": "Pass",
+      "End": true,
+      "Output": {
+        "messages": "{% $states.input.messages %}",
+        "output": {
+          "answer": "{% $states.input.messages[-1].**.text ? $states.input.messages[-1].**.text : $states.input.messages[-1].**.content %}"
+        }
+      },
+      "Comment": "Extract final response"
+    },
+    "For each tool use": {
+      "Type": "Map",
+      "Items": "{% $states.input.function_calls %}",
+      "ItemProcessor": {
+        "ProcessorConfig": {
+          "Mode": "INLINE"
+        },
+        "StartAt": "Which Tool to Use?",
+        "States": {
+          "Which Tool to Use?": {
+            "Type": "Choice",
+            "Choices": [
+              {
+                "Next": "Execute DB Tool",
+                "Condition": "{% ($states.input.name = \"get_db_schema\") or ($states.input.name = \"execute_sql_query\") %}"
+              }
+            ],
+            "Default": "No Tool to Use (ignore)",
+            "Comment": "Route to DB interface tool for both SQL functions"
+          },
+          "Execute DB Tool": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Arguments": {
+              "FunctionName": "DB_INTERFACE_LAMBDA_ARN",
+              "Payload": {
+                "name": "{% $states.input.**.name %}",
+                "id": "{% $states.input.id %}",
+                "input": "{% $states.input.input %}"
+              }
+            },
+            "Retry": [
+              {
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException",
+                  "Lambda.TooManyRequestsException"
+                ],
+                "IntervalSeconds": 1,
+                "MaxAttempts": 3,
+                "BackoffRate": 2,
+                "JitterStrategy": "FULL"
+              }
+            ],
+            "End": true,
+            "Comment": "Execute SQL tool using shared DB interface",
+            "Output": "{%  $states.result.Payload  %}"
+          },
+          "No Tool to Use (ignore)": {
+            "Type": "Pass",
+            "End": true,
+            "Output": {},
+            "Comment": "Handle unknown tools"
+          }
+        }
+      },
+      "Next": "Append Map to Messages",
+      "Output": {
+        "messages": "{% $append($states.input.messages, [ {  \"role\": \"user\",    \"content\": [$filter($states.result,function($v) { $v != {} })] } ] ) %}"
+      },
+      "Comment": "Execute tools in parallel and collect results"
+    },
+    "Append Map to Messages": {
+      "Type": "Pass",
+      "Next": "Call LLM",
+      "Comment": "Continue the conversation with tool results"
+    }
+  }
+}

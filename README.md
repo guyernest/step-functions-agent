@@ -28,6 +28,7 @@
 - [Pre-requisites](#pre-requisites)
 - [uv Set up](#uv-set-up)
 - [Deploying the AI Agent Step Function using CDK](#deploying-the-ai-agent-step-function-using-cdk)
+- [Refactored Architecture (New)](#refactored-architecture-new)
   - [Other CDK commands](#other-cdk-commands)
 - [Monitoring](#monitoring)
 
@@ -654,6 +655,56 @@ cdk synth FinancialAgentStack
 cdk diff SQLAgentStack
 cdk diff FinancialAgentStack
 ```
+
+## Refactored Architecture (New)
+
+The framework has been refactored into a three-module architecture for better modularity and reusability:
+
+### 1. Tools Module
+- Independent Lambda functions for business logic
+- Multi-language support (Python, TypeScript, Rust, Java, Go)
+- DynamoDB-based tool registry for dynamic discovery
+- Deploy with: `cdk deploy DBInterfaceToolStack-prod`
+
+### 2. Shared LLMs Module
+- Centralized LLM provider integrations (OpenAI, Anthropic, Gemini)
+- Single deployment, shared across all agents
+- Automatic API key loading from `.env` file
+- Deploy with: `cdk deploy SharedLLMStack-prod`
+
+### 3. Agents Module
+- Lightweight Step Functions orchestrations
+- Dynamic tool loading from DynamoDB registry
+- JSON templates with JSONata for flexibility
+- Deploy with: `cdk deploy DynamicSQLAgentStack-prod`
+
+### Quick Start (Refactored Architecture)
+
+1. **Set up environment**:
+   ```bash
+   # Create .env file with your API keys
+   echo "ANTHROPIC_API_KEY=your-key-here" >> .env
+   echo "OPENAI_API_KEY=your-key-here" >> .env
+   
+   # Activate virtual environment
+   source cpython-3.12.3-macos-aarch64-none/bin/activate
+   ```
+
+2. **Deploy in order**:
+   ```bash
+   # Deploy shared LLM stack first
+   cdk deploy SharedLLMStack-prod --app "python refactored_app.py"
+   
+   # Deploy tool stacks
+   cdk deploy DBInterfaceToolStack-prod --app "python refactored_app.py"
+   
+   # Deploy agent stacks
+   cdk deploy DynamicSQLAgentStack-prod --app "python refactored_app.py"
+   ```
+
+### Troubleshooting
+
+See [Lambda Layer Troubleshooting Guide](docs/LAMBDA_LAYER_TROUBLESHOOTING.md) for common issues and solutions.
 
 ## Monitoring
 

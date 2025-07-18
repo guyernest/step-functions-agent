@@ -1,0 +1,11 @@
+{
+  "model": "claude-3-haiku-20240307",
+  "system": "You are a helpful assistant. Answer the user's question directly and concisely.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What is 3 + 3?"
+    }
+  ],
+  "tools": []
+}

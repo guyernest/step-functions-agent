@@ -1,0 +1,7 @@
+{
+  "name": "execute_sql_query",
+  "id": "test-002", 
+  "input": {
+    "sql_query": "SELECT name FROM sqlite_master WHERE type='table' LIMIT 3;"
+  }
+}

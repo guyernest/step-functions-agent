@@ -49,3 +49,4 @@ lambda/extensions/long-content/Cargo.lock
 lambda/tools/local-agent/Cargo.lock
 lambda/tools/local-agent/.vscode
 lambda/tools/WebScraperMemory/Cargo.lock
+.qodo

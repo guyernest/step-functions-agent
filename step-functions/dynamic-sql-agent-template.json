@@ -1,0 +1,248 @@
+{
+  "Comment": "Dynamic SQL Agent - Loads tools from DynamoDB registry",
+  "QueryLanguage": "JSONata",
+  "StartAt": "For Each Tool",
+  "States": {
+    "For Each Tool": {
+      "Type": "Map",
+      "ItemProcessor": {
+        "ProcessorConfig": {
+          "Mode": "INLINE"
+        },
+        "StartAt": "Load Tool Input Schema",
+        "States": {
+          "Load Tool Input Schema": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::dynamodb:getItem",
+            "Arguments": {
+              "TableName": "TOOL_REGISTRY_TABLE_NAME",
+              "Key": {
+                "tool_name": {
+                  "S": "{% $states.input %}"
+                },
+                "version": {
+                  "S": "latest"
+                }
+              }
+            },
+            "End": true,
+            "Output": {
+              "name": "{% $states.result.Item.tool_name.S %}",
+              "description": "{% $states.result.Item.description.S %}",
+              "input_schema": "{% $parse($states.result.Item.input_schema.S) %}"
+            },
+            "Comment": "Loading the details of the tool from the tool registry"
+          }
+        }
+      },
+      "Next": "Call LLM",
+      "Assign": {
+        "tools": "{% $states.result %}"
+      },
+      "Items": "AGENT_TOOL_LIST",
+      "Output": {
+        "messages": "{% $states.input.messages %}"
+      }
+    },
+    "Call LLM": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2,
+          "JitterStrategy": "FULL"
+        }
+      ],
+      "Next": "Update Token Metrics",
+      "Arguments": {
+        "Payload": {
+          "system": "You are an expert business analyst with deep knowledge of SQL. Your job is to help users understand and analyze their database. You have access to a set of tools, but only use them when needed. Please don't assume to know the schema of the database, and use the get_db_schema tool to learn table and column names and types before using it.",
+          "messages": "{% $states.input.messages %}",
+          "tools": "{% $tools %}"
+        },
+        "FunctionName": "SHARED_CLAUDE_LAMBDA_ARN"
+      },
+      "Comment": "Call the shared Claude LLM function with dynamically loaded tools",
+      "Output": {
+        "messages": "{% $states.result.Payload.body.messages%}",
+        "metadata": "{% $states.result.Payload.body.metadata%}",
+        "function_calls": "{% $states.result.Payload.body.function_calls%}"
+      },
+      "Assign": {
+        "messages": "{% $states.result.Payload.body.messages%}"
+      }
+    },
+    "Update Token Metrics": {
+      "Type": "Task",
+      "Arguments": {
+        "Namespace": "AI-Agents",
+        "MetricData": [
+          {
+            "MetricName": "InputTokens",
+            "Value": "{% $states.input.metadata.usage.input_tokens %}",
+            "Unit": "Count",
+            "Dimensions": [
+              {
+                "Name": "model",
+                "Value": "{% $states.input.metadata.model %}"
+              },
+              {
+                "Name": "state_machine_name",
+                "Value": "{% $states.context.StateMachine.Name %}"
+              }
+            ]
+          },
+          {
+            "MetricName": "OutputTokens",
+            "Value": "{% $states.input.metadata.usage.output_tokens %}",
+            "Unit": "Count",
+            "Dimensions": [
+              {
+                "Name": "model",
+                "Value": "{% $states.input.metadata.model %}"
+              },
+              {
+                "Name": "state_machine_name",
+                "Value": "{% $states.context.StateMachine.Name %}"
+              }
+            ]
+          }
+        ]
+      },
+      "Resource": "arn:aws:states:::aws-sdk:cloudwatch:putMetricData",
+      "Next": "Is done?",
+      "Output": "{%  $states.input  %}"
+    },
+    "Is done?": {
+      "Type": "Choice",
+      "Default": "For each tool use",
+      "Choices": [
+        {
+          "Condition": "{%  $states.input.function_calls = [] or $states.input.metadata.stop_reason in [\"end_turn\", \"stop\"] %}",
+          "Next": "Prepare Output"
+        }
+      ],
+      "Comment": "Check if LLM is done or wants to use tools"
+    },
+    "Prepare Output": {
+      "Type": "Pass",
+      "End": true,
+      "Output": {
+        "messages": "{% $states.input.messages %}",
+        "output": {
+          "answer": "{% $states.input.messages[-1].**.text ? $states.input.messages[-1].**.text : $states.input.messages[-1].**.content %}"
+        }
+      },
+      "Comment": "Extract final response"
+    },
+    "For each tool use": {
+      "Type": "Map",
+      "Items": "{% $states.input.function_calls %}",
+      "ItemProcessor": {
+        "ProcessorConfig": {
+          "Mode": "INLINE"
+        },
+        "StartAt": "Which Tool to Use?",
+        "States": {
+          "Which Tool to Use?": {
+            "Type": "Choice",
+            "Choices": [
+              {
+                "Condition": "{% ($states.input.name = \"get_db_schema\") %}",
+                "Next": "Execute get_db_schema"
+              },
+              {
+                "Condition": "{% ($states.input.name = \"execute_sql_query\") %}",
+                "Next": "Execute execute_sql_query"
+              }
+            ],
+            "Default": "No Tool to Use (ignore)",
+            "Comment": "Route to the appropriate SQL tool"
+          },
+          "No Tool to Use (ignore)": {
+            "Type": "Pass",
+            "End": true,
+            "Output": {},
+            "Comment": "Handle unknown tools"
+          },
+          "Execute get_db_schema": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Arguments": {
+              "FunctionName": "DB_INTERFACE_LAMBDA_ARN",
+              "Payload": {
+                "name": "{% $states.input.**.name %}",
+                "id": "{% $states.input.id %}",
+                "input": "{% $states.input.input %}"
+              }
+            },
+            "Retry": [
+              {
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException",
+                  "Lambda.TooManyRequestsException"
+                ],
+                "IntervalSeconds": 1,
+                "MaxAttempts": 3,
+                "BackoffRate": 2,
+                "JitterStrategy": "FULL"
+              }
+            ],
+            "End": true,
+            "Comment": "Execute get_db_schema using db-interface Lambda",
+            "Output": "{%  $states.result.Payload  %}"
+          },
+          "Execute execute_sql_query": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Arguments": {
+              "FunctionName": "DB_INTERFACE_LAMBDA_ARN",
+              "Payload": {
+                "name": "{% $states.input.**.name %}",
+                "id": "{% $states.input.id %}",
+                "input": "{% $states.input.input %}"
+              }
+            },
+            "Retry": [
+              {
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException",
+                  "Lambda.TooManyRequestsException"
+                ],
+                "IntervalSeconds": 1,
+                "MaxAttempts": 3,
+                "BackoffRate": 2,
+                "JitterStrategy": "FULL"
+              }
+            ],
+            "End": true,
+            "Comment": "Execute execute_sql_query using db-interface Lambda",
+            "Output": "{%  $states.result.Payload  %}"
+          }
+        }
+      },
+      "Next": "Append Map to Messages",
+      "Output": {
+        "messages": "{% $append($states.input.messages, [ {  \"role\": \"user\",    \"content\": [$filter($states.result,function($v) { $v != {} })] } ] ) %}"
+      },
+      "Comment": "Execute tools in parallel and collect results"
+    },
+    "Append Map to Messages": {
+      "Type": "Pass",
+      "Next": "Call LLM",
+      "Comment": "Continue the conversation with tool results"
+    }
+  }
+}

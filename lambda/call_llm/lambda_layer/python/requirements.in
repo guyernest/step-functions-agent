@@ -1,2 +1,4 @@
+boto3==1.36.0  # Pinned to resolve aws_account_id issue
+botocore==1.36.0  # Pinned to resolve aws_account_id issue
 aws-lambda-powertools>=2.30.2  # AWS Lambda Powertools for Python
 aws_xray_sdk # For tracer
