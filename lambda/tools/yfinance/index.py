@@ -3,17 +3,68 @@ import json
 import yfinance as yf
 import pandas as pd
 from aws_lambda_powertools import Logger
-import pandas as pd
 import boto3
 import os
 from datetime import datetime, timedelta
+import requests
 
 
 logger = Logger()
 logger.setLevel("INFO")
 
+# Configure yfinance to use a custom User-Agent to avoid rate limiting
+# Set up a session with custom headers
+session = requests.Session()
+session.headers.update({
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'Accept-Encoding': 'gzip, deflate',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1'
+})
+
+# Configure yfinance to use our custom session
+# This helps avoid "Too Many Requests" errors from Yahoo Finance
+def get_ticker_with_session(ticker_symbol):
+    """Create a yfinance Ticker object with custom session"""
+    ticker = yf.Ticker(ticker_symbol)
+    # Override the session for this ticker instance
+    try:
+        ticker.session = session
+    except AttributeError:
+        pass
+    return ticker
+
+def download_with_session(tickers, start=None, end=None, **kwargs):
+    """Download data using yf.download with custom session"""
+    # Temporarily override the global session
+    original_session = None
+    try:
+        # Try to save the original session
+        original_session = getattr(yf.utils, 'get_session', None)
+        # Override with our custom session
+        yf.utils.get_session = lambda: session
+    except AttributeError:
+        pass
+    
+    try:
+        result = yf.download(tickers, start=start, end=end, **kwargs)
+        return result
+    finally:
+        # Restore original session if we had one
+        if original_session:
+            try:
+                yf.utils.get_session = original_session
+            except AttributeError:
+                pass
+
 # First, let's flatten the columns if they are multi-level
 def prepare_yf_data(df):
+    # Check if DataFrame is empty
+    if df.empty:
+        return json.dumps([])
+    
     # If we have multi-level columns, flatten them
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = [f"{col[0]}_{col[1]}" if isinstance(col, tuple) else col 
@@ -22,8 +73,10 @@ def prepare_yf_data(df):
     # Reset index to make the date a column
     df = df.reset_index()
     
-    # Convert datetime to string format
-    df['Date'] = df['Date'].dt.strftime('%Y-%m-%d')
+    # Check if Date column exists and has datetime values
+    if 'Date' in df.columns and hasattr(df['Date'], 'dt'):
+        # Convert datetime to string format
+        df['Date'] = df['Date'].dt.strftime('%Y-%m-%d')
     
     # Convert to records format
     return json.dumps(df.to_dict(orient='records'))
@@ -41,8 +94,15 @@ def get_ticker_data(ticker: str, start_date: str, end_date: str) -> str:
         str: The data as a JSON object.
     """
     logger.info(f"Getting data for {ticker} from {start_date} to {end_date}")
-    data = yf.download(ticker, start=start_date, end=end_date)
-    return prepare_yf_data(data)
+    try:
+        data = download_with_session(ticker, start=start_date, end=end_date)
+        if data.empty:
+            logger.warning(f"No data found for ticker {ticker} between {start_date} and {end_date}")
+            return json.dumps({"error": f"No data available for ticker {ticker} between {start_date} and {end_date}"})
+        return prepare_yf_data(data)
+    except Exception as e:
+        logger.error(f"Error getting ticker data for {ticker}: {str(e)}")
+        return json.dumps({"error": f"Failed to get data for {ticker}: {str(e)}"})
 
 def get_ticker_recent_history(ticker, period: str='1mo', interval: str='1d') -> str:
     """
@@ -57,8 +117,16 @@ def get_ticker_recent_history(ticker, period: str='1mo', interval: str='1d') -> 
         str: The recent history as a JSON object.
     """
     logger.info(f"Getting recent history for {ticker} for {period}")
-    data = yf.Ticker(ticker).history(period=period, interval=interval)
-    return prepare_yf_data(data)
+    try:
+        ticker_obj = get_ticker_with_session(ticker)
+        data = ticker_obj.history(period=period, interval=interval)
+        if data.empty:
+            logger.warning(f"No data found for ticker {ticker} with period {period}")
+            return json.dumps({"error": f"No data available for ticker {ticker} with period {period}"})
+        return prepare_yf_data(data)
+    except Exception as e:
+        logger.error(f"Error getting ticker history for {ticker}: {str(e)}")
+        return json.dumps({"error": f"Failed to get data for {ticker}: {str(e)}"})
 
 def list_industries(sector_key: str) -> str:
     """
@@ -80,10 +148,25 @@ def list_industries(sector_key: str) -> str:
     :return: a string containing the list of industries
     """
     logger.info(f"Listing industries for sector: {sector_key}")
-    # get the list of industries from Yahoo Finance
-    industries_dataframe = yf.Sector(sector_key).industries
-    industries = industries_dataframe.to_dict()
-    return json.dumps(industries)
+    try:
+        # Create sector object with custom session
+        sector = yf.Sector(sector_key)
+        try:
+            sector.session = session
+        except AttributeError:
+            pass
+        
+        # get the list of industries from Yahoo Finance
+        industries_dataframe = sector.industries
+        if industries_dataframe is None or industries_dataframe.empty:
+            logger.warning(f"No industries found for sector: {sector_key}")
+            return json.dumps({"error": f"No industries available for sector {sector_key}"})
+        
+        industries = industries_dataframe.to_dict()
+        return json.dumps(industries)
+    except Exception as e:
+        logger.error(f"Error getting industries for sector {sector_key}: {str(e)}")
+        return json.dumps({"error": f"Failed to get industries for sector {sector_key}: {str(e)}"})
 
 def top_sector_companies(sector_key: str) -> str:
     """
@@ -107,10 +190,25 @@ def top_sector_companies(sector_key: str) -> str:
     :return: a string containing the list of companies
     """
     logger.info(f"Getting top companies for sector: {sector_key}")
-    # get the top companies from Yahoo Finance
-    companies_dataframe = yf.Sector(sector_key).top_companies
-    companies = companies_dataframe.to_dict()
-    return json.dumps(companies)
+    try:
+        # Create sector object with custom session
+        sector = yf.Sector(sector_key)
+        try:
+            sector.session = session
+        except AttributeError:
+            pass
+        
+        # get the top companies from Yahoo Finance
+        companies_dataframe = sector.top_companies
+        if companies_dataframe is None or companies_dataframe.empty:
+            logger.warning(f"No companies found for sector: {sector_key}")
+            return json.dumps({"error": f"No companies available for sector {sector_key}"})
+        
+        companies = companies_dataframe.to_dict()
+        return json.dumps(companies)
+    except Exception as e:
+        logger.error(f"Error getting companies for sector {sector_key}: {str(e)}")
+        return json.dumps({"error": f"Failed to get companies for sector {sector_key}: {str(e)}"})
 
 
 def top_industry_companies(industry_key: str) -> str:
@@ -121,10 +219,25 @@ def top_industry_companies(industry_key: str) -> str:
     :return: a string containing the list of companies
     """
     logger.info(f"Getting top companies for industry: {industry_key}")
-    # get the top companies from Yahoo Finance
-    companies_dataframe = yf.Industry(industry_key).top_companies
-    companies = companies_dataframe.to_dict()
-    return json.dumps(companies)
+    try:
+        # Create industry object with custom session
+        industry = yf.Industry(industry_key)
+        try:
+            industry.session = session
+        except AttributeError:
+            pass
+        
+        # get the top companies from Yahoo Finance
+        companies_dataframe = industry.top_companies
+        if companies_dataframe is None or companies_dataframe.empty:
+            logger.warning(f"No companies found for industry: {industry_key}")
+            return json.dumps({"error": f"No companies available for industry {industry_key}"})
+        
+        companies = companies_dataframe.to_dict()
+        return json.dumps(companies)
+    except Exception as e:
+        logger.error(f"Error getting companies for industry {industry_key}: {str(e)}")
+        return json.dumps({"error": f"Failed to get companies for industry {industry_key}: {str(e)}"})
 
 DATA_BUCKET_NAME = os.environ.get('DATA_BUCKET_NAME', 'mlguy-mlops-courses')
 
@@ -144,7 +257,7 @@ def download_tickers_data(
     s3 = boto3.client('s3')
     start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
     end_date = datetime.now().strftime('%Y-%m-%d')
-    data = yf.download(
+    data = download_with_session(
         tickers,
         start=start_date,
         end=end_date,

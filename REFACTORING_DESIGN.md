@@ -4,7 +4,7 @@
 
 This document outlines the comprehensive refactoring plan for the AWS Step Functions Agent Framework to achieve better modularity, reusability, and maintainability. The refactoring addresses the current issues of code duplication, poor resource sharing, and complex IAM management while preserving the framework's strength in multi-language support.
 
-## Implementation Status (Updated: 2025-07-18)
+## Implementation Status (Updated: 2025-07-19)
 
 ✅ **Completed**:
 - Three-module architecture implemented (Tools, LLMs, Agents)
@@ -22,6 +22,9 @@ This document outlines the comprehensive refactoring plan for the AWS Step Funct
 - **Base Agent Construct** - Reusable CDK construct reducing agent code from ~340 to ~20 lines
 - **Google Maps Agent with Gemini LLM** - Multi-LLM support (Claude for SQL, Gemini for Maps)
 - **Simplified SQL Agent** - Converted to use base construct pattern
+- **BaseToolConstruct** - DRY tool registration reducing tool stack code by 60-87%
+- **Multi-language Research Agent** - Go + Python tools with OpenAI GPT LLM
+- **Enhanced LLM Coverage** - Three agents using different LLMs (Claude, Gemini, OpenAI)
 
 🚧 **In Progress**:
 - Migration of remaining agents to base construct pattern
@@ -477,14 +480,24 @@ step-functions-agent/
 #### 3. **Multi-LLM Architecture** 🧠
 - **Claude for SQL Agent**: Proven existing integration for structured data tasks
 - **Gemini for Google Maps Agent**: New LLM integration demonstrating flexibility
+- **OpenAI GPT for Research Agent**: Expanded LLM coverage with Go + Python tools
 - **Google Gen AI SDK**: Successfully integrated with proper client initialization
 - **LLM-Tool Pairing**: Demonstrated optimal pairing of LLMs with domain-specific tools
+- **Three-LLM Framework**: Complete validation of multi-provider architecture
 
-#### 4. **Production-Ready Deployments** ✅
-- **Working End-to-End Flows**: Both SQL and Google Maps agents deployed and tested
+#### 4. **BaseToolConstruct Pattern** 🔧
+- **DRY Tool Registration**: Automatic DynamoDB tool registry with single construct
+- **Code Reduction**: Tool stacks reduced by 60-87% (E2B: 323→42 lines)
+- **Standardized Patterns**: Consistent tool deployment across all languages
+- **Multi-Tool Support**: Single construct handles multiple tools per Lambda
+- **Lifecycle Management**: Automatic create/update/delete in DynamoDB
+
+#### 5. **Production-Ready Deployments** ✅
+- **Working End-to-End Flows**: SQL, Google Maps, and Research agents deployed and tested
 - **Error Handling**: Proper retry logic and error propagation
 - **Secrets Management**: Tool-specific secrets working across languages
 - **Step Functions Integration**: Dynamic tool loading with Map states
+- **Multi-Language Research**: Go web research + Python financial tools working
 
 ### Code Quality Improvements
 
@@ -538,10 +551,12 @@ class SQLAgentStack(Stack):  # 25 lines total
 | Metric | Before | After | Improvement |
 |--------|--------|-------|-------------|
 | Agent Stack Lines | ~340 | ~20 | **94% reduction** |
+| Tool Stack Lines | ~323 | ~42 | **87% reduction** |
 | New Agent Development | 2-3 days | 2-3 hours | **10x faster** |
-| Tool Languages | Python only | Python + TypeScript | **Multi-language** |
-| LLM Integration | Single (Claude) | Multiple (Claude, Gemini) | **Flexible** |
+| Tool Languages | Python only | Python + TypeScript + Go | **Multi-language** |
+| LLM Integration | Single (Claude) | Multiple (Claude, Gemini, OpenAI) | **Flexible** |
 | Code Duplication | High | Minimal | **DRY compliance** |
+| Tool Registration | Manual scripts | Automatic DynamoDB | **Streamlined** |
 
 ## Key Implementation Learnings
 
@@ -588,6 +603,27 @@ class SQLAgentStack(Stack):  # 25 lines total
   - More reliable than hardcoded ARN patterns
   - Enforces deployment order
   - Better CDK integration
+
+### BaseToolConstruct Best Practices
+- **Single Construct Pattern**: One construct handles all tool registration for a Lambda
+  - Eliminates custom resources and inline registration code
+  - Consistent validation and error handling
+  - Automatic DynamoDB lifecycle management
+
+- **Multi-Tool Support**: Handle multiple tools per Lambda function
+  - `MultiToolConstruct` for tools spanning multiple Lambda functions
+  - Efficient resource utilization
+  - Simplified deployment patterns
+
+- **DynamoDB Type Mapping**: Proper type conversion for tool specifications
+  - Convert JSON objects to strings for storage
+  - Handle boolean values correctly: `{"BOOL": value}`
+  - Consistent schema across all tools
+
+- **Tool Specification Validation**: Validate required fields at construct time
+  - Fail fast during CDK synthesis
+  - Clear error messages for missing fields
+  - Consistent tool metadata across deployments
 
 ## Migration Strategy
 
