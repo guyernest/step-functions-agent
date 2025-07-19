@@ -16,7 +16,9 @@ from stacks.shared.shared_llm_stack import SharedLLMStack
 from stacks.shared.shared_infrastructure_stack import SharedInfrastructureStack
 from stacks.tools.db_interface_tool_stack import DBInterfaceToolStack
 from stacks.tools.e2b_tool_stack import E2BToolStack
-from stacks.agents.dynamic_sql_agent_stack import DynamicSQLAgentStack
+from stacks.tools.google_maps_tool_stack import GoogleMapsToolStack
+from stacks.agents.sql_agent_with_base_construct import SQLAgentStack
+from stacks.agents.google_maps_agent_stack import GoogleMapsAgentStack
 
 
 def main():
@@ -77,16 +79,34 @@ def main():
         description=f"E2B code execution tool for {environment} environment"
     )
     
+    # Google Maps Tool - provides location-based services
+    google_maps_tool = GoogleMapsToolStack(
+        app,
+        f"GoogleMapsToolStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Google Maps tool for {environment} environment"
+    )
+    
     # Deploy agent stacks that reference shared resources
     # These are lightweight and focus only on Step Functions workflows
     
-    # Dynamic SQL Agent - uses DynamoDB tool registry for dynamic tool loading
-    dynamic_sql_agent = DynamicSQLAgentStack(
+    # SQL Agent - uses base agent construct for simplified deployment
+    sql_agent = SQLAgentStack(
         app,
-        f"DynamicSQLAgentStack-{environment}",
+        f"SQLAgentStack-{environment}",
         env_name=environment,
         env=env,
-        description=f"Dynamic SQL agent with tool registry for {environment} environment"
+        description=f"SQL agent using base construct for {environment} environment"
+    )
+    
+    # Google Maps Agent - uses Gemini LLM with Google Maps tools
+    google_maps_agent = GoogleMapsAgentStack(
+        app,
+        f"GoogleMapsAgentStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Google Maps agent with Gemini LLM for {environment} environment"
     )
     
     # CDK automatically handles dependency order through stack references
@@ -99,7 +119,7 @@ def main():
         "Architecture": "Refactored"
     }
     
-    for stack in [shared_infrastructure_stack, shared_llm_stack, db_interface_tool, e2b_tool, dynamic_sql_agent]:
+    for stack in [shared_infrastructure_stack, shared_llm_stack, db_interface_tool, e2b_tool, sql_agent, google_maps_tool, google_maps_agent]:
         for key, value in tags.items():
             cdk.Tags.of(stack).add(key, value)
     

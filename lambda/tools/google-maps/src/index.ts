@@ -138,7 +138,7 @@ let GOOGLE_MAPS_API_KEY: string;
 
 async function initializeApiKey(): Promise<void> {
     try {
-        const apiKeySecret = await getSecret("/ai-agent/api-keys");
+        const apiKeySecret = await getSecret("/ai-agent/tools/google-maps/prod");
         if (!apiKeySecret) {
             throw new Error("Failed to retrieve secret from Secrets Manager");
         }

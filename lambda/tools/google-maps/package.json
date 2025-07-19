@@ -15,12 +15,14 @@
   "license": "ISC",
   "dependencies": {
     "@types/aws-lambda": "^8.10.147",
-    "@aws-lambda-powertools/logger": "^2.12.0",
-    "@aws-lambda-powertools/parameters": "^2.12.0",
-    "@aws-lambda-powertools/tracer": "2.13.1",
+    "@aws-lambda-powertools/logger": "^2.24.0",
+    "@aws-lambda-powertools/parameters": "^2.24.0",
+    "@aws-lambda-powertools/tracer": "^2.24.0",
+    "@aws-lambda-powertools/commons": "^2.24.0",
     "@aws-sdk/client-secrets-manager": "^3.741.0",
     "node-fetch": "2.6.7",
-    "@types/node-fetch": "^2.6.4"
+    "@types/node-fetch": "^2.6.4",
+    "lodash.merge": "^4.6.2"
   },
   "devDependencies": {
     "@types/jest": "^29.x",
