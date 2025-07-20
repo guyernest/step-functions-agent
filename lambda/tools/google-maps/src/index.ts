@@ -138,11 +138,18 @@ let GOOGLE_MAPS_API_KEY: string;
 
 async function initializeApiKey(): Promise<void> {
     try {
-        const apiKeySecret = await getSecret("/ai-agent/tools/google-maps/prod");
+        const secretName = process.env.GOOGLE_MAPS_SECRET_NAME || "/ai-agent/tools/google-maps/prod";
+        logger.info(`Retrieving secret from: ${secretName}`);
+        const apiKeySecret = await getSecret(secretName);
         if (!apiKeySecret) {
-            throw new Error("Failed to retrieve secret from Secrets Manager");
+            throw new Error(`Failed to retrieve secret from Secrets Manager: ${secretName}`);
         }
-        GOOGLE_MAPS_API_KEY = JSON.parse(apiKeySecret.toString())["GOOGLE_MAPS_API_KEY"];
+        const secretData = JSON.parse(apiKeySecret.toString());
+        // Try both possible field names for backward compatibility
+        GOOGLE_MAPS_API_KEY = secretData["GOOGLE_MAPS_API_KEY"] || secretData["api_key"];
+        if (!GOOGLE_MAPS_API_KEY) {
+            throw new Error("API key not found in secret. Expected 'GOOGLE_MAPS_API_KEY' or 'api_key' field");
+        }
         logger.info("API key initialized successfully");
     } catch (error) {
         logger.error('Failed to initialize API key', { error });

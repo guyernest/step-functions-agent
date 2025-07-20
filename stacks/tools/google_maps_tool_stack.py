@@ -3,9 +3,9 @@ from aws_cdk import (
     Stack,
     Fn,
     CfnOutput,
-    CustomResource,
     RemovalPolicy,
     SecretValue,
+    CustomResource,
     aws_secretsmanager as secretsmanager,
     aws_iam as iam,
     aws_lambda as _lambda,
@@ -14,8 +14,10 @@ from aws_cdk import (
 )
 from constructs import Construct
 from ..shared.naming_conventions import NamingConventions
-import json
+from ..shared.tool_definitions import GoogleMapsTools
+from .base_tool_construct import BaseToolConstruct
 import os
+import json
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -27,8 +29,10 @@ class GoogleMapsToolStack(Stack):
     This stack demonstrates TypeScript tool integration:
     - Deploys TypeScript Lambda with multiple tool endpoints
     - Creates tool-specific secrets from .env.google-maps
-    - Registers 7 Google Maps tools in DynamoDB registry
+    - Registers 7 Google Maps tools in DynamoDB registry using BaseToolConstruct
     - Shows how one Lambda can provide multiple tools
+    
+    Now refactored to use BaseToolConstruct for consistency with other tool stacks.
     """
 
     def __init__(self, scope: Construct, construct_id: str, env_name: str = "prod", **kwargs) -> None:
@@ -45,76 +49,85 @@ class GoogleMapsToolStack(Stack):
         # Create tool Lambda
         self._create_google_maps_lambda()
         
-        # Register tools in DynamoDB registry
-        self._register_tools_in_registry()
+        # Register tools in DynamoDB registry using BaseToolConstruct
+        self._register_tools_using_base_construct()
         
         # Create stack exports
         self._create_stack_exports()
 
     def _import_shared_resources(self):
-        """Import shared resources from other stacks"""
-        
-        # Import tool registry table name and ARN
+        """Import shared DynamoDB tool registry resources"""
         self.tool_registry_table_name = Fn.import_value(
             NamingConventions.stack_export_name("Table", "ToolRegistry", self.env_name)
         )
-        
         self.tool_registry_table_arn = Fn.import_value(
             NamingConventions.stack_export_name("TableArn", "ToolRegistry", self.env_name)
         )
 
     def _create_google_maps_secrets(self):
-        """Create Google Maps tool secrets from .env.google-maps file"""
-        # Load API keys from .env.google-maps file if it exists
-        env_path = Path(__file__).parent.parent.parent / '.env.google-maps'
-        if env_path.exists():
-            load_dotenv(env_path)
+        """Create or update Google Maps API key secret from .env file"""
         
-        # Create secret with JSON structure for Google Maps API key
-        secret_value = {
-            "GOOGLE_MAPS_API_KEY": os.getenv("GOOGLE_MAPS_API_KEY", "your-google-maps-api-key-here")
-        }
+        # Define env file path - check both possible locations
+        # First try the root level with underscore (as user mentioned)
+        env_file = Path(__file__).parent.parent.parent / '.env.google_maps'
+        # If not found, try the lambda directory with hyphen
+        if not env_file.exists():
+            env_file = Path(__file__).parent.parent.parent / 'lambda' / 'tools' / 'google-maps' / '.env.google-maps'
         
-        # Check if we have real API keys or just placeholders
-        has_real_keys = not secret_value["GOOGLE_MAPS_API_KEY"].startswith("your-")
-        
-        if has_real_keys:
-            # Use the real API keys from .env.google-maps file
-            secret_object_value = {
-                key: SecretValue.unsafe_plain_text(value)
-                for key, value in secret_value.items()
-            }
+        # Load environment variables from .env file if it exists
+        if env_file.exists():
+            print(f"Loading Google Maps API key from: {env_file}")
+            # Clear any existing GOOGLE_MAPS_API_KEY from environment
+            if 'GOOGLE_MAPS_API_KEY' in os.environ:
+                del os.environ['GOOGLE_MAPS_API_KEY']
+            # Load from .env file with override
+            load_dotenv(env_file, override=True)
+            google_maps_api_key = os.getenv('GOOGLE_MAPS_API_KEY')
             
-            self.google_maps_secret = secretsmanager.Secret(
-                self, 
-                "GoogleMapsSecrets",
-                secret_name=NamingConventions.tool_secret_path("google-maps", self.env_name),
-                description=f"Google Maps tool API keys for {self.env_name} environment",
-                secret_object_value=secret_object_value,
-                removal_policy=RemovalPolicy.DESTROY
-            )
+            if google_maps_api_key:
+                print(f"Found Google Maps API key (length: {len(google_maps_api_key)}, starts with: {google_maps_api_key[:10]}...)")
+                # Create secret with actual API key
+                self.google_maps_secret = secretsmanager.Secret(
+                    self,
+                    "GoogleMapsApiKey",
+                    secret_name=NamingConventions.tool_secret_path("google-maps", self.env_name),
+                    description="Google Maps API key for geocoding, places, and directions services",
+                    secret_string_value=SecretValue.unsafe_plain_text(
+                        json.dumps({"GOOGLE_MAPS_API_KEY": google_maps_api_key})
+                    )
+                )
+            else:
+                # Create placeholder secret
+                self.google_maps_secret = secretsmanager.Secret(
+                    self,
+                    "GoogleMapsApiKey",
+                    secret_name=NamingConventions.tool_secret_path("google-maps", self.env_name),
+                    description="Google Maps API key for geocoding, places, and directions services - UPDATE THIS VALUE",
+                    generate_secret_string=secretsmanager.SecretStringGenerator(
+                        secret_string_template='{"api_key": "PLACEHOLDER_GOOGLE_MAPS_API_KEY"}',
+                        generate_string_key="api_key"
+                    )
+                )
         else:
-            # Use the template with placeholders
+            # Create placeholder secret if no .env file
             self.google_maps_secret = secretsmanager.Secret(
-                self, 
-                "GoogleMapsSecrets",
+                self,
+                "GoogleMapsApiKey",
                 secret_name=NamingConventions.tool_secret_path("google-maps", self.env_name),
-                description=f"Google Maps tool API keys for {self.env_name} environment",
+                description="Google Maps API key - UPDATE THIS VALUE in Secrets Manager",
                 generate_secret_string=secretsmanager.SecretStringGenerator(
-                    secret_string_template=json.dumps(secret_value),
-                    generate_string_key="placeholder",
-                    exclude_characters=" %+~`#$&*()|[]{}:;<>?!'/\"\\\\^\""
-                ),
-                removal_policy=RemovalPolicy.DESTROY
+                    secret_string_template='{"GOOGLE_MAPS_API_KEY": "PLACEHOLDER_GOOGLE_MAPS_API_KEY"}',
+                    generate_string_key="GOOGLE_MAPS_API_KEY"
+                )
             )
+        
+        # Apply removal policy
+        self.google_maps_secret.apply_removal_policy(RemovalPolicy.DESTROY)
 
     def _create_google_maps_lambda(self):
-        """Create Google Maps Lambda function with TypeScript"""
+        """Create the Google Maps Lambda function for TypeScript tools"""
         
-        # Generate consistent function name
-        function_name = NamingConventions.tool_lambda_name("google-maps", self.env_name)
-        
-        # Create execution role
+        # Create Lambda execution role
         lambda_role = iam.Role(
             self,
             "GoogleMapsLambdaRole",
@@ -155,11 +168,11 @@ class GoogleMapsToolStack(Stack):
         self.google_maps_lambda = _lambda_nodejs.NodejsFunction(
             self,
             "GoogleMapsLambda",
-            function_name=function_name,
+            function_name=f"tool-google-maps-{self.env_name}",
             description="Google Maps tools - provides geocoding, places search, directions, and more",
             entry="lambda/tools/google-maps/src/index.ts",
             handler="handler",
-            runtime=_lambda.Runtime.NODEJS_20_X,
+            runtime=_lambda.Runtime.NODEJS_18_X,
             timeout=Duration.seconds(30),
             memory_size=256,
             architecture=_lambda.Architecture.ARM_64,
@@ -167,307 +180,41 @@ class GoogleMapsToolStack(Stack):
             tracing=_lambda.Tracing.ACTIVE,
             environment={
                 "ENVIRONMENT": self.env_name,
-                "NODE_OPTIONS": "--enable-source-maps",
-                "POWERTOOLS_SERVICE_NAME": "google-maps-tool",
-                "POWERTOOLS_LOG_LEVEL": "INFO"
+                "GOOGLE_MAPS_SECRET_NAME": self.google_maps_secret.secret_name,
+                "LOG_LEVEL": "INFO"
             },
             bundling={
-                "minify": False,  # Disable minify to avoid issues with powertools
-                "source_map": True
+                "minify": True,
+                "source_map": True,
+                "external_modules": [
+                    "aws-sdk",  # Available in Lambda runtime
+                ]
             }
         )
         
         # Apply removal policy to help with stack destruction
         self.google_maps_lambda.apply_removal_policy(RemovalPolicy.DESTROY)
 
-    def _register_tools_in_registry(self):
-        """Register all Google Maps tools in the DynamoDB registry"""
+    def _register_tools_using_base_construct(self):
+        """Register all Google Maps tools using BaseToolConstruct with centralized definitions"""
         
-        # Tool specifications for all 7 Google Maps tools
-        tools_specs = [
-            {
-                "tool_name": "maps_geocode",
-                "description": "Convert an address into geographic coordinates",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "address": {
-                            "type": "string",
-                            "description": "The address to geocode"
-                        }
-                    },
-                    "required": ["address"]
-                },
-                "lambda_arn": self.google_maps_lambda.function_arn,
-                "lambda_function_name": self.google_maps_lambda.function_name,
-                "language": "typescript",
-                "tags": ["maps", "geocoding", "location"],
-                "status": "active",
-                "author": "system",
-                "human_approval_required": False,
-                "created_at": "2024-01-01T00:00:00Z",
-                "updated_at": "2024-01-01T00:00:00Z"
-            },
-            {
-                "tool_name": "maps_reverse_geocode",
-                "description": "Convert coordinates into an address",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "latitude": {
-                            "type": "number",
-                            "description": "Latitude coordinate"
-                        },
-                        "longitude": {
-                            "type": "number",
-                            "description": "Longitude coordinate"
-                        }
-                    },
-                    "required": ["latitude", "longitude"]
-                },
-                "lambda_arn": self.google_maps_lambda.function_arn,
-                "lambda_function_name": self.google_maps_lambda.function_name,
-                "language": "typescript",
-                "tags": ["maps", "geocoding", "location"],
-                "status": "active",
-                "author": "system",
-                "human_approval_required": False,
-                "created_at": "2024-01-01T00:00:00Z",
-                "updated_at": "2024-01-01T00:00:00Z"
-            },
-            {
-                "tool_name": "maps_search_places",
-                "description": "Search for places using Google Places API",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Search query"
-                        },
-                        "location": {
-                            "type": "object",
-                            "properties": {
-                                "latitude": {"type": "number"},
-                                "longitude": {"type": "number"}
-                            },
-                            "description": "Optional center point for the search"
-                        },
-                        "radius": {
-                            "type": "number",
-                            "description": "Search radius in meters (max 50000)"
-                        }
-                    },
-                    "required": ["query"]
-                },
-                "lambda_arn": self.google_maps_lambda.function_arn,
-                "lambda_function_name": self.google_maps_lambda.function_name,
-                "language": "typescript",
-                "tags": ["maps", "places", "search", "location"],
-                "status": "active",
-                "author": "system",
-                "human_approval_required": False,
-                "created_at": "2024-01-01T00:00:00Z",
-                "updated_at": "2024-01-01T00:00:00Z"
-            },
-            {
-                "tool_name": "maps_place_details",
-                "description": "Get detailed information about a specific place",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "place_id": {
-                            "type": "string",
-                            "description": "The place ID to get details for"
-                        }
-                    },
-                    "required": ["place_id"]
-                },
-                "lambda_arn": self.google_maps_lambda.function_arn,
-                "lambda_function_name": self.google_maps_lambda.function_name,
-                "language": "typescript",
-                "tags": ["maps", "places", "details"],
-                "status": "active",
-                "author": "system",
-                "human_approval_required": False,
-                "created_at": "2024-01-01T00:00:00Z",
-                "updated_at": "2024-01-01T00:00:00Z"
-            },
-            {
-                "tool_name": "maps_distance_matrix",
-                "description": "Calculate travel distance and time for multiple origins and destinations",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "origins": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Array of origin addresses or coordinates"
-                        },
-                        "destinations": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Array of destination addresses or coordinates"
-                        },
-                        "mode": {
-                            "type": "string",
-                            "description": "Travel mode (driving, walking, bicycling, transit)",
-                            "enum": ["driving", "walking", "bicycling", "transit"]
-                        }
-                    },
-                    "required": ["origins", "destinations"]
-                },
-                "lambda_arn": self.google_maps_lambda.function_arn,
-                "lambda_function_name": self.google_maps_lambda.function_name,
-                "language": "typescript",
-                "tags": ["maps", "distance", "travel", "routing"],
-                "status": "active",
-                "author": "system",
-                "human_approval_required": False,
-                "created_at": "2024-01-01T00:00:00Z",
-                "updated_at": "2024-01-01T00:00:00Z"
-            },
-            {
-                "tool_name": "maps_elevation",
-                "description": "Get elevation data for locations on the earth",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "locations": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "latitude": {"type": "number"},
-                                    "longitude": {"type": "number"}
-                                },
-                                "required": ["latitude", "longitude"]
-                            },
-                            "description": "Array of locations to get elevation for"
-                        }
-                    },
-                    "required": ["locations"]
-                },
-                "lambda_arn": self.google_maps_lambda.function_arn,
-                "lambda_function_name": self.google_maps_lambda.function_name,
-                "language": "typescript",
-                "tags": ["maps", "elevation", "geography"],
-                "status": "active",
-                "author": "system",
-                "human_approval_required": False,
-                "created_at": "2024-01-01T00:00:00Z",
-                "updated_at": "2024-01-01T00:00:00Z"
-            },
-            {
-                "tool_name": "maps_directions",
-                "description": "Get directions between two points",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "origin": {
-                            "type": "string",
-                            "description": "Starting point address or coordinates"
-                        },
-                        "destination": {
-                            "type": "string",
-                            "description": "Ending point address or coordinates"
-                        },
-                        "mode": {
-                            "type": "string",
-                            "description": "Travel mode (driving, walking, bicycling, transit)",
-                            "enum": ["driving", "walking", "bicycling", "transit"]
-                        }
-                    },
-                    "required": ["origin", "destination"]
-                },
-                "lambda_arn": self.google_maps_lambda.function_arn,
-                "lambda_function_name": self.google_maps_lambda.function_name,
-                "language": "typescript",
-                "tags": ["maps", "directions", "navigation", "routing"],
-                "status": "active",
-                "author": "system",
-                "human_approval_required": False,
-                "created_at": "2024-01-01T00:00:00Z",
-                "updated_at": "2024-01-01T00:00:00Z"
-            }
+        # Get tool specifications from centralized definitions
+        tool_definitions = GoogleMapsTools.get_all_tools()
+        tool_specs = [
+            tool_def.to_registry_item(
+                lambda_arn=self.google_maps_lambda.function_arn,
+                lambda_function_name=self.google_maps_lambda.function_name
+            )
+            for tool_def in tool_definitions
         ]
         
-        # Create custom resources to register each tool
-        for i, tool_spec in enumerate(tools_specs):
-            self._create_tool_registration(i, tool_spec)
-
-    def _create_tool_registration(self, index: int, tool_spec: dict):
-        """Create a custom resource to register a tool in DynamoDB"""
-        
-        # Create role for the custom resource
-        custom_resource_role = iam.Role(
+        # Use BaseToolConstruct for registration
+        BaseToolConstruct(
             self,
-            f"ToolRegistrationRole{index}",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AWSLambdaBasicExecutionRole"
-                )
-            ]
-        )
-        
-        # Grant DynamoDB permissions
-        custom_resource_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=[
-                    "dynamodb:PutItem",
-                    "dynamodb:UpdateItem",
-                    "dynamodb:DeleteItem"
-                ],
-                resources=[self.tool_registry_table_arn]
-            )
-        )
-        
-        # Convert input_schema and tags to JSON strings for DynamoDB
-        tool_spec_for_dynamo = tool_spec.copy()
-        tool_spec_for_dynamo["input_schema"] = json.dumps(tool_spec["input_schema"])
-        tool_spec_for_dynamo["tags"] = json.dumps(tool_spec["tags"])
-        
-        # Create the custom resource
-        cr.AwsCustomResource(
-            self,
-            f"RegisterTool{index}",
-            on_create=cr.AwsSdkCall(
-                service="dynamodb",
-                action="putItem",
-                parameters={
-                    "TableName": self.tool_registry_table_name,
-                    "Item": {
-                        key: {"S": str(value)} if not isinstance(value, bool) else {"BOOL": value}
-                        for key, value in tool_spec_for_dynamo.items()
-                    }
-                },
-                physical_resource_id=cr.PhysicalResourceId.of(f"tool-{tool_spec['tool_name']}-{self.env_name}")
-            ),
-            on_update=cr.AwsSdkCall(
-                service="dynamodb", 
-                action="putItem",
-                parameters={
-                    "TableName": self.tool_registry_table_name,
-                    "Item": {
-                        key: {"S": str(value)} if not isinstance(value, bool) else {"BOOL": value}
-                        for key, value in tool_spec_for_dynamo.items()
-                    }
-                },
-                physical_resource_id=cr.PhysicalResourceId.of(f"tool-{tool_spec['tool_name']}-{self.env_name}")
-            ),
-            on_delete=cr.AwsSdkCall(
-                service="dynamodb",
-                action="deleteItem", 
-                parameters={
-                    "TableName": self.tool_registry_table_name,
-                    "Key": {
-                        "tool_name": {"S": tool_spec["tool_name"]}
-                    }
-                }
-            ),
-            role=custom_resource_role
+            "GoogleMapsTools",
+            tool_specs=tool_specs,
+            lambda_function=self.google_maps_lambda,
+            env_name=self.env_name
         )
 
     def _create_stack_exports(self):

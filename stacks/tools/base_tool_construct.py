@@ -7,6 +7,7 @@ from constructs import Construct
 from ..shared.naming_conventions import NamingConventions
 from typing import List, Dict, Any
 import json
+from datetime import datetime, timezone
 
 
 class BaseToolConstruct(Construct):
@@ -65,7 +66,7 @@ class BaseToolConstruct(Construct):
             self._create_tool_registration(i, tool_spec)
 
     def _create_tool_registration(self, index: int, tool_spec: Dict[str, Any]):
-        """Create a custom resource to register a single tool in DynamoDB"""
+        """Create a custom resource to register a single tool in DynamoDB using direct API calls"""
         
         # Validate required fields
         required_fields = ["tool_name", "description", "input_schema"]
@@ -73,28 +74,39 @@ class BaseToolConstruct(Construct):
             if field not in tool_spec:
                 raise ValueError(f"Tool spec missing required field: {field}")
         
-        # Create complete tool specification with defaults
+        # Generate current timestamp in ISO format
+        current_timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        
+        # Create complete tool specification with defaults for missing fields
         complete_tool_spec = {
             "tool_name": tool_spec["tool_name"],
             "description": tool_spec["description"],
             "input_schema": tool_spec["input_schema"],
-            "lambda_arn": self.lambda_function.function_arn,
-            "lambda_function_name": self.lambda_function.function_name,
+            "lambda_arn": tool_spec.get("lambda_arn", self.lambda_function.function_arn),
+            "lambda_function_name": tool_spec.get("lambda_function_name", self.lambda_function.function_name),
             "language": tool_spec.get("language", "python"),
             "tags": tool_spec.get("tags", []),
             "status": tool_spec.get("status", "active"),
             "author": tool_spec.get("author", "system"),
             "human_approval_required": tool_spec.get("human_approval_required", False),
-            "created_at": tool_spec.get("created_at", "2025-07-19T00:00:00Z"),
-            "updated_at": tool_spec.get("updated_at", "2025-07-19T00:00:00Z")
+            "created_at": tool_spec.get("created_at", current_timestamp),
+            "updated_at": tool_spec.get("updated_at", current_timestamp)
         }
         
-        # Convert complex objects to JSON strings for DynamoDB storage
-        tool_spec_for_dynamo = complete_tool_spec.copy()
-        tool_spec_for_dynamo["input_schema"] = json.dumps(complete_tool_spec["input_schema"])
-        tool_spec_for_dynamo["tags"] = json.dumps(complete_tool_spec["tags"])
+        # Add any additional fields from the tool spec (like version)
+        for key, value in tool_spec.items():
+            if key not in complete_tool_spec:
+                complete_tool_spec[key] = value
         
-        # Create the custom resource for DynamoDB registration
+        # Convert complex objects to JSON strings for DynamoDB storage if needed
+        tool_spec_for_dynamo = complete_tool_spec.copy()
+        # Only convert to JSON if not already a string (from centralized definitions)
+        if not isinstance(complete_tool_spec["input_schema"], str):
+            tool_spec_for_dynamo["input_schema"] = json.dumps(complete_tool_spec["input_schema"])
+        if not isinstance(complete_tool_spec["tags"], str):
+            tool_spec_for_dynamo["tags"] = json.dumps(complete_tool_spec["tags"])
+        
+        # Create the custom resource for direct DynamoDB registration
         cr.AwsCustomResource(
             self,
             f"RegisterTool{index}",

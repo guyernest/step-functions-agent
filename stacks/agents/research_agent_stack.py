@@ -1,6 +1,8 @@
 from aws_cdk import Stack, Fn
 from constructs import Construct
 from .base_agent_stack import BaseAgentStack
+from ..shared.base_agent_construct import BaseAgentConstruct
+import json
 
 
 class ResearchAgentStack(Stack):
@@ -58,4 +60,72 @@ When conducting research:
 5. Provide actionable insights and clear summaries
 
 Always explain your research methodology and cite the specific tools used for transparency."""
+        )
+        
+        # Store env_name for registration
+        self.env_name = env_name
+        
+        # Register this agent in the Agent Registry
+        self._register_agent_in_registry()
+    
+    def _register_agent_in_registry(self):
+        """Register this agent in the Agent Registry using BaseAgentConstruct"""
+        
+        # Define Research agent specification
+        agent_spec = {
+            "agent_name": "research-agent",
+            "version": "v1.0",
+            "status": "active", 
+            "system_prompt": """You are a comprehensive research assistant specializing in business intelligence and financial analysis.
+
+Your capabilities include:
+- Company research and competitive analysis
+- Financial data analysis using market APIs
+- Industry trends and sector analysis  
+- Web research for current information
+- Data synthesis and insight generation
+
+When conducting research:
+1. Start with specific company or topic research using available tools
+2. Gather financial data when analyzing companies
+3. Look for recent developments and news
+4. Provide context and analysis, not just raw data
+5. Cite your sources and explain your methodology
+6. Offer actionable insights and recommendations
+
+Always be thorough but concise, and prioritize accuracy and relevance.""",
+            "description": "Business research and financial analysis agent",
+            "llm_provider": "openai",
+            "llm_model": "gpt-4o",
+            "tools": [
+                {"tool_id": "research_company", "enabled": True, "version": "latest"},
+                {"tool_id": "top_sector_companies", "enabled": True, "version": "latest"},
+                {"tool_id": "top_industry_companies", "enabled": True, "version": "latest"},
+                {"tool_id": "list_industries", "enabled": True, "version": "latest"}
+            ],
+            "observability": {
+                "log_group": f"/aws/stepfunctions/research-agent-{self.env_name}",
+                "metrics_namespace": "AIAgents/Research",
+                "trace_enabled": True,
+                "log_level": "INFO"
+            },
+            "parameters": {
+                "max_iterations": 8,
+                "temperature": 0.4,
+                "timeout_seconds": 600,
+                "max_tokens": 8192
+            },
+            "metadata": {
+                "created_by": "system", 
+                "tags": ["research", "business", "financial", "production"],
+                "deployment_env": self.env_name
+            }
+        }
+        
+        # Use BaseAgentConstruct for registration
+        BaseAgentConstruct(
+            self,
+            "ResearchAgentRegistration",
+            agent_spec=agent_spec,
+            env_name=self.env_name
         )
