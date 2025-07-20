@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SAM template for Execute Code Lambda function using E2B sandbox
+
+Globals:
+  Function:
+    Timeout: 300
+    MemorySize: 512
+    Runtime: python3.11
+    Architectures:
+      - arm64
+
+Resources:
+  ExecuteCodeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: execute-code-tool
+      CodeUri: .
+      Handler: index.lambda_handler
+      Description: Execute Python code in E2B sandbox environment
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: execute-code-tool
+          POWERTOOLS_LOG_LEVEL: INFO
+          IMAGE_BUCKET_NAME: !Ref ImageBucketName
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/ai-agent/tools/execute-code/*'
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:GetObject
+                - s3:PutObjectAcl
+              Resource: !Sub 'arn:aws:s3:::${ImageBucketName}/*'
+            - Effect: Allow
+              Action:
+                - xray:PutTraceSegments
+                - xray:PutTelemetryRecords
+              Resource: '*'
+      Tracing: Active
+
+Parameters:
+  ImageBucketName:
+    Type: String
+    Default: mlguy-mlops-courses
+    Description: S3 bucket name for storing generated images
+
+Outputs:
+  ExecuteCodeFunctionArn:
+    Description: Execute Code Lambda Function ARN
+    Value: !GetAtt ExecuteCodeFunction.Arn
+  ExecuteCodeFunctionName:
+    Description: Execute Code Lambda Function Name
+    Value: !Ref ExecuteCodeFunction

@@ -58,7 +58,7 @@ func handler(ctx context.Context, event ToolEvent) (ToolResponse, error) {
 	// Create Secrets Manager client
 	svc := secretsmanager.NewFromConfig(cfg)
 	secret, err := svc.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{
-		SecretId: aws.String("/ai-agent/api-keys"),
+		SecretId: aws.String("/ai-agent/tools/web-research/prod"),
 	})
 	if err != nil {
 		return response, fmt.Errorf("unable to get secret: %v", err)

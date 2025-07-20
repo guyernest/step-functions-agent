@@ -92,11 +92,3 @@ class CloudWatchToolStack(Stack):
         # Store Lambda function reference for monitoring
         self.cloudwatch_lambda_function = cloudwatch_lambda
         
-        # Export CloudWatch Lambda function ARN for agent stacks to import
-        CfnOutput(
-            self,
-            "CloudWatchToolsLambdaArnOutput",
-            value=cloudwatch_lambda.function_arn,
-            export_name=f"CloudWatchToolsLambdaArn-{env_name}",
-            description="ARN of the CloudWatch tools Lambda function"
-        )

@@ -1,0 +1,6 @@
+{
+  "name": "get_db_schema",
+  "id": "test-get-schema-001",
+  "input": {},
+  "type": "tool_use"
+}

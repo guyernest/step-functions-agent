@@ -23,7 +23,7 @@
       "Next": "Update Token Metrics",
       "Arguments": {
         "Payload": {
-          "system": "You are a helpful SQL assistant with access to a SQLite database. Help users query and understand their data. Please don't assume to know the schema of the database, and use the get_db_schema tool to learn table and column names and types before using it.",
+          "system": "You are a helpful SQL assistant with access to a SQLite database and Python code execution. Help users query and understand their data. Please don't assume to know the schema of the database, and use the get_db_schema tool to learn table and column names and types before using it. You can also execute Python code for data analysis, visualization, or calculations using the execute_python tool.",
           "messages": "{% $states.input.messages %}",
           "tools": [
             {
@@ -46,6 +46,20 @@
                   }
                 },
                 "required": ["sql_query"]
+              }
+            },
+            {
+              "name": "execute_python",
+              "description": "Execute Python code in a secure sandbox environment using E2B",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "Python code to execute"
+                  }
+                },
+                "required": ["code"]
               }
             }
           ]
@@ -140,6 +154,10 @@
               {
                 "Next": "Execute DB Tool",
                 "Condition": "{% ($states.input.name = \"get_db_schema\") or ($states.input.name = \"execute_sql_query\") %}"
+              },
+              {
+                "Next": "Execute Code Tool",
+                "Condition": "{% $states.input.name = \"execute_python\" %}"
               }
             ],
             "Default": "No Tool to Use (ignore)",
@@ -172,6 +190,35 @@
             ],
             "End": true,
             "Comment": "Execute SQL tool using shared DB interface",
+            "Output": "{%  $states.result.Payload  %}"
+          },
+          "Execute Code Tool": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Arguments": {
+              "FunctionName": "EXECUTE_CODE_LAMBDA_ARN",
+              "Payload": {
+                "name": "{% $states.input.**.name %}",
+                "id": "{% $states.input.id %}",
+                "input": "{% $states.input.input %}"
+              }
+            },
+            "Retry": [
+              {
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException",
+                  "Lambda.TooManyRequestsException"
+                ],
+                "IntervalSeconds": 1,
+                "MaxAttempts": 3,
+                "BackoffRate": 2,
+                "JitterStrategy": "FULL"
+              }
+            ],
+            "End": true,
+            "Comment": "Execute Python code using E2B sandbox",
             "Output": "{%  $states.result.Payload  %}"
           },
           "No Tool to Use (ignore)": {

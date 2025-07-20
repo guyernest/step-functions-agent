@@ -42,14 +42,6 @@ async function runTest() {
         console.log('------------------------');
         console.log('result:', result);
         console.log('------------------------');
-        // if (result.statusCode === 200) {
-        //     console.log('\nExtracted Text:');
-        //     console.log('------------------------');
-        //     console.log(result.body.text);
-        //     console.log('------------------------');
-        // } else {
-        //     console.log('Error:', result.body);
-        // }
 
     } catch (error) {
         console.error('Test failed:', error);

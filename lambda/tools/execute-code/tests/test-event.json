@@ -1,0 +1,8 @@
+{
+  "name": "execute_python",
+  "id": "test-execute-python-001",
+  "input": {
+    "code": "# Simple test code\nimport numpy as np\nimport matplotlib.pyplot as plt\n\n# Create some data\nx = np.linspace(0, 10, 100)\ny = np.sin(x)\n\n# Create a plot\nplt.figure(figsize=(10, 6))\nplt.plot(x, y)\nplt.title('Sine Wave')\nplt.xlabel('X')\nplt.ylabel('Y')\nplt.grid(True)\nplt.savefig('sine_wave.png')\n\nprint('Successfully created sine wave plot')\nprint(f'Data points: {len(x)}')"
+  },
+  "type": "tool_use"
+}

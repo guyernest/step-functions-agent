@@ -1,9 +1,0 @@
-{
-    "id": "toolu_01GzN3ATS4f3UZAgeV57UCC9",
-    "input": {
-      "bucket": "yfinance-data-672915487120-us-west-2",
-      "key": "stock_vectors/stock_data_20250108_032729.csv"
-    },
-    "name": "calculate_volatility",
-    "type": "tool_use"
-  }

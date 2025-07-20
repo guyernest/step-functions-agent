@@ -1,22 +1,45 @@
-# template.yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
+Description: SAM template for {{cookiecutter.tool_name}} Lambda function - {{cookiecutter.tool_description}}
+
+Globals:
+  Function:
+    Timeout: 90
+    MemorySize: 256
+    Runtime: python3.11
+    Architectures:
+      - arm64
 
 Resources:
-  # {{cookiecutter.tool_description}}
-  {{cookiecutter.tool_name}}:
+  {{cookiecutter.tool_name|replace('-', '')|replace('_', '')|title}}Function:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: {{cookiecutter.tool_name}}-tool
       CodeUri: .
       Handler: index.lambda_handler
-      Runtime: python3.12
-      Timeout: 90
-      MemorySize: 128
+      Description: {{cookiecutter.tool_description}}
       Environment:
         Variables:
-          POWERTOOLS_SERVICE_NAME: {{cookiecutter.tool_name}}
-      Architectures:
-        - arm64
+          POWERTOOLS_SERVICE_NAME: {{cookiecutter.tool_name}}-tool
+          POWERTOOLS_LOG_LEVEL: INFO
       Policies:
-        - SecretsManagerRead
-        - AWSLambdaBasicExecutionRole
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/ai-agent/tools/{{cookiecutter.tool_name}}/*'
+            - Effect: Allow
+              Action:
+                - xray:PutTraceSegments
+                - xray:PutTelemetryRecords
+              Resource: '*'
+      Tracing: Active
+
+Outputs:
+  {{cookiecutter.tool_name|replace('-', '')|replace('_', '')|title}}FunctionArn:
+    Description: {{cookiecutter.tool_name}} Lambda Function ARN
+    Value: !GetAtt {{cookiecutter.tool_name|replace('-', '')|replace('_', '')|title}}Function.Arn
+  {{cookiecutter.tool_name|replace('-', '')|replace('_', '')|title}}FunctionName:
+    Description: {{cookiecutter.tool_name}} Lambda Function Name
+    Value: !Ref {{cookiecutter.tool_name|replace('-', '')|replace('_', '')|title}}Function

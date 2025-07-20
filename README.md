@@ -664,19 +664,72 @@ The framework has been refactored into a three-module architecture for better mo
 - Independent Lambda functions for business logic
 - Multi-language support (Python, TypeScript, Rust, Java, Go)
 - DynamoDB-based tool registry for dynamic discovery
-- Deploy with: `cdk deploy DBInterfaceToolStack-prod`
+- Functional tool stack organization
 
 ### 2. Shared LLMs Module
 - Centralized LLM provider integrations (OpenAI, Anthropic, Gemini)
 - Single deployment, shared across all agents
 - Automatic API key loading from `.env` file
-- Deploy with: `cdk deploy SharedLLMStack-prod`
 
 ### 3. Agents Module
 - Lightweight Step Functions orchestrations
 - Dynamic tool loading from DynamoDB registry
 - JSON templates with JSONata for flexibility
-- Deploy with: `cdk deploy DynamicSQLAgentStack-prod`
+
+## Tool Stack Architecture
+
+The tool stacks follow a **functional naming pattern** that clearly identifies business capabilities rather than implementation languages. Each stack represents a cohesive business domain:
+
+### 🏗️ **Tool Stack Inventory**
+
+| **Stack Name** | **Business Function** | **Tools** | **Language** | **Key Features** |
+|----------------|----------------------|-----------|--------------|------------------|
+| **clustering_tool_stack** | Data Analysis | HDBSCAN + Semantic Search | Rust | High-performance clustering, Qdrant integration |
+| **stock_analysis_tool_stack** | Financial Analysis | Moving Average + Volatility | Java | Fork/Join framework, time series processing |
+| **earthquake_monitoring_tool_stack** | Seismic Monitoring | USGS API integration | TypeScript | Real-time earthquake data, geographic filtering |
+| **book_recommendation_tool_stack** | Literary Discovery | NYT Books API | TypeScript | Bestseller tracking, category filtering |
+| **local_automation_tool_stack** | Process Automation | Secure command execution | Rust | RPA capabilities, security controls |
+| **microsoft_graph_tool_stack** | Enterprise Integration | Office 365 APIs | Python | Email, Teams, SharePoint, user management |
+| **web_automation_tool_stack** | Web Intelligence | Browser + Memory | TypeScript + Rust | Playwright automation, learning system |
+| **graphql_interface_tool_stack** | API Integration | GraphQL execution | Python | Dynamic queries, schema analysis |
+| **image_analysis_tool_stack** | Computer Vision | Gemini multimodal AI | Python | Vision analysis, natural language queries |
+| **cloudwatch_tool_stack** | AWS Monitoring | Log analysis + X-Ray | Python | CloudWatch Insights, service graphs |
+| **db_interface_tool_stack** | Database Operations | SQL schema + queries | Python | SQLite operations, schema introspection |
+| **financial_tool_stack** | Market Data | Yahoo Finance | Python | Stock data, sector analysis, company rankings |
+| **google_maps_tool_stack** | Geographic Services | Maps APIs | TypeScript | Geocoding, directions, places, elevation |
+| **research_tools_stack** | AI Research | Perplexity integration | Go + Python | Company research, market analysis |
+| **e2b_tool_stack** | Code Execution | Python sandbox | Python | Secure code execution, data science workflows |
+
+### 🎯 **Architectural Benefits**
+
+1. **🔍 Instant Clarity**: Each stack name immediately tells you its business purpose
+2. **👥 Team Ownership**: Teams can own specific functional domains  
+3. **🚀 Independent Deployment**: Deploy earthquake monitoring without affecting clustering
+4. **🏷️ Language as Metadata**: Implementation language becomes a descriptive tag, not the primary identifier
+5. **📊 Logical Grouping**: Related tools are naturally grouped together
+6. **🔧 Maintainability**: Easy to find and modify specific capabilities
+
+### 📁 **File Structure**
+
+```
+📁 stacks/tools/
+├── 🏗️  base_tool_construct.py              # Shared foundation
+├── 🔍  clustering_tool_stack.py             # Data science & ML
+├── 📈  stock_analysis_tool_stack.py         # Financial analysis  
+├── 🌍  earthquake_monitoring_tool_stack.py  # Seismic monitoring
+├── 📚  book_recommendation_tool_stack.py    # Literary discovery
+├── 🤖  local_automation_tool_stack.py       # Process automation
+├── 🏢  microsoft_graph_tool_stack.py        # Enterprise integration
+├── 🌐  web_automation_tool_stack.py         # Web intelligence
+├── 🔗  graphql_interface_tool_stack.py      # API integration
+├── 👁️  image_analysis_tool_stack.py         # Computer vision
+├── 📊  cloudwatch_tool_stack.py            # AWS monitoring
+├── 🗄️  db_interface_tool_stack.py          # Database operations
+├── 💰  financial_tool_stack.py             # Market data
+├── 🗺️  google_maps_tool_stack.py           # Geographic services
+├── 🔬  research_tools_stack.py             # AI research
+└── 💻  e2b_tool_stack.py                   # Code execution
+```
 
 ### Quick Start (Refactored Architecture)
 
@@ -685,22 +738,64 @@ The framework has been refactored into a three-module architecture for better mo
    # Create .env file with your API keys
    echo "ANTHROPIC_API_KEY=your-key-here" >> .env
    echo "OPENAI_API_KEY=your-key-here" >> .env
+   echo "GEMINI_API_KEY=your-key-here" >> .env
    
    # Activate virtual environment
    source cpython-3.12.3-macos-aarch64-none/bin/activate
    ```
 
-2. **Deploy in order**:
+2. **Deploy infrastructure**:
    ```bash
-   # Deploy shared LLM stack first
+   # Deploy shared infrastructure and LLM stacks
+   cdk deploy SharedInfrastructureStack-prod --app "python refactored_app.py"
    cdk deploy SharedLLMStack-prod --app "python refactored_app.py"
-   
-   # Deploy tool stacks
-   cdk deploy DBInterfaceToolStack-prod --app "python refactored_app.py"
-   
-   # Deploy agent stacks
-   cdk deploy DynamicSQLAgentStack-prod --app "python refactored_app.py"
+   cdk deploy AgentRegistryStack-prod --app "python refactored_app.py"
    ```
+
+3. **Deploy tool stacks** (choose what you need):
+   ```bash
+   # Core tools
+   cdk deploy DBInterfaceToolStack-prod --app "python refactored_app.py"
+   cdk deploy E2BToolStack-prod --app "python refactored_app.py"
+   cdk deploy GoogleMapsToolStack-prod --app "python refactored_app.py"
+   
+   # Business domain tools
+   cdk deploy ClusteringToolStack-prod --app "python refactored_app.py"
+   cdk deploy StockAnalysisToolStack-prod --app "python refactored_app.py"
+   cdk deploy EarthquakeMonitoringToolStack-prod --app "python refactored_app.py"
+   cdk deploy BookRecommendationToolStack-prod --app "python refactored_app.py"
+   cdk deploy MicrosoftGraphToolStack-prod --app "python refactored_app.py"
+   cdk deploy WebAutomationToolStack-prod --app "python refactored_app.py"
+   cdk deploy GraphQLInterfaceToolStack-prod --app "python refactored_app.py"
+   cdk deploy ImageAnalysisToolStack-prod --app "python refactored_app.py"
+   ```
+
+4. **Deploy agent stacks**:
+   ```bash
+   # Deploy agents that use the tools
+   cdk deploy SQLAgentStack-prod --app "python refactored_app.py"
+   cdk deploy GoogleMapsAgentStack-prod --app "python refactored_app.py"
+   cdk deploy ResearchAgentStack-prod --app "python refactored_app.py"
+   cdk deploy CloudWatchAgentStack-prod --app "python refactored_app.py"
+   ```
+
+### Tool-Specific Deployment Examples
+
+Deploy specific business capabilities:
+
+```bash
+# Financial analysis workflow
+cdk deploy FinancialToolStack-prod StockAnalysisToolStack-prod --app "python refactored_app.py"
+
+# Web intelligence workflow  
+cdk deploy WebAutomationToolStack-prod --app "python refactored_app.py"
+
+# Enterprise integration workflow
+cdk deploy MicrosoftGraphToolStack-prod GraphQLInterfaceToolStack-prod --app "python refactored_app.py"
+
+# Data science workflow
+cdk deploy ClusteringToolStack-prod ImageAnalysisToolStack-prod --app "python refactored_app.py"
+```
 
 ### Troubleshooting
 

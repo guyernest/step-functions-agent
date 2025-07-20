@@ -1,0 +1,9 @@
+{
+  "name": "maps_directions",
+  "id": "google_maps_test_003",
+  "input": {
+    "origin": "New York, NY",
+    "destination": "Philadelphia, PA",
+    "mode": "driving"
+  }
+}

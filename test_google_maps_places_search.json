@@ -1,0 +1,12 @@
+{
+  "name": "maps_search_places",
+  "id": "google_maps_test_002",
+  "input": {
+    "query": "restaurants near Times Square",
+    "location": {
+      "latitude": 40.7580,
+      "longitude": -73.9855
+    },
+    "radius": 1000
+  }
+}

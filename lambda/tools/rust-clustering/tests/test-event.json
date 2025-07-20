@@ -1,8 +1,0 @@
-{
-    "id": "calculate_hdbscan_clusters_unique_id",
-    "name": "calculate_hdbscan_clusters",
-    "input": {
-        "bucket": "yfinance-data-672915487120-us-west-2",
-        "key": "stock_vectors/stock_data_20250107_214201.csv"
-    }
-}

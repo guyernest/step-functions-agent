@@ -1,0 +1,237 @@
+{
+  "Comment": "Dynamic Agent - Loads agent config and tools from registries at runtime",
+  "QueryLanguage": "JSONata",
+  "StartAt": "Load Agent Configuration",
+  "States": {
+    "Load Agent Configuration": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:getItem",
+      "Arguments": {
+        "TableName": "AGENT_REGISTRY_TABLE_NAME",
+        "Key": {
+          "agent_name": {"S": "AGENT_NAME"},
+          "version": {"S": "v1.0"}
+        }
+      },
+      "Next": "Load Tools from Registry",
+      "Comment": "Load agent configuration from Agent Registry and set static variables",
+      "Output": "{% $states.input.messages %}",
+      "Assign": {
+        "system_prompt": "{% $states.result.Item.system_prompt.S %}",
+        "llm_provider": "{% $states.result.Item.llm_provider.S %}",
+        "llm_model": "{% $states.result.Item.llm_model.S %}",
+        "parameters": "{% $parse($states.result.Item.parameters.S) %}",
+        "tool_names": "{% $parse($states.result.Item.tools.S).tool_id %}"
+      }
+    },
+    "Load Tools from Registry": {
+      "Type": "Map",
+      "Items": "{% $tool_names %}",
+      "ItemProcessor": {
+        "ProcessorConfig": {
+          "Mode": "INLINE"
+        },
+        "StartAt": "Get Tool Schema",
+        "States": {
+          "Get Tool Schema": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::dynamodb:getItem",
+            "Arguments": {
+              "TableName": "TOOL_REGISTRY_TABLE_NAME",
+              "Key": {
+                "tool_name": {"S": "{% $states.input %}"}
+              }
+            },
+            "End": true,
+            "Comment": "Load tool definition from DynamoDB",
+            "Output": {
+              "name": "{% $states.result.Item.tool_name.S %}",
+              "description": "{% $states.result.Item.description.S %}",
+              "input_schema": "{% $parse($states.result.Item.input_schema.S) %}"
+            }
+          }
+        }
+      },
+      "Next": "Call LLM",
+      "Comment": "Load all tool definitions from DynamoDB registry",
+      "Output": "{% $states.input %}",
+      "Assign": {
+        "tools": "{% $states.result %}"
+      }
+    },
+    "Call LLM": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2,
+          "JitterStrategy": "FULL"
+        }
+      ],
+      "Next": "Update Token Metrics",
+      "Arguments": {
+        "Payload": {
+          "system": "{% $system_prompt %}",
+          "messages": "{% $states.input %}",
+          "tools": "{% $tools %}",
+          "model": "{% $llm_model %}",
+          "temperature": "{% $parameters.temperature %}",
+          "max_tokens": "{% $parameters.max_tokens %}"
+        },
+        "FunctionName": "SHARED_CLAUDE_LAMBDA_ARN"
+      },
+      "Comment": "Call the LLM function with static config from variables and dynamic messages",
+      "Output": "{% $states.result.Payload.body.messages %}",
+      "Assign": {
+        "function_calls": "{% $states.result.Payload.body.function_calls %}",
+        "metadata": "{% $states.result.Payload.body.metadata %}"
+      }
+    },
+    "Update Token Metrics": {
+      "Type": "Task",
+      "Arguments": {
+        "Namespace": "AI-Agents",
+        "MetricData": [
+          {
+            "MetricName": "InputTokens",
+            "Value": "{% $metadata.usage.input_tokens %}",
+            "Unit": "Count",
+            "Dimensions": [
+              {
+                "Name": "model",
+                "Value": "{% $metadata.model %}"
+              },
+              {
+                "Name": "state_machine_name",
+                "Value": "{% $states.context.StateMachine.Name %}"
+              }
+            ]
+          },
+          {
+            "MetricName": "OutputTokens",
+            "Value": "{% $metadata.usage.output_tokens %}",
+            "Unit": "Count",
+            "Dimensions": [
+              {
+                "Name": "model",
+                "Value": "{% $metadata.model %}"
+              },
+              {
+                "Name": "state_machine_name",
+                "Value": "{% $states.context.StateMachine.Name %}"
+              }
+            ]
+          }
+        ]
+      },
+      "Resource": "arn:aws:states:::aws-sdk:cloudwatch:putMetricData",
+      "Next": "Is done?",
+      "Output": "{% $states.input %}",
+      "Comment": "Record token usage metrics in CloudWatch"
+    },
+    "Is done?": {
+      "Type": "Choice",
+      "Default": "For each tool use",
+      "Choices": [
+        {
+          "Condition": "{% $exists($function_calls) and $count($function_calls) > 0 ? false : true %}",
+          "Next": "End"
+        }
+      ],
+      "Comment": "Checks if the LLM made tool calls or if it's done"
+    },
+    "For each tool use": {
+      "Type": "Map",
+      "Items": "{% $function_calls %}",
+      "ItemProcessor": {
+        "ProcessorConfig": {
+          "Mode": "INLINE"
+        },
+        "StartAt": "Get Tool Lambda ARN",
+        "States": {
+          "Get Tool Lambda ARN": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::dynamodb:getItem",
+            "Arguments": {
+              "TableName": "TOOL_REGISTRY_TABLE_NAME",
+              "Key": {
+                "tool_name": {"S": "{% $states.input.name %}"}
+              }
+            },
+            "Next": "Execute Tool",
+            "Catch": [
+              {
+                "ErrorEquals": ["States.ALL"],
+                "Next": "Tool Not Found"
+              }
+            ],
+            "Comment": "Get tool Lambda ARN from registry",
+            "Assign": {
+              "lambda_arn": "{% $states.result.Item.lambda_arn.S %}"
+            }
+          },
+          "Execute Tool": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Arguments": {
+              "FunctionName": "{% $lambda_arn %}",
+              "Payload": {
+                "name": "{% $states.input.name %}",
+                "id": "{% $states.input.id %}",
+                "input": "{% $states.input.input %}"
+              }
+            },
+            "Retry": [
+              {
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException", 
+                  "Lambda.SdkClientException",
+                  "Lambda.TooManyRequestsException"
+                ],
+                "IntervalSeconds": 1,
+                "MaxAttempts": 3,
+                "BackoffRate": 2,
+                "JitterStrategy": "FULL"
+              }
+            ],
+            "End": true,
+            "Comment": "Execute the tool Lambda function",
+            "Output": "{% $states.result.Payload %}"
+          },
+          "Tool Not Found": {
+            "Type": "Pass",
+            "End": true,
+            "Output": {
+              "error": "Tool not found in registry",
+              "tool_name": "{% $states.input.name %}"
+            },
+            "Comment": "Handle tools not found in registry"
+          }
+        }
+      },
+      "Next": "Append Map to Messages",
+      "Output": "{% $append($states.input, [ {  \"role\": \"user\",    \"content\": [$filter($states.result,function($v) { $v != {} })] } ] ) %}",
+      "Comment": "Execute each tool call in parallel and format results"
+    },
+    "Append Map to Messages": {
+      "Type": "Pass",
+      "Next": "Call LLM",
+      "Comment": "Gather the replies of the different tools and call the LLM to continue the agent flow"
+    },
+    "End": {
+      "Type": "Pass",
+      "End": true,
+      "Output": "{% $states.input %}",
+      "Comment": "Return the complete conversation messages"
+    }
+  }
+}

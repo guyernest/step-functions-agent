@@ -1,0 +1,25 @@
+{
+  "system": "You are a helpful location and mapping assistant powered by Google Maps services.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello! Can you help me find the coordinates for the Eiffel Tower?"
+    }
+  ],
+  "tools": [
+    {
+      "name": "maps_geocode",
+      "description": "Convert an address into geographic coordinates",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "The address to geocode"
+          }
+        },
+        "required": ["address"]
+      }
+    }
+  ]
+}

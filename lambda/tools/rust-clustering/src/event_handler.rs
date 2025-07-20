@@ -6,8 +6,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
-use anyhow::{anyhow, Context, Result};
-
 struct S3Config {
     bucket: String,
     key: String,
@@ -20,14 +18,14 @@ struct NamedVector {
     vector: Vec<f32>, // Note: Changed to f32 to match hdbscan expectations
 }
 
-fn parse_csv(data: &str) -> Result<Vec<NamedVector>> {
+fn parse_csv(data: &str) -> Result<Vec<NamedVector>, Box<dyn std::error::Error + Send + Sync>> {
     data.lines()
         .filter(|line| !line.trim().is_empty())
         .map(|line| {
             let mut parts = line.split(',');
             let name = parts
                 .next()
-                .ok_or_else(|| anyhow!("Missing name column"))?
+                .ok_or("Missing name column")?
                 .trim()
                 .to_string();
 
@@ -41,7 +39,9 @@ fn parse_csv(data: &str) -> Result<Vec<NamedVector>> {
         .collect()
 }
 
-async fn read_vectors_from_s3(config: S3Config) -> Result<Vec<NamedVector>> {
+async fn read_vectors_from_s3(
+    config: S3Config,
+) -> Result<Vec<NamedVector>, Box<dyn std::error::Error + Send + Sync>> {
     let aws_config: SdkConfig = aws_config::load_defaults(BehaviorVersion::latest()).await;
     let client = Client::new(&aws_config);
 
@@ -98,17 +98,13 @@ pub(crate) async fn function_handler(event: LambdaEvent<Value>) -> Result<ToolUs
     match payload.name.as_str() {
         "calculate_hdbscan_clusters" => {
             tracing::info!("Calculating clusters using HDBSCAN");
-            let bucket = payload.input["bucket"].as_str().unwrap().to_string();
-            let key = payload.input["key"].as_str().unwrap().to_string();
-            // Store bucket and key values before they're moved
-            let bucket_name = bucket.clone();
-            let key_name = key.clone();
-            let config = S3Config { bucket, key };
+            let config = S3Config {
+                bucket: payload.input["bucket"].as_str().unwrap().to_string(),
+                key: payload.input["key"].as_str().unwrap().to_string(),
+            };
 
             // Read vectors from S3
-            let named_vectors = read_vectors_from_s3(config)
-                .await
-                .context(format!("Failed to read vectors from S3 bucket: {bucket_name} key: {key_name}. Please check file existenace and IAM permissions."))?;
+            let named_vectors = read_vectors_from_s3(config).await?;
 
             // Prepare data for HDBSCAN
             let data: Vec<Vec<f32>> = named_vectors.iter().map(|nv| nv.vector.clone()).collect();

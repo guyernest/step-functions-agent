@@ -12,6 +12,8 @@ from aws_cdk import (
     custom_resources as cr,
 )
 from constructs import Construct
+from .base_tool_construct import BaseToolConstruct
+from ..shared.tool_definitions import DatabaseTools
 from ..shared.naming_conventions import NamingConventions
 import json
 
@@ -38,11 +40,8 @@ class DBInterfaceToolStack(Stack):
         # Create tool Lambda
         self._create_db_interface_lambda()
         
-        # Register tools in DynamoDB registry
-        self._register_tools_in_registry()
-        
-        # Create stack exports
-        self._create_stack_exports()
+        # Register tools in DynamoDB registry using BaseToolConstruct
+        self._register_tools_using_base_construct()
 
     def _import_shared_resources(self):
         """Import shared resources from other stacks"""
@@ -113,139 +112,27 @@ class DBInterfaceToolStack(Stack):
         # Apply removal policy to help with stack destruction
         self.db_interface_lambda.apply_removal_policy(RemovalPolicy.DESTROY)
 
-    def _register_tools_in_registry(self):
-        """Register both SQL tools in the DynamoDB registry"""
+    def _register_tools_using_base_construct(self):
+        """Register database tools using BaseToolConstruct with centralized definitions"""
         
-        # Tool specifications for both tools that use the same Lambda
-        tools_specs = [
-            {
-                "tool_name": "get_db_schema",
-                "description": "Describe the schema of the SQLite database, including table names, and column names and types.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {}
-                },
-                "lambda_arn": self.db_interface_lambda.function_arn,
-                "lambda_function_name": self.db_interface_lambda.function_name,
-                "language": "python",
-                "tags": ["sql", "database", "schema"],
-                "status": "active",
-                "author": "system",
-                "human_approval_required": False,
-                "created_at": "2024-01-01T00:00:00Z",
-                "updated_at": "2024-01-01T00:00:00Z"
-            },
-            {
-                "tool_name": "execute_sql_query", 
-                "description": "Return the query results of any valid sqlite SQL query. If the SQL query result has many rows then return only the first 5 rows.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "sql_query": {
-                            "type": "string",
-                            "description": "The sql query to execute. If the SQL query result has many rows then return only the first 5 rows."
-                        }
-                    },
-                    "required": ["sql_query"]
-                },
-                "lambda_arn": self.db_interface_lambda.function_arn,
-                "lambda_function_name": self.db_interface_lambda.function_name,
-                "language": "python",
-                "tags": ["sql", "database", "query"],
-                "status": "active", 
-                "author": "system",
-                "human_approval_required": False,
-                "created_at": "2024-01-01T00:00:00Z",
-                "updated_at": "2024-01-01T00:00:00Z"
-            }
+        # Get tool specifications from centralized definitions
+        tool_definitions = DatabaseTools.get_all_tools()
+        tool_specs = [
+            tool_def.to_registry_item(
+                lambda_arn=self.db_interface_lambda.function_arn,
+                lambda_function_name=self.db_interface_lambda.function_name
+            )
+            for tool_def in tool_definitions
         ]
         
-        # Create custom resources to register each tool
-        for i, tool_spec in enumerate(tools_specs):
-            self._create_tool_registration(i, tool_spec)
-
-    def _create_tool_registration(self, index: int, tool_spec: dict):
-        """Create a custom resource to register a tool in DynamoDB"""
-        
-        # Create role for the custom resource
-        custom_resource_role = iam.Role(
+        # Use BaseToolConstruct for registration
+        BaseToolConstruct(
             self,
-            f"ToolRegistrationRole{index}",
-            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AWSLambdaBasicExecutionRole"
-                )
-            ]
-        )
-        
-        # Grant DynamoDB permissions
-        custom_resource_role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=[
-                    "dynamodb:PutItem",
-                    "dynamodb:UpdateItem",
-                    "dynamodb:DeleteItem"
-                ],
-                resources=[self.tool_registry_table_arn]
-            )
-        )
-        
-        # Convert input_schema to JSON string for DynamoDB
-        tool_spec_for_dynamo = tool_spec.copy()
-        tool_spec_for_dynamo["input_schema"] = json.dumps(tool_spec["input_schema"])
-        tool_spec_for_dynamo["tags"] = json.dumps(tool_spec["tags"])
-        
-        # Create the custom resource
-        cr.AwsCustomResource(
-            self,
-            f"RegisterTool{index}",
-            on_create=cr.AwsSdkCall(
-                service="dynamodb",
-                action="putItem",
-                parameters={
-                    "TableName": self.tool_registry_table_name,
-                    "Item": {
-                        key: {"S": str(value)} if not isinstance(value, bool) else {"BOOL": value}
-                        for key, value in tool_spec_for_dynamo.items()
-                    }
-                },
-                physical_resource_id=cr.PhysicalResourceId.of(f"tool-{tool_spec['tool_name']}-{self.env_name}")
-            ),
-            on_update=cr.AwsSdkCall(
-                service="dynamodb", 
-                action="putItem",
-                parameters={
-                    "TableName": self.tool_registry_table_name,
-                    "Item": {
-                        key: {"S": str(value)} if not isinstance(value, bool) else {"BOOL": value}
-                        for key, value in tool_spec_for_dynamo.items()
-                    }
-                },
-                physical_resource_id=cr.PhysicalResourceId.of(f"tool-{tool_spec['tool_name']}-{self.env_name}")
-            ),
-            on_delete=cr.AwsSdkCall(
-                service="dynamodb",
-                action="deleteItem", 
-                parameters={
-                    "TableName": self.tool_registry_table_name,
-                    "Key": {
-                        "tool_name": {"S": tool_spec["tool_name"]}
-                    }
-                }
-            ),
-            role=custom_resource_role
+            "DatabaseTools",
+            tool_specs=tool_specs,
+            lambda_function=self.db_interface_lambda,
+            env_name=self.env_name
         )
 
-    def _create_stack_exports(self):
-        """Create CloudFormation outputs for other stacks to import"""
-        
-        # Export DB interface Lambda function ARN
-        CfnOutput(
-            self, 
-            "DBInterfaceLambdaArn",
-            value=self.db_interface_lambda.function_arn,
-            export_name=f"DBInterfaceLambdaArn-{self.env_name}",
-            description="ARN of the DB interface Lambda function"
-        )
+        # Store Lambda function reference for monitoring
+        self.database_lambda_function = self.db_interface_lambda

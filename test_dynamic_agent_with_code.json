@@ -1,0 +1,4 @@
+{
+  "user_request": "Can you help me analyze some data? First, get the database schema, then write Python code to create a simple data visualization showing the relationship between different tables.",
+  "max_iterations": 5
+}

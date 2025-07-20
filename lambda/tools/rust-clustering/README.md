@@ -1,7 +1,5 @@
 # Rust Example: Clustering Tools
 
-![Rust logo](https://cdn.simpleicons.org/rust/gray?size=48)
-
 This directory contains the implementation of the tools for Time Series Clustering AI Agent in **Rust**.
 
 ## Folder structure
@@ -36,7 +34,6 @@ pub struct ToolUsePayload {
 #[derive(Serialize, Debug)]
 pub struct ToolUseResponse {
     pub tool_use_id: String,
-    pub name: String,
     #[serde(rename = "type")]
     pub response_type: String,
     pub content: String,
@@ -77,7 +74,6 @@ The tools return the output as a JSON object, with the result in the `content` f
     ...
     Ok(ToolUseResponse {
         tool_use_id: payload.id,
-        name: payload.name,
         response_type: "tool_result".to_string(),
         content: result,
     })
@@ -91,37 +87,20 @@ Tools often need to make requests to external APIs, such as Google Maps API. Thi
 The following code snippet shows how to initialize the API key.
 
 ```rust
-    // Handle Secrets
-    let region_provider = RegionProviderChain::default_provider().or_else("us-west-2");
-    let shared_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region(region_provider)
-        .load()
-        .await;
-    let secrets_client = aws_sdk_secretsmanager::Client::new(&shared_config);
-    let name: &str = "/ai-agent/TOOL_NAME";
-    let resp = secrets_client
-        .get_secret_value()
-        .secret_id(name)
-        .send()
-        .await?;
-    let secret_json: serde_json::Value =
-        serde_json::from_str(&resp.secret_string().unwrap_or_default())
-            .expect("Failed to parse JSON");
-    let api_key_value: String = secret_json["TOOL_API_KEY"]
-        .as_str()
-        .unwrap_or("No value!")
-        .to_string();
-```
+let client = aws_sdk_secretsmanager::Client::new(&shared_config);
+let name: &str = "/ai-agent/XXX_API_KEY";
+let resp = client.get_secret_value().secret_id(name).send().await?;
+let api_key_secret: String = resp.secret_string().unwrap_or("No value!".to_string());
+  ```
 
 ## Prerequisites
 
-* [Rust](https://www.rust-lang.org/tools/install)
-* [Cargo Lambda](https://www.cargo-lambda.info/guide/installation.html)
+- [Rust](https://www.rust-lang.org/tools/install)
+- [Cargo Lambda](https://www.cargo-lambda.info/guide/installation.html)
 
 ## Setup
 
 To set up the project, run:
-
 ```bash
 cargo lambda new rust-clustering 
 # When prompted, choose No for the HTTP question
@@ -138,7 +117,6 @@ cargo add aws_sdk_s3
 ## Building
 
 To build the project for production, run:
-
 ```bash
 cargo lambda build --arm64 --release
 ```
@@ -155,7 +133,7 @@ If you want to run integration tests locally, you can use the `cargo lambda watc
 
 First, run `cargo lambda watch` to start a local server. When you make changes to the code, the server will automatically restart.
 
-For generic events, where you define the event data structure, you can create a JSON file with the data you want to test with under `tests/test-event.json`. For example:
+For generic events, where you define the event data structure, you can create a JSON file with the data you want to test with. For example:
 
 ```json
 {
@@ -168,35 +146,4 @@ For generic events, where you define the event data structure, you can create a 
 }
 ```
 
-Then, run
-
-```bash
-cargo lambda invoke --data-file tests/test-event.json
-```
-
-or using the SAM CLI:
-
-```bash
-sam local invoke RustClusteringFunction --event tests/test-event.json
-```
-
-to invoke the function with the data in `test-event.json`.
-
-## Deployment
-
-The deployment is done using a CDK stack, which is implemented in the [step_functions_clustering_agent_stack.py](../../../step_functions_sql_agent/step_functions_clustering_agent_stack.py) file.
-
-```python
-## Forecasting Tools in Rust
-# Rust Lambda
-clustering_lambda = _lambda.Function(
-    self, 
-    "ClusteringLambda",
-    function_name="ClusteringTools",
-    code=_lambda.Code.from_asset("lambda/tools/rust-clustering/target/lambda/rust-clustering"), 
-    handler="main",
-    runtime=_lambda.Runtime.PROVIDED_AL2023,
-    architecture=_lambda.Architecture.ARM_64,
-    role=clustering_lambda_role
-)
-```
+Then, run `cargo lambda invoke --data-file ./data.json` to invoke the function with the data in `data.json`.

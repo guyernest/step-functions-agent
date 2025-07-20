@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SAM template for YFinance Lambda function for financial data
+
+Globals:
+  Function:
+    Timeout: 120
+    MemorySize: 256
+    Runtime: python3.11
+    Architectures:
+      - arm64
+
+Resources:
+  YFinanceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: yfinance-tool
+      CodeUri: .
+      Handler: index.lambda_handler
+      Description: Financial data tool using yfinance library
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: yfinance-tool
+          POWERTOOLS_LOG_LEVEL: INFO
+          DATA_BUCKET_NAME: !Ref DataBucketName
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:GetObject
+              Resource: !Sub 'arn:aws:s3:::${DataBucketName}/*'
+            - Effect: Allow
+              Action:
+                - xray:PutTraceSegments
+                - xray:PutTelemetryRecords
+              Resource: '*'
+      Tracing: Active
+
+Parameters:
+  DataBucketName:
+    Type: String
+    Default: mlguy-mlops-courses
+    Description: S3 bucket name for storing financial data
+
+Outputs:
+  YFinanceFunctionArn:
+    Description: YFinance Lambda Function ARN
+    Value: !GetAtt YFinanceFunction.Arn
+  YFinanceFunctionName:
+    Description: YFinance Lambda Function Name
+    Value: !Ref YFinanceFunction

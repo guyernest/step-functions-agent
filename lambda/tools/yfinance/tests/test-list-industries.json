@@ -1,0 +1,8 @@
+{
+  "name": "list_industries",
+  "id": "test-list-industries-001",
+  "input": {
+    "sector_key": "technology"
+  },
+  "type": "tool_use"
+}

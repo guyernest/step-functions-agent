@@ -1,0 +1,7 @@
+{
+  "name": "maps_geocode",
+  "id": "google_maps_test_001",
+  "input": {
+    "address": "1600 Amphitheatre Parkway, Mountain View, CA"
+  }
+}

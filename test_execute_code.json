@@ -1,0 +1,7 @@
+{
+  "name": "execute_python",
+  "id": "test_execute_code_001",
+  "input": {
+    "code": "print('Hello from E2B!')\nresult = 2 + 2\nprint(f'2 + 2 = {result}')\nresult"
+  }
+}

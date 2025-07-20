@@ -1,0 +1,8 @@
+{
+  "name": "execute_sql_query",
+  "id": "test-execute-query-001",
+  "input": {
+    "query": "SELECT playerID, nameFirst, nameLast FROM player LIMIT 5"
+  },
+  "type": "tool_use"
+}

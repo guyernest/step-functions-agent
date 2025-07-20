@@ -1,0 +1,10 @@
+{
+  "name": "get_ticker_data",
+  "id": "test-ticker-data-001",
+  "input": {
+    "ticker": "AAPL",
+    "start_date": "2024-01-01",
+    "end_date": "2024-12-31"
+  },
+  "type": "tool_use"
+}

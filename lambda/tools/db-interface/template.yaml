@@ -1,0 +1,48 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SAM template for Database Interface Lambda function
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: python3.11
+    Architectures:
+      - arm64
+
+Resources:
+  DbInterfaceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: db-interface-tool
+      CodeUri: .
+      Handler: index.lambda_handler
+      Description: Database interface tool for SQL operations
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: db-interface-tool
+          POWERTOOLS_LOG_LEVEL: INFO
+          DATABASE_NAME: baseball.db
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - xray:PutTraceSegments
+                - xray:PutTelemetryRecords
+              Resource: '*'
+      Tracing: Active
+
+Parameters:
+  DatabaseName:
+    Type: String
+    Default: baseball.db
+    Description: Name of the SQLite database file
+
+Outputs:
+  DbInterfaceFunctionArn:
+    Description: Database Interface Lambda Function ARN
+    Value: !GetAtt DbInterfaceFunction.Arn
+  DbInterfaceFunctionName:
+    Description: Database Interface Lambda Function Name
+    Value: !Ref DbInterfaceFunction

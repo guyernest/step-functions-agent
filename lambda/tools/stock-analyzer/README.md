@@ -1,4 +1,4 @@
-# ![Java Logo](https://img.icons8.com/?size=48&id=13679&format=png&color=000000) Java Example: Time Series Tools
+# Java Example: Time Series Tools
 
 This directory contains the implementation of the tools for time series analysis AI Agent in **Java**, using Fork/Join Framework.
 
@@ -102,7 +102,6 @@ The tools return the output as a JSON object, with the result in the `content` f
         ...
             Map<String, String> response = new HashMap<>();
             response.put("type", "tool_result");
-            response.put("name", event.getName());
             response.put("tool_use_id", event.getId());
             response.put("content", result);
             
@@ -111,7 +110,6 @@ The tools return the output as a JSON object, with the result in the `content` f
         } catch (Exception e) {
             Map<String, String> errorResponse = new HashMap<>();
             errorResponse.put("type", "tool_result");
-            errorResponse.put("name", event.getName());
             errorResponse.put("tool_use_id", event.getId());
             errorResponse.put("content", String.format("error executing tool %s: %s", event.getName(), e.getMessage()));
             return errorResponse;
@@ -133,27 +131,23 @@ import software.amazon.lambda.powertools.parameters.ParamManager;
     SecretsProvider secretsProvider = ParamManager.getSecretsProvider();
 
     // Retrieve a single secret
-    String value = secretsProvider.get("/ai-agent/api-keys");
-    // Parse the JSON string into a map
-    Map<String, String> apiKeys = new Gson().fromJson(value, Map.class);
-    // Retrieve the API key for the tool
-    String apiKey = apiKeys.get("YOUR_API_KEY_NAME");
+    String value = secretsProvider.get("/ai-agent/OPENAI_API_KEY");
     ...
 ```
 
-## Building
+## Building 
 
-To build the Lambda function, run
+To build the Lambda function, run 
 
 ```bash
 mvn clean package
-```
+``` 
 
-in the root directory of the lambda tool (lambda/tools/stock-analyzer).
+in the root directory of the lambda tool (lambda/tools/stock-analyzer). 
 
 ## Testing
 
-You can test it locally using [AWS SAM](https://docs.aws.amazon.com/lambda/latest/dg/sam-cli-local.html) by running
+You can test it locally using [AWS SAM](https://docs.aws.amazon.com/lambda/latest/dg/sam-cli-local.html) by running 
 
 ```bash
 sam local invoke StockAnalyzerFunction -e events/test_event.json

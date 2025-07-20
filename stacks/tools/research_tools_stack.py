@@ -153,9 +153,11 @@ class ResearchToolsStack(Stack):
                 code=_lambda.Code.from_asset("lambda/tools/web-research/"),
                 handler="main",
                 timeout=Duration.seconds(120),
-                role=go_lambda_role,
-                removal_policy=RemovalPolicy.DESTROY
+                role=go_lambda_role
             )
+            
+            # Apply removal policy separately
+            self.go_research_lambda.apply_removal_policy(RemovalPolicy.DESTROY)
         
         # Export Lambda ARN
         CfnOutput(
