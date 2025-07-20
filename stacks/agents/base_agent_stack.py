@@ -70,6 +70,15 @@ class BaseAgentStack(Stack):
             NamingConventions.stack_export_name("TableArn", "ToolRegistry", self.env_name)
         )
         
+        # Import agent registry table name and ARN
+        self.agent_registry_table_name = Fn.import_value(
+            NamingConventions.stack_export_name("Table", "AgentRegistry", self.env_name)
+        )
+        
+        self.agent_registry_table_arn = Fn.import_value(
+            NamingConventions.stack_export_name("TableArn", "AgentRegistry", self.env_name)
+        )
+        
         # Import tool Lambda ARNs for IAM permissions
         # We'll generate permissions for all tools the agent might use
         self._import_tool_lambda_arns()
@@ -95,6 +104,21 @@ class BaseAgentStack(Stack):
             "maps_distance_matrix": f"GoogleMapsLambdaArn-{self.env_name}",
             "maps_elevation": f"GoogleMapsLambdaArn-{self.env_name}",
             "maps_directions": f"GoogleMapsLambdaArn-{self.env_name}",
+            
+            # Research tools (Go + Python)
+            "research_company": f"WebResearchLambdaArn-{self.env_name}",
+            "list_industries": f"FinancialToolsLambdaArn-{self.env_name}",
+            "top_industry_companies": f"FinancialToolsLambdaArn-{self.env_name}",
+            "top_sector_companies": f"FinancialToolsLambdaArn-{self.env_name}",
+            
+            # Financial data tools
+            "yfinance": f"FinancialToolsLambdaArn-{self.env_name}",
+            
+            # CloudWatch tools
+            "find_log_groups_by_tag": f"CloudWatchToolsLambdaArn-{self.env_name}",
+            "execute_query": f"CloudWatchToolsLambdaArn-{self.env_name}",
+            "get_query_generation_prompt": f"CloudWatchToolsLambdaArn-{self.env_name}",
+            "get_service_graph": f"CloudWatchToolsLambdaArn-{self.env_name}",
         }
         
         # Import ARNs for tools this agent uses
@@ -110,7 +134,7 @@ class BaseAgentStack(Stack):
         self.log_group = logs.LogGroup(
             self,
             f"{self.agent_name}AgentLogGroup",
-            log_group_name=f"/aws/stepfunctions/{self.agent_name}-agent-{self.env_name}",
+            log_group_name=f"/aws/stepfunctions/{self.agent_name}-{self.env_name}",
             retention=logs.RetentionDays.ONE_WEEK,
             removal_policy=RemovalPolicy.DESTROY
         )
@@ -165,6 +189,21 @@ class BaseAgentStack(Stack):
             )
         )
         
+        # Grant access to DynamoDB agent registry
+        role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "dynamodb:GetItem",
+                    "dynamodb:Query"
+                ],
+                resources=[
+                    self.agent_registry_table_arn,
+                    f"{self.agent_registry_table_arn}/index/*"
+                ]
+            )
+        )
+        
         # Grant access to LLM Lambda function
         role.add_to_policy(
             iam.PolicyStatement(
@@ -208,28 +247,33 @@ class BaseAgentStack(Stack):
     def _create_step_functions_from_template(self):
         """Create Step Functions workflow from dynamic template"""
         
-        # Read the template file
-        template_path = "step-functions/dynamic-agent-template.json"
+        # Read the template file - now using registry-aware template
+        template_path = "step-functions/dynamic-agent-with-registry-template.json"
         
         with open(template_path, 'r') as f:
             template_content = f.read()
         
         # Replace placeholders with actual values
         
-        # 1. Replace tool registry table name
+        # 1. Replace agent registry table name
+        template_content = template_content.replace(
+            "AGENT_REGISTRY_TABLE_NAME",
+            self.agent_registry_table_name
+        )
+        
+        # 2. Replace agent name
+        template_content = template_content.replace(
+            "AGENT_NAME",
+            self.agent_name
+        )
+        
+        # 3. Replace tool registry table name
         template_content = template_content.replace(
             "TOOL_REGISTRY_TABLE_NAME",
             self.tool_registry_table_name
         )
         
-        # 2. Replace tool names list for dynamic loading
-        tool_names_json = json.dumps(self.tool_ids)
-        template_content = template_content.replace(
-            '"TOOL_NAMES_LIST"',
-            tool_names_json
-        )
-        
-        # 3. Replace LLM Lambda ARN
+        # 4. Replace LLM Lambda ARN
         template_content = template_content.replace(
             "SHARED_CLAUDE_LAMBDA_ARN",
             self.llm_arn
@@ -261,7 +305,7 @@ class BaseAgentStack(Stack):
                     "Arguments": {
                         "FunctionName": actual_lambda_arn,
                         "Payload": {
-                            "name": "{% $states.input.**.name %}",
+                            "name": "{% $states.input.name %}",
                             "id": "{% $states.input.id %}",
                             "input": "{% $states.input.input %}"
                         }
@@ -292,7 +336,7 @@ class BaseAgentStack(Stack):
             routing_choices_json
         )
         
-        # Replace execution states by merging them into the JSON structure
+        # Parse template as JSON to add execution states
         template_json = json.loads(template_content)
         
         # Add execution states to the ItemProcessor states
@@ -302,9 +346,6 @@ class BaseAgentStack(Stack):
         for state_name, state_def in execution_states.items():
             item_processor_states[state_name] = state_def
         
-        # Update system prompt in the template
-        template_json["States"]["Call LLM"]["Arguments"]["Payload"]["system"] = self.system_prompt
-        
         # Convert back to JSON string
         template_content = json.dumps(template_json, indent=2)
         
@@ -312,7 +353,7 @@ class BaseAgentStack(Stack):
         self.state_machine = sfn.StateMachine(
             self,
             f"{self.agent_name}AgentStateMachine",
-            state_machine_name=f"{self.agent_name}-agent-{self.env_name}",
+            state_machine_name=f"{self.agent_name}-{self.env_name}",
             definition_body=sfn.DefinitionBody.from_string(template_content),
             role=self.agent_execution_role,
             logs=sfn.LogOptions(
