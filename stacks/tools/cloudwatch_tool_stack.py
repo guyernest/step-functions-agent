@@ -92,3 +92,17 @@ class CloudWatchToolStack(Stack):
         # Store Lambda function reference for monitoring
         self.cloudwatch_lambda_function = cloudwatch_lambda
         
+        # Create CloudFormation exports
+        self._create_stack_exports(cloudwatch_lambda)
+    
+    def _create_stack_exports(self, cloudwatch_lambda):
+        """Create CloudFormation outputs for other stacks to import"""
+        
+        # Export CloudWatch Lambda ARN
+        CfnOutput(
+            self,
+            "CloudWatchInsightsLambdaArn",
+            value=cloudwatch_lambda.function_arn,
+            export_name=f"CloudWatchInsightsLambdaArn-{self.env_name}",
+            description="ARN of the CloudWatch Insights Lambda function"
+        )

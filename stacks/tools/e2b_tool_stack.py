@@ -217,3 +217,18 @@ class E2BToolStack(Stack):
 
         # Store Lambda function reference for monitoring
         self.code_execution_lambda_function = self.execute_code_lambda
+        
+        # Create CloudFormation exports
+        self._create_stack_exports()
+    
+    def _create_stack_exports(self):
+        """Create CloudFormation outputs for other stacks to import"""
+        
+        # Export Execute Code Lambda ARN
+        CfnOutput(
+            self,
+            "ExecuteCodeLambdaArn",
+            value=self.execute_code_lambda.function_arn,
+            export_name=f"ExecuteCodeLambdaArn-{self.env_name}",
+            description="ARN of the Execute Code Lambda function"
+        )

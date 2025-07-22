@@ -3,13 +3,15 @@ from aws_cdk import (
     Stack,
     Fn,
     RemovalPolicy,
+    CfnOutput,
     aws_logs as logs,
     aws_iam as iam,
     aws_stepfunctions as sfn,
 )
 from constructs import Construct
 from ..shared.naming_conventions import NamingConventions
-from typing import List
+from .step_functions_generator import StepFunctionsGenerator
+from typing import List, Dict, Any
 import json
 
 
@@ -36,7 +38,7 @@ class BaseAgentStack(Stack):
         construct_id: str, 
         agent_name: str,
         llm_arn: str, 
-        tool_ids: List[str], 
+        tool_configs: List[Dict[str, Any]], 
         env_name: str = "prod",
         system_prompt: str = None,
         **kwargs
@@ -46,7 +48,8 @@ class BaseAgentStack(Stack):
         self.env_name = env_name
         self.agent_name = agent_name
         self.llm_arn = llm_arn
-        self.tool_ids = tool_ids
+        self.tool_configs = tool_configs
+        self.tool_names = [config["tool_name"] for config in tool_configs]
         self.system_prompt = system_prompt or f"You are a helpful AI assistant with access to various tools."
         
         # Import shared resources
@@ -170,17 +173,17 @@ class BaseAgentStack(Stack):
             )
         )
         
-        # Grant access to invoke any Lambda function that is registered as a tool
-        # The Step Functions will discover tool Lambda ARNs dynamically from the Tool Registry
+        # Grant access to invoke specific tool Lambda functions
+        # Get unique Lambda ARNs from tool configs
+        lambda_arns = list(set(config["lambda_arn"] for config in self.tool_configs))
+        
         role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 actions=[
                     "lambda:InvokeFunction"
                 ],
-                resources=[
-                    f"arn:aws:lambda:{self.region}:{self.account}:function:*tool*{self.env_name}*"
-                ]
+                resources=lambda_arns
             )
         )
         
@@ -199,50 +202,24 @@ class BaseAgentStack(Stack):
         self.agent_execution_role = role
 
     def _create_step_functions_from_template(self):
-        """Create Step Functions workflow from dynamic template"""
+        """Create Step Functions workflow with static tool definitions"""
         
-        # Read the template file - now using registry-aware template
-        template_path = "step-functions/dynamic-agent-with-registry-template.json"
-        
-        with open(template_path, 'r') as f:
-            template_content = f.read()
-        
-        # Replace placeholders with actual values
-        
-        # 1. Replace agent registry table name
-        template_content = template_content.replace(
-            "AGENT_REGISTRY_TABLE_NAME",
-            self.agent_registry_table_name
+        # Generate static Step Functions definition with explicit tool routing
+        definition_json = StepFunctionsGenerator.generate_static_agent_definition(
+            agent_name=self.agent_name,
+            llm_arn=self.llm_arn,
+            tool_configs=self.tool_configs,
+            system_prompt=self.system_prompt,
+            agent_registry_table_name=self.agent_registry_table_name,
+            tool_registry_table_name=self.tool_registry_table_name
         )
         
-        # 2. Replace agent name
-        template_content = template_content.replace(
-            "AGENT_NAME",
-            self.agent_name
-        )
-        
-        # 3. Replace tool registry table name
-        template_content = template_content.replace(
-            "TOOL_REGISTRY_TABLE_NAME",
-            self.tool_registry_table_name
-        )
-        
-        # 4. Replace LLM Lambda ARN
-        template_content = template_content.replace(
-            "SHARED_CLAUDE_LAMBDA_ARN",
-            self.llm_arn
-        )
-        
-        # The template now uses dynamic tool discovery via Tool Registry
-        # All tool routing and execution is handled at runtime by querying DynamoDB
-        # No need to generate static routing choices or execution states
-        
-        # Create the state machine using the processed template
+        # Create the state machine using the generated definition
         self.state_machine = sfn.StateMachine(
             self,
             f"{self.agent_name}AgentStateMachine",
             state_machine_name=f"{self.agent_name}-{self.env_name}",
-            definition_body=sfn.DefinitionBody.from_string(template_content),
+            definition_body=sfn.DefinitionBody.from_string(definition_json),
             role=self.agent_execution_role,
             logs=sfn.LogOptions(
                 destination=self.log_group,

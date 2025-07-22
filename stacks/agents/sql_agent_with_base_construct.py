@@ -6,7 +6,7 @@ from ..shared.base_agent_construct import BaseAgentConstruct
 import json
 
 
-class SQLAgentStack(Stack):
+class SQLAgentStack(BaseAgentStack):
     """
     SQL Agent Stack - Uses base agent stack for simplified deployment
     
@@ -18,32 +18,48 @@ class SQLAgentStack(Stack):
     """
 
     def __init__(self, scope: Construct, construct_id: str, env_name: str = "prod", **kwargs) -> None:
-        super().__init__(scope, construct_id, **kwargs)
-        
         # Import Claude LLM ARN from shared stack
         claude_lambda_arn = Fn.import_value(f"SharedClaudeLambdaArn-{env_name}")
         
-        # Define tool IDs with validation
-        tool_ids = [
-            "get_db_schema",
-            "execute_sql_query", 
-            "execute_python"
+        # Import tool Lambda ARNs
+        db_interface_lambda_arn = Fn.import_value(f"DBInterfaceLambdaArn-{env_name}")
+        execute_code_lambda_arn = Fn.import_value(f"ExecuteCodeLambdaArn-{env_name}")
+        
+        # Define tool configurations
+        tool_configs = [
+            {
+                "tool_name": "get_db_schema",
+                "lambda_arn": db_interface_lambda_arn,
+                "requires_approval": False
+            },
+            {
+                "tool_name": "execute_sql_query",
+                "lambda_arn": db_interface_lambda_arn,
+                "requires_approval": False
+            },
+            {
+                "tool_name": "execute_python",
+                "lambda_arn": execute_code_lambda_arn,
+                "requires_approval": False
+            }
         ]
         
         # Validate tool names exist in centralized definitions
-        invalid_tools = AllTools.validate_tool_names(tool_ids)
+        tool_names = [config["tool_name"] for config in tool_configs]
+        invalid_tools = AllTools.validate_tool_names(tool_names)
         if invalid_tools:
             raise ValueError(f"SQL Agent uses invalid tools: {invalid_tools}. Available tools: {AllTools.get_all_tool_names()}")
         
-        # Create agent using base stack
-        self.sql_agent = BaseAgentStack(
-            self,
-            "SQLAgent",
+        # Call BaseAgentStack constructor
+        super().__init__(
+            scope,
+            construct_id,
             agent_name="sql-agent",
             llm_arn=claude_lambda_arn,
-            tool_ids=tool_ids,
+            tool_configs=tool_configs,
             env_name=env_name,
-            system_prompt="You are a helpful SQL assistant with access to a SQLite database and Python code execution. Help users query and understand their data. Please don't assume to know the schema of the database, and use the get_db_schema tool to learn table and column names and types before using it. You can also execute Python code for data analysis, visualization, or calculations using the execute_python tool."
+            system_prompt="You are a helpful SQL assistant with access to a SQLite database and Python code execution. Help users query and understand their data. Please don't assume to know the schema of the database, and use the get_db_schema tool to learn table and column names and types before using it. You can also execute Python code for data analysis, visualization, or calculations using the execute_python tool.",
+            **kwargs
         )
         
         # Store env_name for registration
@@ -74,9 +90,9 @@ Always ensure queries are safe and follow best practices. Use the get_db_schema 
             "llm_provider": "claude",
             "llm_model": "claude-3-5-sonnet-20241022",
             "tools": [
-                {"tool_id": "get_db_schema", "enabled": True, "version": "latest"},
-                {"tool_id": "execute_sql_query", "enabled": True, "version": "latest"},
-                {"tool_id": "execute_python", "enabled": True, "version": "latest"}
+                {"tool_name": "get_db_schema", "enabled": True, "version": "latest"},
+                {"tool_name": "execute_sql_query", "enabled": True, "version": "latest"},
+                {"tool_name": "execute_python", "enabled": True, "version": "latest"}
             ],
             "observability": {
                 "log_group": f"/aws/stepfunctions/sql-agent-{self.env_name}",

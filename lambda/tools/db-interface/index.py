@@ -103,7 +103,7 @@ def lambda_handler(event, context):
             # The SQL provided might cause ad error. We need to return the error message to the LLM
             # so it can fix the SQL and try again.
             try:
-                result = db.execute_sql_query(tool_input['sql_query'])
+                result = db.execute_sql_query(tool_input['query'])
             except sqlite3.OperationalError as e:
                 result = json.dumps({
                     'error': str(e)

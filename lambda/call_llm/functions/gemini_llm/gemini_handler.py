@@ -57,7 +57,8 @@ class GeminiLLM(BaseLLM):
             if function_declarations:
                 gemini_tools = [types.Tool(function_declarations=function_declarations)]
 
-        # Convert messages to Gemini format
+        # Convert messages to Gemini format and filter out empty messages
+        filtered_messages = []
         for message in messages:
             if message["role"] == "user":
                 if "content" in message:
@@ -77,9 +78,30 @@ class GeminiLLM(BaseLLM):
                                 })
                     
                     del message["content"]
+                    filtered_messages.append(message)
+            elif message["role"] == "assistant":
+                # Handle assistant messages with content (string or array)
+                if "content" in message and message["content"]:
+                    if isinstance(message["content"], str):
+                        message["parts"] = [{"text": message["content"]}]
+                    elif isinstance(message["content"], list):
+                        message["parts"] = []
+                        for part in message["content"]:
+                            if "type" in part and part["type"] == "text":
+                                message["parts"].append({"text": part["text"]})
+                            elif "type" in part and part["type"] == "tool_use":
+                                message["parts"].append({
+                                    "function_call": {
+                                        "name": part["name"],
+                                        "args": part["input"]
+                                    }
+                                })
+                    del message["content"]
+                    filtered_messages.append(message)
+                # Skip empty assistant messages to avoid Gemini API errors
 
         return {
-            "messages": messages,
+            "messages": filtered_messages,
             "tools": gemini_tools,
             "system": system
         }    
@@ -90,8 +112,8 @@ class GeminiLLM(BaseLLM):
 
         message_dict = {
             "message": {
-                "role": function_call_content.role,
-                "parts": [],
+                "role": "assistant",  # Normalize to "assistant" for consistency
+                "content": [],  # Use "content" for consistency with other LLMs
             },
             "function_calls": [],
             "metadata": {
@@ -106,7 +128,8 @@ class GeminiLLM(BaseLLM):
         
         for part in function_call_content.parts:
             if part.text:
-                message_dict["message"]["parts"].append({
+                message_dict["message"]["content"].append({
+                    "type": "text",
                     "text": part.text,
                 })
             elif part.function_call:
@@ -115,12 +138,11 @@ class GeminiLLM(BaseLLM):
                     "input": part.function_call.args,
                     "name": part.function_call.name,
                 })
-                message_dict["message"]["parts"].append({
-                    "function_call" : {
-                        "id" : part.function_call.id,
-                        "name" : part.function_call.name,
-                        "args" : part.function_call.args
-                    }
+                message_dict["message"]["content"].append({
+                    "type": "tool_use",
+                    "id": part.function_call.id,
+                    "name": part.function_call.name,
+                    "input": part.function_call.args
                 })
         
         return message_dict

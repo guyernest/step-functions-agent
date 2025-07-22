@@ -97,3 +97,18 @@ class FinancialToolStack(Stack):
 
         # Store Lambda function reference for monitoring
         self.financial_lambda_function = financial_lambda
+        
+        # Create CloudFormation exports
+        self._create_stack_exports(financial_lambda)
+    
+    def _create_stack_exports(self, financial_lambda):
+        """Create CloudFormation outputs for other stacks to import"""
+        
+        # Export YFinance Lambda ARN (using the import name expected by research agent)
+        CfnOutput(
+            self,
+            "YFinanceLambdaArn",
+            value=financial_lambda.function_arn,
+            export_name=f"YFinanceLambdaArn-{self.env_name}",
+            description="ARN of the YFinance Lambda function"
+        )

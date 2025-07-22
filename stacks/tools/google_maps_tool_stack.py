@@ -220,6 +220,15 @@ class GoogleMapsToolStack(Stack):
     def _create_stack_exports(self):
         """Create CloudFormation outputs for other stacks to import"""
         
+        # Export Google Maps Lambda ARN
+        CfnOutput(
+            self,
+            "GoogleMapsLambdaArn",
+            value=self.google_maps_lambda.function_arn,
+            export_name=f"GoogleMapsLambdaArn-{self.env_name}",
+            description="ARN of the Google Maps Lambda function"
+        )
+        
         # Export Google Maps secret ARN (still needed for other tools that might reference it)
         CfnOutput(
             self, 

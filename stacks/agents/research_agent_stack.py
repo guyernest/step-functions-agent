@@ -2,10 +2,11 @@ from aws_cdk import Stack, Fn
 from constructs import Construct
 from .base_agent_stack import BaseAgentStack
 from ..shared.base_agent_construct import BaseAgentConstruct
+from ..shared.tool_definitions import AllTools
 import json
 
 
-class ResearchAgentStack(Stack):
+class ResearchAgentStack(BaseAgentStack):
     """
     Research Agent Stack - Uses base agent stack for simplified deployment
     
@@ -17,26 +18,51 @@ class ResearchAgentStack(Stack):
     """
 
     def __init__(self, scope: Construct, construct_id: str, env_name: str = "prod", **kwargs) -> None:
-        super().__init__(scope, construct_id, **kwargs)
         
         # Import OpenAI GPT LLM ARN from shared stack for LLM coverage diversity
         openai_lambda_arn = Fn.import_value(f"SharedOpenAILambdaArn-{env_name}")
         
-        # Define tool IDs (mix of Go and Python tools)
-        tool_ids = [
-            "research_company",      # Go tool - Perplexity web research
-            "list_industries",       # Python tool - yfinance sectors
-            "top_industry_companies", # Python tool - yfinance industry rankings
-            "top_sector_companies"   # Python tool - yfinance sector rankings
+        # Import tool Lambda ARNs
+        web_research_lambda_arn = Fn.import_value(f"WebResearchLambdaArn-{env_name}")
+        yfinance_lambda_arn = Fn.import_value(f"YFinanceLambdaArn-{env_name}")
+        
+        # Define tool configurations (mix of Go and Python tools)
+        tool_configs = [
+            {
+                "tool_name": "research_company",  # Go tool - Perplexity web research
+                "lambda_arn": web_research_lambda_arn,
+                "requires_approval": False
+            },
+            {
+                "tool_name": "list_industries",  # Python tool - yfinance sectors
+                "lambda_arn": yfinance_lambda_arn,
+                "requires_approval": False
+            },
+            {
+                "tool_name": "top_industry_companies",  # Python tool - yfinance industry rankings
+                "lambda_arn": yfinance_lambda_arn,
+                "requires_approval": False
+            },
+            {
+                "tool_name": "top_sector_companies",  # Python tool - yfinance sector rankings
+                "lambda_arn": yfinance_lambda_arn,
+                "requires_approval": False
+            }
         ]
         
-        # Create agent using base stack
-        self.research_agent = BaseAgentStack(
-            self,
-            "ResearchAgent",
+        # Validate tool names exist in centralized definitions
+        tool_names = [config["tool_name"] for config in tool_configs]
+        invalid_tools = AllTools.validate_tool_names(tool_names)
+        if invalid_tools:
+            raise ValueError(f"Research Agent uses invalid tools: {invalid_tools}. Available tools: {AllTools.get_all_tool_names()}")
+        
+        # Call BaseAgentStack constructor
+        super().__init__(
+            scope,
+            construct_id,
             agent_name="research-agent",
             llm_arn=openai_lambda_arn,
-            tool_ids=tool_ids,
+            tool_configs=tool_configs,
             env_name=env_name,
             system_prompt="""You are an expert financial analyst and research assistant with specialization in comprehensive market analysis.
 
@@ -59,7 +85,8 @@ When conducting research:
 4. Focus on recent developments and market positioning
 5. Provide actionable insights and clear summaries
 
-Always explain your research methodology and cite the specific tools used for transparency."""
+Always explain your research methodology and cite the specific tools used for transparency.""",
+            **kwargs
         )
         
         # Store env_name for registration
@@ -98,10 +125,10 @@ Always be thorough but concise, and prioritize accuracy and relevance.""",
             "llm_provider": "openai",
             "llm_model": "gpt-4o",
             "tools": [
-                {"tool_id": "research_company", "enabled": True, "version": "latest"},
-                {"tool_id": "top_sector_companies", "enabled": True, "version": "latest"},
-                {"tool_id": "top_industry_companies", "enabled": True, "version": "latest"},
-                {"tool_id": "list_industries", "enabled": True, "version": "latest"}
+                {"tool_name": "research_company", "enabled": True, "version": "latest"},
+                {"tool_name": "top_sector_companies", "enabled": True, "version": "latest"},
+                {"tool_name": "top_industry_companies", "enabled": True, "version": "latest"},
+                {"tool_name": "list_industries", "enabled": True, "version": "latest"}
             ],
             "observability": {
                 "log_group": f"/aws/stepfunctions/research-agent-{self.env_name}",

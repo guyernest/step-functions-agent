@@ -1,7 +1,7 @@
 from aws_cdk import Stack, Fn
 from constructs import Construct
 from .base_agent_stack import BaseAgentStack
-from ..shared.tool_definitions import CloudWatchTools
+from ..shared.tool_definitions import CloudWatchTools, AllTools
 from ..shared.base_agent_construct import BaseAgentConstruct
 import json
 
@@ -28,11 +28,41 @@ class CloudWatchAgentStack(BaseAgentStack):
         # Import Claude Lambda ARN from shared LLM stack (best for analytical tasks)
         claude_lambda_arn = Fn.import_value(f"SharedClaudeLambdaArn-{env_name}")
         
-        # Define the tools this agent will use (validated from centralized definitions)
-        cloudwatch_tools = CloudWatchTools.get_tool_names()
+        # Import CloudWatch tools Lambda ARN
+        cloudwatch_lambda_arn = Fn.import_value(f"CloudWatchInsightsLambdaArn-{env_name}")
         
-        # Define system prompt for this agent (stored as instance variable to avoid duplication)
-        self.system_prompt = """You are an expert software system analyst with deep knowledge of root cause analysis and CloudWatch monitoring.
+        # Define tool configurations
+        tool_configs = [
+            {
+                "tool_name": "find_log_groups_by_tag",
+                "lambda_arn": cloudwatch_lambda_arn,
+                "requires_approval": False
+            },
+            {
+                "tool_name": "execute_query",
+                "lambda_arn": cloudwatch_lambda_arn,
+                "requires_approval": False
+            },
+            {
+                "tool_name": "get_query_generation_prompt",
+                "lambda_arn": cloudwatch_lambda_arn,
+                "requires_approval": False
+            },
+            {
+                "tool_name": "get_service_graph",
+                "lambda_arn": cloudwatch_lambda_arn,
+                "requires_approval": False
+            }
+        ]
+        
+        # Validate tool names exist in centralized definitions
+        tool_names = [config["tool_name"] for config in tool_configs]
+        invalid_tools = AllTools.validate_tool_names(tool_names)
+        if invalid_tools:
+            raise ValueError(f"CloudWatch Agent uses invalid tools: {invalid_tools}. Available tools: {AllTools.get_all_tool_names()}")
+        
+        # Define system prompt for this agent
+        system_prompt = """You are an expert software system analyst with deep knowledge of root cause analysis and CloudWatch monitoring.
 
 You are working with users who are trying to understand the root cause of problems in software systems.
 
@@ -60,17 +90,21 @@ When helping users with system analysis:
 
 Always base your analysis on actual retrieved log data and service metrics. Explain your methodology and cite specific evidence from the tools."""
 
-        # Call BaseAgentStack constructor directly
+        # Call BaseAgentStack constructor
         super().__init__(
             scope,
             construct_id,
             agent_name="cloudwatch-agent",
             llm_arn=claude_lambda_arn,
-            tool_ids=cloudwatch_tools,
+            tool_configs=tool_configs,
             env_name=env_name,
-            system_prompt=self.system_prompt,
+            system_prompt=system_prompt,
             **kwargs
         )
+        
+        # Store env_name and system_prompt for registration
+        self.env_name = env_name
+        self.system_prompt = system_prompt
         
         # Register this agent in the Agent Registry
         self._register_agent_in_registry()
@@ -88,10 +122,10 @@ Always base your analysis on actual retrieved log data and service metrics. Expl
             "llm_provider": "claude",
             "llm_model": "claude-3-5-sonnet-20241022",
             "tools": [
-                {"tool_id": "find_log_groups_by_tag", "enabled": True, "version": "latest"},
-                {"tool_id": "execute_query", "enabled": True, "version": "latest"},
-                {"tool_id": "get_query_generation_prompt", "enabled": True, "version": "latest"},
-                {"tool_id": "get_service_graph", "enabled": True, "version": "latest"}
+                {"tool_name": "find_log_groups_by_tag", "enabled": True, "version": "latest"},
+                {"tool_name": "execute_query", "enabled": True, "version": "latest"},
+                {"tool_name": "get_query_generation_prompt", "enabled": True, "version": "latest"},
+                {"tool_name": "get_service_graph", "enabled": True, "version": "latest"}
             ],
             "observability": {
                 "log_group": f"/aws/stepfunctions/cloudwatch-agent-{self.env_name}",

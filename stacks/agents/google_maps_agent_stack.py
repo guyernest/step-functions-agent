@@ -1,9 +1,10 @@
 from aws_cdk import (
+    Stack,
     Fn,
 )
 from constructs import Construct
 from .base_agent_stack import BaseAgentStack
-from ..shared.tool_definitions import GoogleMapsTools
+from ..shared.tool_definitions import GoogleMapsTools, AllTools
 from ..shared.base_agent_construct import BaseAgentConstruct
 import json
 
@@ -27,12 +28,56 @@ class GoogleMapsAgentStack(BaseAgentStack):
     """
 
     def __init__(self, scope: Construct, construct_id: str, env_name: str = "prod", **kwargs) -> None:
-        
         # Import Gemini Lambda ARN from shared LLM stack
         gemini_lambda_arn = Fn.import_value(f"SharedGeminiLambdaArn-{env_name}")
         
-        # Define the tools this agent will use (validated from centralized definitions)
-        google_maps_tools = GoogleMapsTools.get_tool_names()
+        # Import Google Maps Lambda ARN
+        google_maps_lambda_arn = Fn.import_value(f"GoogleMapsLambdaArn-{env_name}")
+        
+        # Define tool configurations for all Google Maps tools
+        tool_configs = [
+            {
+                "tool_name": "maps_geocode",
+                "lambda_arn": google_maps_lambda_arn,
+                "requires_approval": False
+            },
+            {
+                "tool_name": "maps_reverse_geocode",
+                "lambda_arn": google_maps_lambda_arn,
+                "requires_approval": False
+            },
+            {
+                "tool_name": "maps_search_places",
+                "lambda_arn": google_maps_lambda_arn,
+                "requires_approval": False
+            },
+            {
+                "tool_name": "maps_place_details",
+                "lambda_arn": google_maps_lambda_arn,
+                "requires_approval": False
+            },
+            {
+                "tool_name": "maps_distance_matrix",
+                "lambda_arn": google_maps_lambda_arn,
+                "requires_approval": False
+            },
+            {
+                "tool_name": "maps_elevation",
+                "lambda_arn": google_maps_lambda_arn,
+                "requires_approval": False
+            },
+            {
+                "tool_name": "maps_directions",
+                "lambda_arn": google_maps_lambda_arn,
+                "requires_approval": False
+            }
+        ]
+        
+        # Validate tool names exist in centralized definitions
+        tool_names = [config["tool_name"] for config in tool_configs]
+        invalid_tools = AllTools.validate_tool_names(tool_names)
+        if invalid_tools:
+            raise ValueError(f"Google Maps Agent uses invalid tools: {invalid_tools}. Available tools: {AllTools.get_all_tool_names()}")
         
         # Define system prompt for this agent
         system_prompt = """You are a helpful location and mapping assistant powered by Google Maps services. 
@@ -54,16 +99,20 @@ When helping users:
 
 You work best with Google's ecosystem and can provide rich, detailed location-based information."""
 
+        # Call BaseAgentStack constructor
         super().__init__(
             scope,
             construct_id,
             agent_name="google-maps-agent",
             llm_arn=gemini_lambda_arn,
-            tool_ids=google_maps_tools,
+            tool_configs=tool_configs,
             env_name=env_name,
             system_prompt=system_prompt,
             **kwargs
         )
+        
+        # Store env_name for registration
+        self.env_name = env_name
         
         # Register this agent in the Agent Registry
         self._register_agent_in_registry()
@@ -98,13 +147,13 @@ Always format responses clearly and provide actionable information.""",
             "llm_provider": "gemini",
             "llm_model": "gemini-1.5-pro-latest",
             "tools": [
-                {"tool_id": "maps_geocode", "enabled": True, "version": "latest"},
-                {"tool_id": "maps_reverse_geocode", "enabled": True, "version": "latest"},
-                {"tool_id": "maps_search_places", "enabled": True, "version": "latest"},
-                {"tool_id": "maps_place_details", "enabled": True, "version": "latest"},
-                {"tool_id": "maps_directions", "enabled": True, "version": "latest"},
-                {"tool_id": "maps_distance_matrix", "enabled": True, "version": "latest"},
-                {"tool_id": "maps_elevation", "enabled": True, "version": "latest"}
+                {"tool_name": "maps_geocode", "enabled": True, "version": "latest"},
+                {"tool_name": "maps_reverse_geocode", "enabled": True, "version": "latest"},
+                {"tool_name": "maps_search_places", "enabled": True, "version": "latest"},
+                {"tool_name": "maps_place_details", "enabled": True, "version": "latest"},
+                {"tool_name": "maps_directions", "enabled": True, "version": "latest"},
+                {"tool_name": "maps_distance_matrix", "enabled": True, "version": "latest"},
+                {"tool_name": "maps_elevation", "enabled": True, "version": "latest"}
             ],
             "observability": {
                 "log_group": f"/aws/stepfunctions/google-maps-agent-{self.env_name}",

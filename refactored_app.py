@@ -34,6 +34,8 @@ from stacks.agents.sql_agent_with_base_construct import SQLAgentStack
 from stacks.agents.google_maps_agent_stack import GoogleMapsAgentStack
 from stacks.agents.research_agent_stack import ResearchAgentStack
 from stacks.agents.cloudwatch_agent_stack import CloudWatchAgentStack
+from stacks.agents.graphql_agent_stack import GraphQLAgentStack
+from stacks.agents.image_analysis_agent_stack import ImageAnalysisAgentStack
 
 
 def main():
@@ -260,6 +262,24 @@ def main():
         description=f"CloudWatch monitoring agent for {environment} environment"
     )
     
+    # GraphQL Agent - uses Claude LLM for GraphQL schema analysis and query generation
+    graphql_agent = GraphQLAgentStack(
+        app,
+        f"GraphQLAgentStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"GraphQL integration and query generation agent for {environment} environment"
+    )
+    
+    # Image Analysis Agent - uses Gemini LLM for multimodal image analysis
+    image_analysis_agent = ImageAnalysisAgentStack(
+        app,
+        f"ImageAnalysisAgentStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"AI-powered image analysis and computer vision agent for {environment} environment"
+    )
+    
     # Add explicit dependencies to ensure proper deployment order
     
     # Agent stacks need Agent Registry to be deployed first
@@ -267,6 +287,8 @@ def main():
     google_maps_agent.add_dependency(agent_registry_stack)
     research_agent.add_dependency(agent_registry_stack)
     cloudwatch_agent.add_dependency(agent_registry_stack)
+    graphql_agent.add_dependency(agent_registry_stack)
+    image_analysis_agent.add_dependency(agent_registry_stack)
     
     # Research agent needs financial and web research tools
     research_agent.add_dependency(financial_tools)
@@ -274,6 +296,12 @@ def main():
     
     # CloudWatch agent needs CloudWatch tools
     cloudwatch_agent.add_dependency(cloudwatch_tools)
+    
+    # GraphQL agent needs GraphQL interface tools
+    graphql_agent.add_dependency(graphql_interface_tools)
+    
+    # Image analysis agent needs image analysis tools
+    image_analysis_agent.add_dependency(image_analysis_tools)
     
     # Add tags to all stacks
     tags = {
@@ -288,7 +316,7 @@ def main():
                   earthquake_monitoring_tools, book_recommendation_tools, local_automation_tools,
                   microsoft_graph_tools, web_automation_tools, graphql_interface_tools,
                   image_analysis_tools, sql_agent, google_maps_agent, research_agent, 
-                  cloudwatch_agent]:
+                  cloudwatch_agent, graphql_agent, image_analysis_agent]:
         for key, value in tags.items():
             cdk.Tags.of(stack).add(key, value)
     

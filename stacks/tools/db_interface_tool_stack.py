@@ -136,3 +136,18 @@ class DBInterfaceToolStack(Stack):
 
         # Store Lambda function reference for monitoring
         self.database_lambda_function = self.db_interface_lambda
+        
+        # Create CloudFormation exports
+        self._create_stack_exports()
+    
+    def _create_stack_exports(self):
+        """Create CloudFormation outputs for other stacks to import"""
+        
+        # Export DB Interface Lambda ARN
+        CfnOutput(
+            self,
+            "DBInterfaceLambdaArn",
+            value=self.db_interface_lambda.function_arn,
+            export_name=f"DBInterfaceLambdaArn-{self.env_name}",
+            description="ARN of the DB Interface Lambda function"
+        )

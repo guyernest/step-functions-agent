@@ -766,28 +766,18 @@ class SpecializedTools:
     """Additional specialized tool definitions"""
     
     EARTHQUAKE_QUERY = ToolDefinition(
-        tool_name="earthquake_query",
-        description="Query earthquake data using USGS API with location-based filtering and time range selection",
+        tool_name="query_earthquakes",
+        description="Query earthquake data using USGS API with date range filtering",
         input_schema={
             "type": "object",
             "properties": {
-                "latitude": {
-                    "type": "number",
-                    "description": "Latitude coordinate for search center"
+                "start_date": {
+                    "type": "string",
+                    "description": "Start date in YYYY-MM-DD format"
                 },
-                "longitude": {
-                    "type": "number",
-                    "description": "Longitude coordinate for search center"
-                },
-                "radius": {
-                    "type": "number",
-                    "description": "Search radius in kilometers",
-                    "default": 100
-                },
-                "days": {
-                    "type": "integer",
-                    "description": "Number of days back to search",
-                    "default": 30
+                "end_date": {
+                    "type": "string",
+                    "description": "End date in YYYY-MM-DD format"
                 },
                 "min_magnitude": {
                     "type": "number",
@@ -795,22 +785,22 @@ class SpecializedTools:
                     "default": 2.5
                 }
             },
-            "required": ["latitude", "longitude"]
+            "required": ["start_date", "end_date"]
         },
         language=ToolLanguage.TYPESCRIPT,
         lambda_handler="handler",
-        tags=["earthquake", "seismic", "usgs", "geolocation", "disaster"]
+        tags=["earthquake", "seismic", "usgs", "disaster"]
     )
     
     BOOK_RECOMMENDATION = ToolDefinition(
-        tool_name="book_recommendations",
-        description="Get book recommendations using New York Times Books API with category and bestseller filtering",
+        tool_name="get_nyt_books",
+        description="Get book recommendations using New York Times Books API with genre and bestseller filtering",
         input_schema={
             "type": "object",
             "properties": {
-                "category": {
+                "genre": {
                     "type": "string",
-                    "description": "Book category (e.g., 'fiction', 'nonfiction', 'hardcover-fiction')",
+                    "description": "Book genre (e.g., 'fiction', 'nonfiction', 'hardcover-fiction')",
                     "default": "combined-print-and-e-book-fiction"
                 },
                 "list_type": {
