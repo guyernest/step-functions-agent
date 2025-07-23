@@ -20,7 +20,8 @@ class StepFunctionsGenerator:
         tool_configs: List[Dict[str, Any]],
         system_prompt: str,
         agent_registry_table_name: str = None,
-        tool_registry_table_name: str = None
+        tool_registry_table_name: str = None,
+        approval_activity_arn: str = None
     ) -> str:
         """
         Generate a complete Step Functions definition with static tool routing
@@ -32,6 +33,7 @@ class StepFunctionsGenerator:
             system_prompt: System prompt for the agent
             agent_registry_table_name: Name of agent registry DynamoDB table
             tool_registry_table_name: Name of tool registry DynamoDB table
+            approval_activity_arn: ARN of approval activity for human approval tools
             
         Returns:
             JSON string of the Step Functions definition
@@ -57,7 +59,11 @@ class StepFunctionsGenerator:
                 print(f"Warning: Tool definition not found for '{tool_name}'")
         
         # Generate tool routing choices
-        tool_choices = StepFunctionsGenerator._generate_tool_choices(tool_configs)
+        tool_choices = StepFunctionsGenerator._generate_tool_choices(
+            tool_configs, 
+            agent_name=agent_name,
+            approval_activity_arn=approval_activity_arn
+        )
         
         # Build the complete state machine definition
         definition = {
@@ -254,7 +260,11 @@ class StepFunctionsGenerator:
         return json.dumps(definition, indent=2)
     
     @staticmethod
-    def _generate_tool_choices(tool_configs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _generate_tool_choices(
+        tool_configs: List[Dict[str, Any]], 
+        agent_name: str = None,
+        approval_activity_arn: str = None
+    ) -> Dict[str, Any]:
         """Generate the Choice state and tool execution states"""
         
         states = {
@@ -270,65 +280,32 @@ class StepFunctionsGenerator:
         for config in tool_configs:
             tool_name = config["tool_name"]
             lambda_arn = config["lambda_arn"]
-            requires_approval = config.get("requires_approval", False)
+            requires_activity = config.get("requires_activity", False)
+            activity_type = config.get("activity_type")
             
-            # Add choice condition (JSONata syntax)
-            states["Which Tool to Use?"]["Choices"].append({
-                "Condition": "{% $states.input.name = '" + tool_name + "' %}",
-                "Next": f"Execute {tool_name}"
-            })
-            
-            # Add execution state
-            states[f"Execute {tool_name}"] = {
-                    "Type": "Task",
-                    "Resource": "arn:aws:states:::lambda:invoke",
-                    "Arguments": {
-                        "FunctionName": lambda_arn,
-                        "Payload": {
-                            "name": "{% $states.input.name %}",
-                            "id": "{% $states.input.id %}",
-                            "input": "{% $states.input.input %}"
-                        }
-                    },
-                    "Retry": [
-                        {
-                            "ErrorEquals": [
-                                "Lambda.ServiceException",
-                                "Lambda.AWSLambdaException",
-                                "Lambda.SdkClientException",
-                                "Lambda.TooManyRequestsException"
-                            ],
-                            "IntervalSeconds": 1,
-                            "MaxAttempts": 3,
-                            "BackoffRate": 2,
-                            "JitterStrategy": "FULL"
-                        }
-                    ],
-                    "End": True,
-                    "Output": "{% $states.result.Payload %}",
-                    "Comment": f"Execute {tool_name} Lambda function"
-            }
-            
-            # Add human approval state if needed
-            if requires_approval:
-                # Modify the choice to go to approval first
-                states["Which Tool to Use?"]["Choices"][-1]["Next"] = f"Request Approval for {tool_name}"
-                
-                # Add approval state
-                states[f"Request Approval for {tool_name}"] = {
-                    "Type": "Task",
-                    "Resource": "arn:aws:states:::sqs:sendMessage.waitForTaskToken",
-                    "Arguments": {
-                        "QueueUrl": "HUMAN_APPROVAL_QUEUE_URL",  # Will be replaced
-                        "MessageBody": {
-                            "TaskToken.$": "$$.Task.Token",
-                            "Tool": tool_name,
-                            "Input": "{% $states.input %}"
-                        }
-                    },
-                    "Next": f"Execute {tool_name}",
-                    "Comment": f"Wait for human approval before executing {tool_name}"
-                }
+            if requires_activity and activity_type == "human_approval" and approval_activity_arn:
+                # Human approval workflow: Choice → Request Approval → Check Approval → Execute/Reject
+                StepFunctionsGenerator._add_human_approval_workflow(
+                    states, tool_name, lambda_arn, approval_activity_arn, agent_name
+                )
+            elif requires_activity and activity_type == "remote_execution":
+                # Remote execution workflow: Choice → Remote Activity → Return Result
+                # Note: The activity ARN comes from the tool's configuration
+                remote_activity_arn = config.get("activity_arn")
+                if remote_activity_arn:
+                    StepFunctionsGenerator._add_remote_execution_workflow(
+                        states, tool_name, remote_activity_arn
+                    )
+                else:
+                    print(f"Warning: Remote execution tool '{tool_name}' missing activity_arn, falling back to standard execution")
+                    StepFunctionsGenerator._add_standard_tool_execution(
+                        states, tool_name, lambda_arn
+                    )
+            else:
+                # Standard tool execution: Choice → Execute
+                StepFunctionsGenerator._add_standard_tool_execution(
+                    states, tool_name, lambda_arn
+                )
         
         # Add Tool Not Found state
         states["Tool Not Found"] = {
@@ -342,3 +319,209 @@ class StepFunctionsGenerator:
         }
         
         return states
+
+    @staticmethod
+    def _add_standard_tool_execution(states: Dict, tool_name: str, lambda_arn: str):
+        """Add standard tool execution states (Choice → Execute)"""
+        
+        # Add choice condition (JSONata syntax)
+        states["Which Tool to Use?"]["Choices"].append({
+            "Condition": "{% $states.input.name = '" + tool_name + "' %}",
+            "Next": f"Execute {tool_name}"
+        })
+        
+        # Add execution state
+        states[f"Execute {tool_name}"] = {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Arguments": {
+                "FunctionName": lambda_arn,
+                "Payload": {
+                    "name": "{% $states.input.name %}",
+                    "id": "{% $states.input.id %}",
+                    "input": "{% $states.input.input %}"
+                }
+            },
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException",
+                        "Lambda.TooManyRequestsException"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2,
+                    "JitterStrategy": "FULL"
+                }
+            ],
+            "End": True,
+            "Output": "{% $states.result.Payload %}",
+            "Comment": f"Execute {tool_name} Lambda function"
+        }
+
+    @staticmethod
+    def _add_human_approval_workflow(states: Dict, tool_name: str, lambda_arn: str, approval_activity_arn: str, agent_name: str):
+        """Add human approval workflow states (Choice → Request Approval → Check Approval → Execute/Reject)"""
+        
+        # Add choice condition pointing to approval request
+        states["Which Tool to Use?"]["Choices"].append({
+            "Condition": "{% $states.input.name = '" + tool_name + "' %}",
+            "Next": f"Request Approval {tool_name}"
+        })
+        
+        # Add approval request state
+        states[f"Request Approval {tool_name}"] = {
+            "Type": "Task",
+            "Resource": approval_activity_arn,
+            "TimeoutSeconds": 3600,  # 1 hour timeout
+            "Next": f"Check Approval {tool_name}",
+            "Arguments": {
+                "tool_name": tool_name,
+                "tool_use_id": "{% $states.input.id %}",
+                "tool_input": "{% $states.input.input %}",
+                "agent_name": agent_name,
+                "timestamp": "{% $states.context.Execution.StartTime %}",
+                "context": {
+                    "execution_name": "{% $states.context.Execution.Name %}",
+                    "state_machine": "{% $states.context.StateMachine.Name %}"
+                }
+            },
+            "Output": {
+                "tool_request": "{% $states.input %}",
+                "approval_response": "{% $states.result %}"
+            },
+            "Catch": [{
+                "ErrorEquals": ["States.Timeout"],
+                "Next": f"Timeout Rejection {tool_name}"
+            }],
+            "Comment": f"Request human approval for {tool_name} execution"
+        }
+        
+        # Add approval check state
+        states[f"Check Approval {tool_name}"] = {
+            "Type": "Choice",
+            "Choices": [{
+                "Condition": "{% $states.input.approval_response.approved = true %}",
+                "Next": f"Execute {tool_name}"
+            }],
+            "Default": f"Handle Rejection {tool_name}",
+            "Comment": f"Check if {tool_name} was approved"
+        }
+        
+        # Add rejection handling state
+        states[f"Handle Rejection {tool_name}"] = {
+            "Type": "Pass",
+            "End": True,
+            "Output": {
+                "type": "tool_result",
+                "tool_use_id": "{% $states.input.tool_request.id %}",
+                "name": tool_name,
+                "content": {
+                    "status": "rejected",
+                    "reason": "{% $states.input.approval_response.rejection_reason %}",
+                    "reviewer": "{% $states.input.approval_response.reviewer %}",
+                    "timestamp": "{% $states.input.approval_response.timestamp %}",
+                    "message": "Tool execution rejected by {% $states.input.approval_response.reviewer %}. Reason: {% $states.input.approval_response.rejection_reason %}. Please revise your approach based on this feedback."
+                }
+            },
+            "Comment": f"Handle rejection of {tool_name} with detailed feedback"
+        }
+        
+        # Add timeout rejection state
+        states[f"Timeout Rejection {tool_name}"] = {
+            "Type": "Pass",
+            "End": True,
+            "Output": {
+                "type": "tool_result",
+                "tool_use_id": "{% $states.input.id %}",
+                "name": tool_name,
+                "content": {
+                    "status": "timeout",
+                    "message": f"Approval request for {tool_name} timed out after 1 hour. Please try again or contact your administrator."
+                }
+            },
+            "Comment": f"Handle timeout for {tool_name} approval request"
+        }
+        
+        # Add standard execution state (used after approval)
+        states[f"Execute {tool_name}"] = {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Arguments": {
+                "FunctionName": lambda_arn,
+                "Payload": {
+                    "name": "{% $states.input.tool_request.name %}",
+                    "id": "{% $states.input.tool_request.id %}",
+                    "input": "{% $states.input.tool_request.input %}"
+                }
+            },
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException",
+                        "Lambda.TooManyRequestsException"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2,
+                    "JitterStrategy": "FULL"
+                }
+            ],
+            "End": True,
+            "Output": "{% $states.result.Payload %}",
+            "Comment": f"Execute {tool_name} Lambda function after approval"
+        }
+
+    @staticmethod
+    def _add_remote_execution_workflow(states: Dict, tool_name: str, remote_activity_arn: str):
+        """Add remote execution workflow states (Choice → Remote Activity → Return Result)"""
+        
+        # Add choice condition pointing to remote activity
+        states["Which Tool to Use?"]["Choices"].append({
+            "Condition": "{% $states.input.name = '" + tool_name + "' %}",
+            "Next": f"Execute Remote {tool_name}"
+        })
+        
+        # Add remote execution state
+        states[f"Execute Remote {tool_name}"] = {
+            "Type": "Task",
+            "Resource": remote_activity_arn,
+            "TimeoutSeconds": 300,  # 5 minute timeout for remote execution
+            "Arguments": {
+                "tool_name": tool_name,
+                "tool_use_id": "{% $states.input.id %}",
+                "tool_input": "{% $states.input.input %}",
+                "timestamp": "{% $states.context.Execution.StartTime %}",
+                "context": {
+                    "execution_name": "{% $states.context.Execution.Name %}",
+                    "state_machine": "{% $states.context.StateMachine.Name %}"
+                }
+            },
+            "Catch": [{
+                "ErrorEquals": ["States.Timeout"],
+                "Next": f"Remote Timeout {tool_name}"
+            }],
+            "End": True,
+            "Output": "{% $states.result %}",
+            "Comment": f"Execute {tool_name} on remote system via activity"
+        }
+        
+        # Add timeout handling state
+        states[f"Remote Timeout {tool_name}"] = {
+            "Type": "Pass",
+            "End": True,
+            "Output": {
+                "type": "tool_result",
+                "tool_use_id": "{% $states.input.id %}",
+                "name": tool_name,
+                "content": {
+                    "status": "timeout",
+                    "message": f"Remote execution of {tool_name} timed out after 5 minutes. The remote system may be unavailable or the operation is taking longer than expected."
+                }
+            },
+            "Comment": f"Handle timeout for {tool_name} remote execution"
+        }

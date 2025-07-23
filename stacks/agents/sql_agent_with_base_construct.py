@@ -25,22 +25,24 @@ class SQLAgentStack(BaseAgentStack):
         db_interface_lambda_arn = Fn.import_value(f"DBInterfaceLambdaArn-{env_name}")
         execute_code_lambda_arn = Fn.import_value(f"ExecuteCodeLambdaArn-{env_name}")
         
-        # Define tool configurations
+        # Define tool configurations with activity support
         tool_configs = [
             {
                 "tool_name": "get_db_schema",
                 "lambda_arn": db_interface_lambda_arn,
-                "requires_approval": False
+                "requires_activity": False
             },
             {
-                "tool_name": "execute_sql_query",
+                "tool_name": "execute_sql_query", 
                 "lambda_arn": db_interface_lambda_arn,
-                "requires_approval": False
+                "requires_activity": True,
+                "activity_type": "human_approval"  # SQL queries require human approval for safety
             },
             {
                 "tool_name": "execute_python",
                 "lambda_arn": execute_code_lambda_arn,
-                "requires_approval": False
+                "requires_activity": True,
+                "activity_type": "human_approval"  # Code execution requires human approval for security
             }
         ]
         

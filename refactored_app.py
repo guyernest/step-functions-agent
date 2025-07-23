@@ -36,6 +36,8 @@ from stacks.agents.research_agent_stack import ResearchAgentStack
 from stacks.agents.cloudwatch_agent_stack import CloudWatchAgentStack
 from stacks.agents.graphql_agent_stack import GraphQLAgentStack
 from stacks.agents.image_analysis_agent_stack import ImageAnalysisAgentStack
+from stacks.agents.test_sql_approval_agent_stack import TestSQLApprovalAgentStack
+from stacks.agents.test_automation_remote_agent_stack import TestAutomationRemoteAgentStack
 from step_functions_agent.agent_monitoring_stack import AgentMonitoringStack
 
 
@@ -281,6 +283,24 @@ def main():
         description=f"AI-powered image analysis and computer vision agent for {environment} environment"
     )
     
+    # Test SQL Approval Agent - demonstrates human approval workflow for SQL operations
+    test_sql_approval_agent = TestSQLApprovalAgentStack(
+        app,
+        f"TestSQLApprovalAgentStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Test SQL agent with human approval workflow for {environment} environment"
+    )
+    
+    # Test Automation Remote Agent - demonstrates remote execution workflow for local automation
+    test_automation_remote_agent = TestAutomationRemoteAgentStack(
+        app,
+        f"TestAutomationRemoteAgentStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Test automation agent with remote execution workflow for {environment} environment"
+    )
+    
     # Deploy monitoring stack for comprehensive observability
     # This monitors all agents, LLM functions, and tool functions
     agent_monitoring = AgentMonitoringStack(
@@ -292,7 +312,9 @@ def main():
             research_agent.state_machine_name,
             cloudwatch_agent.state_machine_name,
             graphql_agent.state_machine_name,
-            image_analysis_agent.state_machine_name
+            image_analysis_agent.state_machine_name,
+            test_sql_approval_agent.state_machine_name,
+            test_automation_remote_agent.state_machine_name
         ],
         llm_functions=[
             shared_llm_stack.claude_function_name,
@@ -345,6 +367,15 @@ def main():
     # Image analysis agent needs image analysis tools
     image_analysis_agent.add_dependency(image_analysis_tools)
     
+    # Test SQL approval agent needs Agent Registry and DB Interface tools
+    test_sql_approval_agent.add_dependency(agent_registry_stack)
+    test_sql_approval_agent.add_dependency(db_interface_tool)
+    test_sql_approval_agent.add_dependency(e2b_tool)
+    
+    # Test automation remote agent needs Agent Registry and Local Automation tools
+    test_automation_remote_agent.add_dependency(agent_registry_stack)
+    test_automation_remote_agent.add_dependency(local_automation_tools)
+    
     # Monitoring stack needs all agents and tools to be deployed first
     agent_monitoring.add_dependency(sql_agent)
     agent_monitoring.add_dependency(google_maps_agent)
@@ -352,6 +383,8 @@ def main():
     agent_monitoring.add_dependency(cloudwatch_agent)
     agent_monitoring.add_dependency(graphql_agent)
     agent_monitoring.add_dependency(image_analysis_agent)
+    agent_monitoring.add_dependency(test_sql_approval_agent)
+    agent_monitoring.add_dependency(test_automation_remote_agent)
     agent_monitoring.add_dependency(shared_llm_stack)
     
     # Add tags to all stacks
@@ -367,7 +400,8 @@ def main():
                   earthquake_monitoring_tools, book_recommendation_tools, local_automation_tools,
                   microsoft_graph_tools, web_automation_tools, graphql_interface_tools,
                   image_analysis_tools, sql_agent, google_maps_agent, research_agent, 
-                  cloudwatch_agent, graphql_agent, image_analysis_agent, agent_monitoring]:
+                  cloudwatch_agent, graphql_agent, image_analysis_agent, 
+                  test_sql_approval_agent, test_automation_remote_agent, agent_monitoring]:
         for key, value in tags.items():
             cdk.Tags.of(stack).add(key, value)
     

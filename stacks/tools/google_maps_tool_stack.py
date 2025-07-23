@@ -76,7 +76,6 @@ class GoogleMapsToolStack(Stack):
         
         # Load environment variables from .env file if it exists
         if env_file.exists():
-            print(f"Loading Google Maps API key from: {env_file}")
             # Clear any existing GOOGLE_MAPS_API_KEY from environment
             if 'GOOGLE_MAPS_API_KEY' in os.environ:
                 del os.environ['GOOGLE_MAPS_API_KEY']
@@ -85,7 +84,7 @@ class GoogleMapsToolStack(Stack):
             google_maps_api_key = os.getenv('GOOGLE_MAPS_API_KEY')
             
             if google_maps_api_key:
-                print(f"Found Google Maps API key (length: {len(google_maps_api_key)}, starts with: {google_maps_api_key[:10]}...)")
+                print(f"✅ Google Maps API key loaded for {self.env_name} environment")
                 # Create secret with actual API key
                 self.google_maps_secret = secretsmanager.Secret(
                     self,

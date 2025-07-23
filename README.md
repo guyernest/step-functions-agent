@@ -236,6 +236,40 @@ flowchart TD
 
 This architecture provides enterprise-grade scalability, observability, and maintainability while supporting any combination of LLM providers and tool implementations.
 
+## 🚀 Latest Feature: Activity Support (Human Approval & Remote Execution)
+
+The framework now includes comprehensive **Activity Support** for enterprise-grade AI agents with human oversight and remote execution capabilities:
+
+### 🔐 **Human Approval Workflow**
+- **Agent-owned activities**: Single approval activity per agent for all approval-required tools
+- **Rich rejection feedback**: Structured responses help LLM learn and improve subsequent attempts
+- **1-hour timeout**: Configurable timeout with proper error handling
+- **Use Cases**: SQL queries, code execution, financial transactions, data modifications
+
+### 🌐 **Remote Execution Workflow**
+- **Tool-owned activities**: Each remote tool manages its own execution activity
+- **5-minute timeout**: Appropriate for remote command execution and automation
+- **Distributed processing**: Execute tools on remote systems via Step Functions Activities
+- **Use Cases**: Local automation, RPA, remote command execution, desktop automation
+
+### 📋 **Test Agents Available**
+- **TestSQLApprovalAgent**: Demonstrates human approval for database operations
+- **TestAutomationRemoteAgent**: Demonstrates remote execution for local automation
+
+### 🛠️ **Quick Test**
+```bash
+# Deploy test agents
+python test_approval_agents.py deploy
+
+# Start activity workers (in separate terminal)
+python activity_worker.py both
+
+# Run test scenarios
+python test_approval_agents.py test
+```
+
+See [Activity Testing Guide](docs/ACTIVITY_TESTING_GUIDE.md) and [Modular Architecture](docs/MODULAR_ARCHITECTURE.md) for complete documentation.
+
 ## MLOps of AI Agents
 
 There are a few frameworks for MLOps of AI Agents, such as: LangGraph, Crew.ai, Pydanic AI, etc. There are also some cloud platforms that can be used to build and deploy AI Agents, such as Amazon Bedrock, Google Vertex AI, and Azure OpenAI. There are cons and pros for each of these frameworks and platforms. The proposed implementation of AI Agents in AWS Step Functions is solving most of the problems with the existing frameworks and platforms.
@@ -668,9 +702,194 @@ The following examples of writing CSV files into S3 in Python, and reading CSV f
     }
 ```
 
-## Human Approval
+## Activity Support: Human Approval and Remote Execution
 
-One of the main risks of using AI Agents is the potential for the AI to make mistakes. To mitigate this risk, the AI Agent can be configured to require human approval for certain tasks. The AI Agent can be configured to send a message to a human operator, who can review the results of the AI Agent, and approve or reject the results. The AI Agent can then proceed based on the operator's decision.
+One of the main risks of using AI Agents is the potential for the AI to make mistakes or execute sensitive operations. To mitigate this risk and enable secure remote execution, the framework supports two types of activities:
+
+### 1. Human Approval Activities
+For tools that require manual oversight (like database operations or code execution), the framework provides a human approval workflow that pauses execution until a human reviewer approves or rejects the action.
+
+### 2. Remote Execution Activities
+For tools that need to execute on remote systems (like local automation or RPA tasks), the framework provides a remote execution workflow that sends task requests to external workers via Step Functions Activities.
+
+Both patterns use AWS Step Functions Activities to implement asynchronous, timeout-controlled workflows with rich feedback mechanisms.
+
+## Activity Request/Response Schemas
+
+### Human Approval Activity
+
+#### Activity Request Schema
+When a tool requires human approval, the Step Functions workflow sends a request to the approval activity with the following structure:
+
+```json
+{
+  "tool_name": "execute_sql_query",
+  "tool_use_id": "tool_123456789",
+  "tool_input": {
+    "sql_query": "SELECT * FROM customers WHERE status = 'active'"
+  },
+  "agent_name": "sql-agent",
+  "timestamp": "2025-01-15T10:30:00.000Z",
+  "context": {
+    "execution_name": "sql-agent-execution-abc123",
+    "state_machine": "sql-agent-prod"
+  }
+}
+```
+
+#### Human Approval Response Schema
+
+**Approved Request:**
+```json
+{
+  "approved": true,
+  "reviewer": "john.doe@company.com",
+  "timestamp": "2025-01-15T10:32:00.000Z",
+  "review_notes": "Query looks safe, approved for execution"
+}
+```
+
+**Rejected Request:**
+```json
+{
+  "approved": false,
+  "rejection_reason": "Query accesses sensitive customer data without proper filtering",
+  "reviewer": "jane.smith@company.com", 
+  "timestamp": "2025-01-15T10:33:00.000Z",
+  "review_notes": "Please add WHERE clause to limit data exposure"
+}
+```
+
+The rejection response is automatically formatted into a structured message for the LLM:
+```json
+{
+  "type": "tool_result",
+  "tool_use_id": "tool_123456789",
+  "name": "execute_sql_query",
+  "content": {
+    "status": "rejected",
+    "reason": "Query accesses sensitive customer data without proper filtering",
+    "reviewer": "jane.smith@company.com",
+    "timestamp": "2025-01-15T10:33:00.000Z",  
+    "message": "Tool execution rejected by jane.smith@company.com. Reason: Query accesses sensitive customer data without proper filtering. Please revise your approach based on this feedback."
+  }
+}
+```
+
+### Remote Execution Activity
+
+#### Activity Request Schema
+For remote execution tools, the request contains the same basic structure but is sent to a tool-specific activity:
+
+```json
+{
+  "tool_name": "local_command_execution",
+  "tool_use_id": "tool_987654321",
+  "tool_input": {
+    "command": "ls -la /home/user/documents",
+    "working_directory": "/home/user"
+  },
+  "timestamp": "2025-01-15T10:35:00.000Z",
+  "context": {
+    "execution_name": "automation-agent-execution-def456",
+    "state_machine": "local-automation-agent-prod"
+  }
+}
+```
+
+#### Remote Execution Response Schema
+
+**Successful Execution:**
+```json
+{
+  "type": "tool_result",
+  "tool_use_id": "tool_987654321", 
+  "name": "local_command_execution",
+  "content": {
+    "status": "success",
+    "output": "total 24\ndrwxr-xr-x 2 user user 4096 Jan 15 10:30 .\ndrwxr-xr-x 5 user user 4096 Jan 15 10:25 ..",
+    "exit_code": 0,
+    "execution_time_ms": 1250
+  }
+}
+```
+
+**Failed Execution:**
+```json
+{
+  "type": "tool_result",
+  "tool_use_id": "tool_987654321",
+  "name": "local_command_execution", 
+  "content": {
+    "status": "error",
+    "error": "Permission denied: cannot access /home/user/documents",
+    "exit_code": 1,
+    "execution_time_ms": 850
+  }
+}
+```
+
+## Activity Configuration
+
+### Tool Configuration Schema
+
+Tools can be configured to use activities by adding the following fields to their configuration:
+
+```python
+tool_configs = [
+    {
+        "tool_name": "execute_sql_query",
+        "lambda_arn": db_interface_lambda_arn,
+        "requires_activity": True,
+        "activity_type": "human_approval"  # Agent-owned approval activity
+    },
+    {
+        "tool_name": "local_command_execution", 
+        "lambda_arn": local_automation_lambda_arn,
+        "requires_activity": True,
+        "activity_type": "remote_execution",  # Tool-owned remote activity
+        "activity_arn": "arn:aws:states:us-east-1:123456789012:activity:local-automation-remote-activity-prod"
+    }
+]
+```
+
+### Activity Types
+
+1. **Human Approval (`human_approval`)**
+   - **Ownership**: Agent-owned (single activity per agent)
+   - **Purpose**: Manual review and approval of tool executions
+   - **Timeout**: 1 hour (3600 seconds)
+   - **Use Cases**: Database operations, code execution, financial transactions
+
+2. **Remote Execution (`remote_execution`)**
+   - **Ownership**: Tool-owned (one activity per tool that needs it)
+   - **Purpose**: Execute tools on remote systems via external workers
+   - **Timeout**: 5 minutes (300 seconds)
+   - **Use Cases**: Local automation, RPA, remote command execution
+
+### Implementation Architecture
+
+#### Human Approval Workflow
+```
+User Request → LLM → Tool Call → Choice State
+                                      ↓
+                              Request Approval State (Activity)
+                                      ↓
+                              Check Approval State (Choice)
+                                   ↙      ↘
+                         Execute Tool    Handle Rejection
+                              ↓               ↓
+                        Return Result   Return Feedback
+```
+
+#### Remote Execution Workflow  
+```
+User Request → LLM → Tool Call → Choice State
+                                      ↓
+                         Execute Remote State (Activity)
+                                      ↓
+                              Return Result/Timeout
+```
 
 ### Step Functions Graph for SQL AI Agent with Human Approval
 

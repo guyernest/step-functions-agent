@@ -4,6 +4,7 @@ from aws_cdk import (
     RemovalPolicy,
     aws_lambda as _lambda,
     aws_iam as iam,
+    aws_stepfunctions as sfn,
     CfnOutput
 )
 from constructs import Construct
@@ -30,11 +31,38 @@ class LocalAutomationToolStack(Stack):
         
         self.env_name = env_name
         
+        # Create remote execution activity for local automation
+        self._create_remote_execution_activity()
+        
         # Deploy Rust local automation tool
         self._create_local_automation_tool()
         
         # Register all tools in DynamoDB using the base construct
         self._register_tools_using_base_construct()
+
+    def _create_remote_execution_activity(self):
+        """Create Step Functions activity for remote local automation execution"""
+        
+        # Create the activity for remote local automation execution
+        self.remote_execution_activity = sfn.Activity(
+            self,
+            "LocalAutomationRemoteActivity",
+            activity_name=f"local-automation-remote-activity-{self.env_name}"
+        )
+        
+        # Store activity ARN for use in tool configurations
+        self.remote_execution_activity_arn = self.remote_execution_activity.activity_arn
+        
+        # Export the activity ARN for potential use by other stacks
+        CfnOutput(
+            self,
+            "LocalAutomationRemoteActivityArn",
+            value=self.remote_execution_activity_arn,
+            export_name=f"LocalAutomationRemoteActivityArn-{self.env_name}",
+            description="Activity ARN for remote local automation execution"
+        )
+        
+        print(f"Created remote execution activity: local-automation-remote-activity-{self.env_name}")
 
     def _create_local_automation_tool(self):
         """Create Rust Lambda function for local automation"""
@@ -49,7 +77,7 @@ class LocalAutomationToolStack(Stack):
             ]
         )
         
-        # Grant additional permissions for local automation operations
+        # Grant additional permissions for local automation operations including activity access
         local_automation_lambda_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
@@ -59,7 +87,10 @@ class LocalAutomationToolStack(Stack):
                     "states:SendTaskHeartbeat",
                     "states:GetActivityTask"
                 ],
-                resources=["*"]
+                resources=[
+                    self.remote_execution_activity_arn,
+                    f"{self.remote_execution_activity_arn}/*"
+                ]
             )
         )
         
@@ -124,7 +155,7 @@ class LocalAutomationToolStack(Stack):
         # Get tool definition from centralized definitions
         local_agent_tool = SpecializedTools.LOCAL_AGENT
         
-        # Define local automation tool specifications
+        # Define local automation tool specifications with remote execution activity
         local_automation_tools = [
             {
                 "tool_name": local_agent_tool.tool_name,
@@ -133,7 +164,10 @@ class LocalAutomationToolStack(Stack):
                 "language": local_agent_tool.language.value,
                 "tags": local_agent_tool.tags,
                 "author": local_agent_tool.author,
-                "human_approval_required": local_agent_tool.human_approval_required
+                "human_approval_required": local_agent_tool.human_approval_required,
+                "requires_activity": True,
+                "activity_type": "remote_execution",
+                "activity_arn": self.remote_execution_activity_arn
             }
         ]
         

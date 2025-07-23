@@ -89,6 +89,9 @@ class BaseToolConstruct(Construct):
             "status": tool_spec.get("status", "active"),
             "author": tool_spec.get("author", "system"),
             "human_approval_required": tool_spec.get("human_approval_required", False),
+            "requires_activity": tool_spec.get("requires_activity", False),
+            "activity_type": tool_spec.get("activity_type", ""),  # Either "human_approval" or "remote_execution"
+            "activity_arn": tool_spec.get("activity_arn", ""),
             "created_at": tool_spec.get("created_at", current_timestamp),
             "updated_at": tool_spec.get("updated_at", current_timestamp)
         }

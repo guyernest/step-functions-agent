@@ -15,21 +15,37 @@ from typing import List, Dict, Any
 import json
 
 
-class BaseAgentStack(Stack):
+class ModularBaseAgentStack(Stack):
     """
-    Base Agent Stack - Common patterns for all agents
+    Modular Base Agent Stack - Truly modular agent deployment without centralized dependencies
     
-    This base class provides:
+    This base class provides complete modularity:
+    - No centralized tool registry dependencies at deploy time
+    - Tools are resolved dynamically from DynamoDB at runtime
+    - Agents can be deployed independently without updating central code
+    - Supports any tool registered in DynamoDB by any stack
+    
+    Key Features:
     - Agent execution role with standard permissions
     - Log group creation with consistent naming
-    - Tool permission generation based on tool IDs
-    - Step Functions template processing
+    - Dynamic tool resolution from DynamoDB registry
+    - Step Functions template processing with activity support
     - State machine creation with standard settings
     
-    Derived agent stacks just need to specify:
-    - LLM ARN to use
-    - List of tool IDs from registry
-    - Agent-specific configuration
+    Usage:
+        ModularBaseAgentStack(
+            scope, construct_id,
+            agent_name="my-agent",
+            llm_arn="arn:aws:lambda:...",
+            tool_configs=[
+                {
+                    "tool_name": "any_tool_name",  # Must exist in DynamoDB registry
+                    "lambda_arn": "arn:aws:lambda:...",
+                    "requires_activity": True,
+                    "activity_type": "human_approval"
+                }
+            ]
+        )
     """
 
     def __init__(
@@ -41,6 +57,7 @@ class BaseAgentStack(Stack):
         tool_configs: List[Dict[str, Any]], 
         env_name: str = "prod",
         system_prompt: str = None,
+        validate_tools: bool = False,  # Optional validation for development
         **kwargs
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -51,6 +68,14 @@ class BaseAgentStack(Stack):
         self.tool_configs = tool_configs
         self.tool_names = [config["tool_name"] for config in tool_configs]
         self.system_prompt = system_prompt or f"You are a helpful AI assistant with access to various tools."
+        self.validate_tools = validate_tools
+        
+        # Log tool configuration for debugging
+        print(f"🔧 Agent '{agent_name}' configured with tools: {self.tool_names}")
+        
+        # Optional tool validation (disabled by default for modularity)
+        if validate_tools:
+            self._validate_tool_names()
         
         # Import shared resources
         self._import_shared_resources()
@@ -63,6 +88,18 @@ class BaseAgentStack(Stack):
         
         # Create Step Functions workflow from template
         self._create_step_functions_from_template()
+
+    def _validate_tool_names(self):
+        """Optional tool validation - only used during development/testing"""
+        try:
+            from ..shared.tool_definitions import AllTools
+            invalid_tools = AllTools.validate_tool_names(self.tool_names)
+            if invalid_tools:
+                print(f"⚠️ Warning: Tools not in centralized registry: {invalid_tools}")
+                print(f"   Available tools: {AllTools.get_all_tool_names()}")
+                print(f"   These tools will be resolved from DynamoDB at runtime")
+        except ImportError:
+            print("ℹ️ Centralized tool registry not available - using dynamic resolution")
 
     def _import_shared_resources(self):
         """Import shared resources from other stacks"""
@@ -104,11 +141,10 @@ class BaseAgentStack(Stack):
             
             # Store activity ARN for Step Functions generator
             self.approval_activity_arn = self.approval_activity.activity_arn
-            print(f"Created approval activity: {self.agent_name}-approval-activity-{self.env_name}")
+            print(f"✅ Created approval activity: {self.agent_name}-approval-activity-{self.env_name}")
         else:
             self.approval_activity = None
             self.approval_activity_arn = None
-
 
     def _create_agent_execution_role(self):
         """Create IAM role for Step Functions execution with tool permissions"""
@@ -204,15 +240,16 @@ class BaseAgentStack(Stack):
         # Get unique Lambda ARNs from tool configs
         lambda_arns = list(set(config["lambda_arn"] for config in self.tool_configs))
         
-        role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=[
-                    "lambda:InvokeFunction"
-                ],
-                resources=lambda_arns
+        if lambda_arns:
+            role.add_to_policy(
+                iam.PolicyStatement(
+                    effect=iam.Effect.ALLOW,
+                    actions=[
+                        "lambda:InvokeFunction"
+                    ],
+                    resources=lambda_arns
+                )
             )
-        )
         
         # Grant approval activity permissions if activity exists
         if self.approval_activity:
@@ -225,6 +262,25 @@ class BaseAgentStack(Stack):
                         "states:SendTaskHeartbeat"
                     ],
                     resources=[self.approval_activity_arn]
+                )
+            )
+        
+        # Grant permissions for remote execution activities (if any tools use them)
+        remote_activity_arns = [
+            config.get("activity_arn") for config in self.tool_configs 
+            if config.get("requires_activity") and config.get("activity_type") == "remote_execution" and config.get("activity_arn")
+        ]
+        
+        if remote_activity_arns:
+            role.add_to_policy(
+                iam.PolicyStatement(
+                    effect=iam.Effect.ALLOW,
+                    actions=[
+                        "states:SendTaskSuccess",
+                        "states:SendTaskFailure",
+                        "states:SendTaskHeartbeat"
+                    ],
+                    resources=remote_activity_arns
                 )
             )
         
@@ -272,3 +328,14 @@ class BaseAgentStack(Stack):
         
         # Store the state machine name for external reference
         self.state_machine_name = f"{self.agent_name}-{self.env_name}"
+        
+        # Export the state machine ARN for potential use by other stacks
+        CfnOutput(
+            self,
+            f"{self.agent_name}StateMachineArn",
+            value=self.state_machine.state_machine_arn,
+            export_name=f"{self.agent_name}StateMachineArn-{self.env_name}",
+            description=f"ARN of the {self.agent_name} Step Functions state machine"
+        )
+        
+        print(f"✅ Created modular agent: {self.agent_name}-{self.env_name}")
