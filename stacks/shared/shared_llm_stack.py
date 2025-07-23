@@ -240,6 +240,13 @@ class SharedLLMStack(Stack):
             handler="lambda_handler",
             **common_config
         )
+        
+        # Store function names for external reference (e.g., monitoring)
+        self.claude_function_name = f"shared-claude-llm-{self.env_name}"
+        self.openai_function_name = f"shared-openai-llm-{self.env_name}"
+        self.gemini_function_name = f"shared-gemini-llm-{self.env_name}"
+        self.bedrock_function_name = f"shared-bedrock-llm-{self.env_name}"
+        self.deepseek_function_name = f"shared-deepseek-llm-{self.env_name}"
 
     def _create_stack_exports(self):
         """Create CloudFormation outputs for agent stacks to import"""

@@ -177,6 +177,10 @@ class StepFunctionsGenerator:
                                     {
                                         "Name": "state_machine_name",
                                         "Value": "{% $states.context.StateMachine.Name %}"
+                                    },
+                                    {
+                                        "Name": "model",
+                                        "Value": "{% $states.input.metadata.model %}"
                                     }
                                 ]
                             },
@@ -192,6 +196,10 @@ class StepFunctionsGenerator:
                                     {
                                         "Name": "state_machine_name",
                                         "Value": "{% $states.context.StateMachine.Name %}"
+                                    },
+                                    {
+                                        "Name": "model",
+                                        "Value": "{% $states.input.metadata.model %}"
                                     }
                                 ]
                             }
@@ -200,7 +208,7 @@ class StepFunctionsGenerator:
                     "Resource": "arn:aws:states:::aws-sdk:cloudwatch:putMetricData",
                     "Next": "Is done?",
                     "Output": "{% $states.input %}",
-                    "Comment": "Record token usage metrics in CloudWatch"
+                    "Comment": "Record token usage metrics with model information for cost calculation"
                 },
                 "Is done?": {
                     "Type": "Choice",

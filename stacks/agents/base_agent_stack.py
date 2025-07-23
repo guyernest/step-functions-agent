@@ -227,3 +227,6 @@ class BaseAgentStack(Stack):
             ),
             tracing_enabled=True
         )
+        
+        # Store the state machine name for external reference
+        self.state_machine_name = f"{self.agent_name}-{self.env_name}"

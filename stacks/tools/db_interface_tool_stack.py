@@ -87,6 +87,9 @@ class DBInterfaceToolStack(Stack):
             )
         )
         
+        # Store function name for external reference (e.g., monitoring)
+        self.function_name = function_name
+        
         # Create the Lambda function
         self.db_interface_lambda = _lambda_python.PythonFunction(
             self,

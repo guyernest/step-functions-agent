@@ -53,6 +53,189 @@ You can read more in [this blog post](https://medium.com/@guyernest/building-sca
 
 ![Step Functions Graph for SQL AI Agent](images/agent_stepfunctions_graph.svg)
 
+## Comprehensive Architecture Diagram
+
+The following diagram provides a detailed view of the complete AI Agent architecture, including Step Functions flow, message transformations, LLM handlers, tool execution, and monitoring integration:
+
+```mermaid
+flowchart TD
+    %% High-Level Architecture Overview
+    subgraph "AI Agent Architecture Overview"
+        direction TB
+        
+        %% Input Layer
+        UserRequest["`🔥 **User Request**
+        Natural language query`"] 
+        
+        %% Core Processing Flow
+        UserRequest --> StepFunction["`⚡ **Step Functions Agent**
+        Orchestrates LLM + Tool execution`"]
+        
+        StepFunction --> LLMChoice{"`**Choose LLM**
+        Claude | OpenAI | Gemini`"}
+        
+        LLMChoice -->|Claude| ClaudeLLM["`🤖 **Claude Lambda**
+        Anthropic API`"]
+        LLMChoice -->|OpenAI| OpenAILLM["`🤖 **OpenAI Lambda**
+        GPT API`"]  
+        LLMChoice -->|Gemini| GeminiLLM["`🤖 **Gemini Lambda**
+        Google API`"]
+        
+        %% Tool Execution Layer
+        ClaudeLLM --> ToolChoice{"`**Tool Required?**`"}
+        OpenAILLM --> ToolChoice
+        GeminiLLM --> ToolChoice
+        
+        ToolChoice -->|Yes| ToolExecution["`🔧 **Tool Execution**
+        Parallel Lambda calls`"]
+        ToolChoice -->|No| Response["`✅ **Final Response**
+        Back to user`"]
+        
+        %% Tool Types
+        ToolExecution --> DBTools["`💾 **Database Tools**
+        Schema + SQL queries`"]
+        ToolExecution --> MapsTools["`🗺️ **Maps Tools**
+        Location services`"]
+        ToolExecution --> CodeTools["`💻 **Code Tools**
+        Python execution`"]
+        ToolExecution --> FinTools["`💰 **Finance Tools**
+        Market data`"]
+        
+        %% Back to LLM for response
+        DBTools --> ToolChoice
+        MapsTools --> ToolChoice
+        CodeTools --> ToolChoice
+        FinTools --> ToolChoice
+        
+        %% Monitoring Layer
+        StepFunction -.-> Monitoring["`📊 **CloudWatch Monitoring**
+        Metrics + Costs + Errors`"]
+    end
+
+    %% Simplified Step Functions Flow
+    subgraph "Step Functions Execution Details"
+        direction TB
+        
+        SFStart(["`🚀 **Start Agent**`"]) --> LoadConfig["`📋 **Load Configuration**
+        Agent Registry + Tool Registry`"]
+        
+        LoadConfig --> CallLLM["`🤖 **Call LLM**
+        Send messages + available tools`"]
+        
+        CallLLM --> RecordMetrics["`📊 **Record Metrics**
+        Token usage to CloudWatch`"]
+        
+        RecordMetrics --> CheckDone{"`❓ **Check if Done**
+        Any tool calls needed?`"}
+        
+        CheckDone -->|No tools| SFEnd(["`✅ **Return Response**`"])
+        CheckDone -->|Use tools| ExecuteTools["`🔧 **Execute Tools**
+        Parallel Lambda execution`"]
+        
+        ExecuteTools --> AppendResults["`📝 **Append Results**
+        Add tool outputs to conversation`"]
+        
+        AppendResults --> CallLLM
+    end
+
+    %% Technology Stack Summary
+    subgraph "Technology Stack"
+        direction LR
+        
+        Infrastructure["`🏗️ **Infrastructure**
+        • AWS CDK (Python)
+        • Step Functions (JSONata)
+        • Lambda Functions
+        • DynamoDB (Registries)`"]
+        
+        LLMProviders["`🤖 **LLM Providers**
+        • Anthropic Claude
+        • OpenAI GPT
+        • Google Gemini
+        • AWS Bedrock`"]
+        
+        Tools["`🔧 **Tool Categories**
+        • Database (SQLite)
+        • Maps (Google APIs)  
+        • Code (Python/E2B)
+        • Finance (Yahoo)
+        • Web (Scraping)`"]
+        
+        Monitoring["`📊 **Observability**
+        • CloudWatch Dashboards
+        • Token Usage Metrics
+        • Cost Tracking
+        • Error Monitoring`"]
+    end
+```
+
+### Key Architecture Components
+
+#### 1. **CDK Stack Organization**
+- **SharedInfrastructureStack**: Provides DynamoDB registries for agents and tools
+- **SharedLLMStack**: Centralized LLM Lambda functions supporting multiple providers
+- **Individual Tool Stacks**: Each tool stack manages its own Lambda functions and exports
+- **Agent Stacks**: Step Functions workflows with agent-specific configurations
+- **AgentMonitoringStack**: Comprehensive observability with real-time dashboards and cost tracking
+
+#### 2. **Monitoring and Observability**
+- **Real-time Token Metrics**: Track input/output tokens per agent across all LLM providers
+- **Cost Analysis Dashboard**: Automated cost calculation with current pricing for GPT-4o, Claude-3-7, Gemini-2.5, Nova Pro, and Grok-2
+- **Multi-dimensional Metrics**: Uses `agent`, `model`, and `state_machine_name` dimensions for precise tracking
+- **Lambda Performance**: Monitor invocations, errors, and performance across all tool and LLM functions
+- **Step Functions Monitoring**: Track execution success/failure rates and workflow performance
+- **Dynamic Configuration**: All monitoring automatically adapts to deployed resource names - no hardcoding
+
+#### 3. **Step Functions State Management**
+- **JSONata Expressions**: Used throughout for data transformation and routing
+- **Dynamic Tool Loading**: Agent and tool configurations loaded from DynamoDB at runtime
+- **Message Conversation**: Maintains full conversation history across LLM calls
+- **Error Handling**: Comprehensive retry logic and fallback mechanisms
+
+#### 4. **LLM Provider Abstraction**
+- **Unified Interface**: All LLM handlers conform to the same input/output format
+- **Provider-Specific Handling**: Each handler manages API-specific requirements
+- **Message Normalization**: Consistent message format regardless of LLM provider
+- **Token Tracking**: Standardized metrics collection across all providers
+
+#### 4. **Tool Execution Framework**
+- **Multi-Language Support**: Tools can be implemented in Python, TypeScript, Rust, Java, Go
+- **Standardized Interface**: All tools receive and return consistent message formats
+- **Dynamic Routing**: Step Functions routes to appropriate Lambda based on tool name
+- **Result Formatting**: Tool outputs are automatically formatted for LLM consumption
+
+#### 5. **Monitoring and Observability**
+- **Real-Time Metrics**: Token usage, costs, errors, and performance metrics
+- **Cost Attribution**: Per-model and per-agent cost tracking and analysis
+- **Error Tracking**: Comprehensive error detection and alerting
+- **Performance Analytics**: Latency and throughput monitoring across all components
+
+#### 6. **Monitoring Implementation Lessons Learned**
+
+##### Dynamic Resource Configuration
+- **Challenge**: Hardcoded monitoring configurations break when resource names change
+- **Solution**: Use CDK construct properties (`agent.state_machine_name`, `lambda.function_name`) for dynamic configuration
+- **Benefit**: Monitoring automatically adapts to naming changes and environment differences
+
+##### Multi-dimensional Metrics Architecture
+- **Challenge**: Simple metrics don't provide enough granularity for cost analysis and debugging
+- **Solution**: Implemented three-dimensional metrics (`agent`, `model`, `state_machine_name`) in Step Functions
+- **Benefit**: Enables precise cost tracking per model and detailed performance analysis per agent
+
+##### CloudWatch Metric Math Best Practices
+- **Issue**: Python underscore separators (`1_000_000`) cause CloudWatch math expression syntax errors
+- **Fix**: Use plain numbers (`1000000`) in CloudWatch metric math expressions
+- **Issue**: SEARCH expressions must match exact dimension structure from metric sources
+- **Fix**: Align monitoring queries with actual Step Functions metric dimensions structure
+
+##### Model Evolution and Cost Tracking
+- **Challenge**: LLM providers frequently update model names and pricing
+- **Solution**: Centralized model configuration in monitoring stack with current pricing
+- **Current Models**: GPT-4o, Claude-3-7-sonnet-latest, Gemini-2.5-flash, Amazon Nova Pro, Grok-2
+- **Maintenance**: Regular updates needed when providers change model names or pricing
+
+This architecture provides enterprise-grade scalability, observability, and maintainability while supporting any combination of LLM providers and tool implementations.
+
 ## MLOps of AI Agents
 
 There are a few frameworks for MLOps of AI Agents, such as: LangGraph, Crew.ai, Pydanic AI, etc. There are also some cloud platforms that can be used to build and deploy AI Agents, such as Amazon Bedrock, Google Vertex AI, and Azure OpenAI. There are cons and pros for each of these frameworks and platforms. The proposed implementation of AI Agents in AWS Step Functions is solving most of the problems with the existing frameworks and platforms.

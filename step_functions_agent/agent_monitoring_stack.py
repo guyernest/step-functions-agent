@@ -36,32 +36,24 @@ class AgentMonitoringStack(Stack):
 
         metric_factory = high_level_facade.create_metric_factory()
 
+        # Create metrics that aggregate across all models for each agent
+        # Use SEARCH to find all InputTokens/OutputTokens metrics for each state machine
         input_tokens_metrics = [
-            metric_factory.create_metric(
-                metric_name='InputTokens',
-                namespace="AI-Agents",
-                dimensions_map={
-                    "state_machine_name": agent_name,
-                },
-                label=f'Input Tokens - {agent_name}',
-                statistic=MetricStatistic.N,
+            cloudwatch.MathExpression(
+                expression=f"SUM(SEARCH('{{AI-Agents,agent,model,state_machine_name}} InputTokens {state_machine_name}', 'Sum'))",
+                label=f'Input Tokens - {state_machine_name}',
                 period=Duration.minutes(5),
             )
-            for agent_name in agents
+            for state_machine_name in agents
         ]
 
         output_tokens_metrics = [
-            metric_factory.create_metric(
-                metric_name='OutputTokens',
-                namespace="AI-Agents",
-                dimensions_map={
-                    "state_machine_name": agent_name,
-                },
-                label=f'Output Tokens - {agent_name}',
-                statistic=MetricStatistic.SUM,
+            cloudwatch.MathExpression(
+                expression=f"SUM(SEARCH('{{AI-Agents,agent,model,state_machine_name}} OutputTokens {state_machine_name}', 'Sum'))",
+                label=f'Output Tokens - {state_machine_name}',
                 period=Duration.minutes(5),
             )
-            for agent_name in agents
+            for state_machine_name in agents
         ]
 
         token_usage_group = CustomMetricGroup(
@@ -87,18 +79,18 @@ class AgentMonitoringStack(Stack):
             # Create the math expression
         math_expression = cloudwatch.MathExpression(
             expression="""
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens gpt-4o', 'Sum')) * 2.50 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens gpt-4o', 'Sum')) * 10.00 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens gpt-4o-mini', 'Sum')) * 0.15 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens gpt-4o-mini', 'Sum')) * 0.60 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens claude-3-5-sonnet-20241022', 'Sum')) * 3.00 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens claude-3-5-sonnet-20241022', 'Sum')) * 15.00 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens gemini-2.0-flash', 'Sum')) * 0.10 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens gemini-2.0-flash', 'Sum')) * 0.40 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens amazon.nova-pro', 'Sum')) * 0.8 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens amazon.nova-pro', 'Sum')) * 3.20 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens grok-2', 'Sum')) * 2.0 / 1_000_000 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens grok-2', 'Sum')) * 10.00 / 1_000_000
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} InputTokens gpt-4o', 'Sum')) * 2.50 / 1000000 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} OutputTokens gpt-4o', 'Sum')) * 10.00 / 1000000 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} InputTokens gpt-4o-mini', 'Sum')) * 0.15 / 1000000 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} OutputTokens gpt-4o-mini', 'Sum')) * 0.60 / 1000000 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} InputTokens claude-3-7-sonnet-latest', 'Sum')) * 3.00 / 1000000 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} OutputTokens claude-3-7-sonnet-latest', 'Sum')) * 15.00 / 1000000 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} InputTokens gemini-2.5-flash', 'Sum')) * 0.10 / 1000000 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} OutputTokens gemini-2.5-flash', 'Sum')) * 0.40 / 1000000 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} InputTokens amazon.nova-pro', 'Sum')) * 0.8 / 1000000 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} OutputTokens amazon.nova-pro', 'Sum')) * 3.20 / 1000000 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} InputTokens grok-2', 'Sum')) * 2.0 / 1000000 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} OutputTokens grok-2', 'Sum')) * 10.00 / 1000000
             """,
             label="Cost Calculation"  # Label that will appear on the dashboard
         )
