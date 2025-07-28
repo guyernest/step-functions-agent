@@ -49,7 +49,9 @@ class SharedInfrastructureStack(Stack):
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY,  # TODO: Change for production
-            point_in_time_recovery=True,
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True
+            ),
             stream=dynamodb.StreamViewType.NEW_AND_OLD_IMAGES
         )
 

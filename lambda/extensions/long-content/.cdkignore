@@ -1,0 +1,44 @@
+# Rust build artifacts
+target/
+Cargo.lock
+
+# Built extensions (we'll build them in CodeBuild)
+extension-x86
+extension-x86.zip
+extension-arm
+extension-arm.zip
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test coverage
+coverage/
+*.lcov
+
+# Documentation images (not needed for build)
+images/
+
+# Local build outputs
+build/
+dist/
+*.so
+*.dylib
+*.dll
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary files
+*.tmp
+*.temp
+*.log

@@ -2,7 +2,6 @@ from aws_cdk import Stack, Fn
 from constructs import Construct
 from .base_agent_stack import BaseAgentStack
 from ..shared.tool_definitions import AllTools
-from ..shared.base_agent_construct import BaseAgentConstruct
 import json
 
 
@@ -67,14 +66,13 @@ class SQLAgentStack(BaseAgentStack):
         # Store env_name for registration
         self.env_name = env_name
         
-        # Register this agent in the Agent Registry
-        self._register_agent_in_registry()
+        # Agent registration is handled by BaseAgentStack
     
-    def _register_agent_in_registry(self):
-        """Register this agent in the Agent Registry using BaseAgentConstruct"""
+    def get_agent_specification(self):
+        """Override to provide SQL agent-specific specification"""
         
         # Define SQL agent specification
-        agent_spec = {
+        return {
             "agent_name": "sql-agent",
             "version": "v1.0",
             "status": "active",
@@ -114,11 +112,3 @@ Always ensure queries are safe and follow best practices. Use the get_db_schema 
                 "deployment_env": self.env_name
             }
         }
-        
-        # Use BaseAgentConstruct for registration
-        BaseAgentConstruct(
-            self,
-            "SQLAgentRegistration",
-            agent_spec=agent_spec,
-            env_name=self.env_name
-        )

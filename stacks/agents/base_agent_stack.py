@@ -11,11 +11,12 @@ from aws_cdk import (
 from constructs import Construct
 from ..shared.naming_conventions import NamingConventions
 from .step_functions_generator import StepFunctionsGenerator
+from .agent_registry_mixin import AgentRegistryMixin
 from typing import List, Dict, Any
 import json
 
 
-class BaseAgentStack(Stack):
+class BaseAgentStack(Stack, AgentRegistryMixin):
     """
     Base Agent Stack - Common patterns for all agents
     
@@ -63,6 +64,9 @@ class BaseAgentStack(Stack):
         
         # Create Step Functions workflow from template
         self._create_step_functions_from_template()
+        
+        # Register agent in registry
+        self.register_agent_in_registry()
 
     def _import_shared_resources(self):
         """Import shared resources from other stacks"""

@@ -11,7 +11,7 @@ This architectural pattern ensures that:
 4. Registry entries are generated automatically from the source of truth
 """
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from dataclasses import dataclass
 from typing import Dict, List, Any, Optional
 from aws_cdk import (
@@ -33,7 +33,7 @@ class ToolExport:
     export_name: str
 
 
-class BaseToolConstruct(Construct, ABC):
+class BaseToolConstruct(Construct):
     """
     Base construct for tool stacks that own their tool definitions.
     

@@ -43,4 +43,5 @@ class AgentDocsStack(Stack):
         deployment = BucketDeployment(self, "DeployWebsiteContent", 
             sources=[Source.asset("docs/build/")],
             destination_bucket=docs_bucket,
+            memory_limit=2048  # Increase memory for faster uploads (default is 128MB)
         )

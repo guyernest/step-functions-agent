@@ -142,7 +142,8 @@ class BaseAgentConstruct(Construct):
                 parameters={
                     "TableName": self.agent_registry_table_name,
                     "Key": {
-                        "agent_name": {"S": complete_agent_spec["agent_name"]}
+                        "agent_name": {"S": complete_agent_spec["agent_name"]},
+                        "version": {"S": complete_agent_spec["version"]}
                     }
                 }
             ),
