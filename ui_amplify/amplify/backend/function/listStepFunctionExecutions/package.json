@@ -1,0 +1,17 @@
+{
+  "name": "liststepfunctionexecutions",
+  "version": "1.0.0",
+  "description": "Lambda function to list Step Function executions",
+  "main": "handler.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@aws-sdk/client-sfn": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.119",
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0"
+  }
+}
