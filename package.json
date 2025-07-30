@@ -1,0 +1,30 @@
+{
+  "name": "step-functions-agent",
+  "version": "1.0.0",
+  "description": "> 📦 **Enterprise AI Agent Framework** > > Extreme flexibility and scalability for enterprise grade AI Agents. Supporting all LLMs and tools in any programming language. Including human approval and observability. All in a single framework. > ___",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@aws-amplify/backend": "^1.16.1",
+    "@aws-amplify/backend-cli": "^1.8.0",
+    "aws-cdk-lib": "^2.204.0",
+    "constructs": "^10.4.2",
+    "esbuild": "^0.25.8",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.856.0",
+    "@aws-sdk/client-sfn": "^3.856.0",
+    "@aws-sdk/lib-dynamodb": "^3.856.0",
+    "aws-amplify": "^6.15.4"
+  }
+}

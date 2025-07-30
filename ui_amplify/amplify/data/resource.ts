@@ -2,9 +2,9 @@ import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 import { listAgentsFromRegistry } from '../backend/function/listAgentsFromRegistry/resource';
 import { listToolsFromRegistry } from '../backend/function/listToolsFromRegistry/resource';
 import { startAgentExecution } from '../backend/function/startAgentExecution/resource';
-import { listStepFunctionExecutions } from '../backend/function/listStepFunctionExecutions/resource';
-import { getStepFunctionExecution } from '../backend/function/getStepFunctionExecution/resource';
-import { getExecutionHistory } from '../backend/function/getExecutionHistory/resource';
+// import { listStepFunctionExecutions } from '../backend/function/listStepFunctionExecutions/resource';
+// import { getStepFunctionExecution } from '../backend/function/getStepFunctionExecution/resource';
+// import { getExecutionHistory } from '../backend/function/getExecutionHistory/resource';
 
 const schema = a.schema({
   // Configuration Management
@@ -95,38 +95,38 @@ const schema = a.schema({
     .handler(a.handler.function(listToolsFromRegistry))
     .authorization((allow) => [allow.authenticated()]),
 
-  // Step Functions queries
-  listStepFunctionExecutions: a
-    .query()
-    .arguments({
-      stateMachineArn: a.string(),
-      statusFilter: a.string(),
-      maxResults: a.integer(),
-      nextToken: a.string(),
-    })
-    .returns(a.ref('StepFunctionExecution').array())
-    .handler(a.handler.function(listStepFunctionExecutions))
-    .authorization((allow) => [allow.authenticated()]),
+  // Step Functions queries - commented out for now
+  // listStepFunctionExecutions: a
+  //   .query()
+  //   .arguments({
+  //     stateMachineArn: a.string(),
+  //     statusFilter: a.string(),
+  //     maxResults: a.integer(),
+  //     nextToken: a.string(),
+  //   })
+  //   .returns(a.ref('StepFunctionExecution').array())
+  //   .handler(a.handler.function(listStepFunctionExecutions))
+  //   .authorization((allow) => [allow.authenticated()]),
 
-  getStepFunctionExecution: a
-    .query()
-    .arguments({
-      executionArn: a.string().required(),
-    })
-    .returns(a.ref('StepFunctionExecution'))
-    .handler(a.handler.function(getStepFunctionExecution))
-    .authorization((allow) => [allow.authenticated()]),
+  // getStepFunctionExecution: a
+  //   .query()
+  //   .arguments({
+  //     executionArn: a.string().required(),
+  //   })
+  //   .returns(a.ref('StepFunctionExecution'))
+  //   .handler(a.handler.function(getStepFunctionExecution))
+  //   .authorization((allow) => [allow.authenticated()]),
 
-  getExecutionHistory: a
-    .query()
-    .arguments({
-      executionArn: a.string().required(),
-      maxResults: a.integer(),
-      nextToken: a.string(),
-    })
-    .returns(a.ref('ExecutionHistory'))
-    .handler(a.handler.function(getExecutionHistory))
-    .authorization((allow) => [allow.authenticated()]),
+  // getExecutionHistory: a
+  //   .query()
+  //   .arguments({
+  //     executionArn: a.string().required(),
+  //     maxResults: a.integer(),
+  //     nextToken: a.string(),
+  //   })
+  //   .returns(a.ref('ExecutionHistory'))
+  //   .handler(a.handler.function(getExecutionHistory))
+  //   .authorization((allow) => [allow.authenticated()]),
 
   // Custom mutations
   startAgentExecution: a
