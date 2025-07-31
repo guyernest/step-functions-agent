@@ -1,29 +1,22 @@
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
-
-# testing
-/coverage
-
-# production
-/build
-
-# misc
-.DS_Store
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
 # amplify
-amplify_outputs.json
-src/amplify_outputs.json
-aws-exports.js
-aws-exports.ts
-.amplify/
-node_modules/
+node_modules
+.amplify
+amplify_outputs*
+amplifyconfiguration*
+
+# Lambda function dependencies
+amplify/backend/function/*/node_modules/
+amplify/backend/function/*/package-lock.json
+
+# Vite
+dist
+*.local
+
+# Editor directories and files
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

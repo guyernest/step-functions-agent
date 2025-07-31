@@ -1,42 +1,35 @@
-import React from 'react';
-import { Authenticator } from '@aws-amplify/ui-react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import '@aws-amplify/ui-react/styles.css';
-import './App.css';
+import React from 'react'
+import { Authenticator } from '@aws-amplify/ui-react'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import Dashboard from './pages/Dashboard'
 
-// Pages
-import Dashboard from './pages/Dashboard';
-import AgentExecution from './pages/AgentExecution';
-import Registries from './pages/Registries';
-import StackVisualization from './pages/StackVisualization';
-import Monitoring from './pages/Monitoring';
-import History from './pages/History';
-import Settings from './pages/Settings';
-
-// Components
-import Layout from './components/Layout/Layout';
+const queryClient = new QueryClient()
 
 function App() {
   return (
-    <Authenticator>
-      {({ signOut, user }) => (
-        <Router>
-          <Layout user={user} onSignOut={signOut || (() => {})}>
-            <Routes>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/execute" element={<AgentExecution />} />
-              <Route path="/registries" element={<Registries />} />
-              <Route path="/stacks" element={<StackVisualization />} />
-              <Route path="/monitoring" element={<Monitoring />} />
-              <Route path="/history" element={<History />} />
-              <Route path="/settings" element={<Settings />} />
-            </Routes>
-          </Layout>
-        </Router>
-      )}
-    </Authenticator>
-  );
+    <QueryClientProvider client={queryClient}>
+      <Authenticator>
+        {({ signOut, user }) => (
+          <Router>
+            <div style={{ padding: '20px' }}>
+              <header style={{ marginBottom: '20px', borderBottom: '1px solid #ddd', paddingBottom: '10px' }}>
+                <h1>Step Functions Agent UI</h1>
+                <div>
+                  Welcome {user?.username}! 
+                  <button onClick={signOut} style={{ marginLeft: '10px' }}>Sign out</button>
+                </div>
+              </header>
+              <Routes>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+              </Routes>
+            </div>
+          </Router>
+        )}
+      </Authenticator>
+    </QueryClientProvider>
+  )
 }
 
-export default App;
+export default App
