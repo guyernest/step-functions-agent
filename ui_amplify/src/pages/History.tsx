@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Card,
   Heading,
@@ -72,7 +72,8 @@ const formatDuration = (startDate: string, stopDate?: string) => {
 
 const History: React.FC = () => {
   const navigate = useNavigate()
-  const [executions, setExecutions] = useState<Execution[]>([])
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [allExecutions, setAllExecutions] = useState<Execution[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('')
@@ -80,9 +81,35 @@ const History: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false)
   const [agents, setAgents] = useState<string[]>([])
 
+  // Initialize filters from URL parameters
+  useEffect(() => {
+    const agentParam = searchParams.get('agent') || ''
+    const statusParam = searchParams.get('status') || ''
+    setAgentFilter(agentParam)
+    setStatusFilter(statusParam)
+  }, [])
+
   useEffect(() => {
     fetchExecutions()
-  }, [statusFilter, agentFilter])
+  }, [])
+
+  // Update URL parameters when filters change
+  const updateUrlParams = (agent: string, status: string) => {
+    const params: Record<string, string> = {}
+    if (agent) params.agent = agent
+    if (status) params.status = status
+    setSearchParams(params)
+  }
+
+  const handleAgentFilterChange = (value: string) => {
+    setAgentFilter(value)
+    updateUrlParams(value, statusFilter)
+  }
+
+  const handleStatusFilterChange = (value: string) => {
+    setStatusFilter(value)
+    updateUrlParams(agentFilter, value)
+  }
 
   const fetchExecutions = async () => {
     if (!refreshing) setLoading(true)
@@ -102,19 +129,15 @@ const History: React.FC = () => {
           : response.data
 
         if (data.executions) {
+          // Store all executions
+          setAllExecutions(data.executions)
+          
           // Extract unique agent names
           const uniqueAgents = [...new Set(data.executions
             .map((exec: Execution) => exec.agentName)
             .filter((name: string | undefined) => name)
           )] as string[]
           setAgents(uniqueAgents.sort())
-          
-          // Apply agent filter if selected
-          const filteredExecutions = agentFilter 
-            ? data.executions.filter((exec: Execution) => exec.agentName === agentFilter)
-            : data.executions
-          
-          setExecutions(filteredExecutions)
         } else if (data.error) {
           setError(data.error + (data.details ? ': ' + data.details : ''))
         }
@@ -132,6 +155,21 @@ const History: React.FC = () => {
     setRefreshing(true)
     fetchExecutions()
   }
+
+  // Apply filters to all executions
+  const filteredExecutions = React.useMemo(() => {
+    let filtered = allExecutions
+    
+    if (agentFilter) {
+      filtered = filtered.filter(exec => exec.agentName === agentFilter)
+    }
+    
+    if (statusFilter) {
+      filtered = filtered.filter(exec => exec.status === statusFilter)
+    }
+    
+    return filtered
+  }, [allExecutions, agentFilter, statusFilter])
 
   return (
     <View>
@@ -155,7 +193,7 @@ const History: React.FC = () => {
             <SelectField
               label=""
               value={agentFilter}
-              onChange={(e) => setAgentFilter(e.target.value)}
+              onChange={(e) => handleAgentFilterChange(e.target.value)}
               width="200px"
             >
               <option value="">All Agents</option>
@@ -166,7 +204,7 @@ const History: React.FC = () => {
             <SelectField
               label=""
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => handleStatusFilterChange(e.target.value)}
               width="200px"
             >
               <option value="">All Statuses</option>
@@ -188,7 +226,7 @@ const History: React.FC = () => {
         
         {loading ? (
           <Loader size="large" />
-        ) : executions.length > 0 ? (
+        ) : filteredExecutions.length > 0 ? (
           <Table marginTop="10px">
             <TableHead>
               <TableRow>
@@ -201,7 +239,7 @@ const History: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {executions.map((execution) => (
+              {filteredExecutions.map((execution) => (
                 <TableRow key={execution.executionArn}>
                   <TableCell>{execution.agentName || 'Unknown'}</TableCell>
                   <TableCell>{execution.name || 'Unnamed'}</TableCell>
@@ -230,7 +268,9 @@ const History: React.FC = () => {
           </Table>
         ) : (
           <Text marginTop="10px">
-            No executions found. Start an agent execution to see it here.
+            {allExecutions.length === 0 
+              ? 'No executions found. Start an agent execution to see it here.'
+              : 'No executions match the current filters.'}
           </Text>
         )}
       </Card>

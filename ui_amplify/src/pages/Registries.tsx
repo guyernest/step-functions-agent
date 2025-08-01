@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Card,
   Heading,
@@ -10,7 +11,8 @@ import {
   SearchField,
   Flex,
   Icon,
-  Divider
+  Divider,
+  Button
 } from '@aws-amplify/ui-react'
 import { generateClient } from 'aws-amplify/data'
 import type { Schema } from '../../amplify/data/resource'
@@ -38,6 +40,7 @@ interface Tool {
 
 
 const Registries: React.FC = () => {
+  const navigate = useNavigate()
   const [agents, setAgents] = useState<Agent[]>([])
   const [tools, setTools] = useState<Tool[]>([])
   const [loadingAgents, setLoadingAgents] = useState(true)
@@ -246,16 +249,43 @@ const Registries: React.FC = () => {
         {isExpanded && (
           <View marginTop="15px" marginLeft="35px">
             <Divider marginBottom="10px" />
-            <Text fontSize="small" fontWeight="bold" marginBottom="10px">
-              Associated Tools:
-            </Text>
-            {agentTools.length > 0 ? (
-              agentTools.map((toolName, index) => 
-                renderTool(toolName, toolObjects[index])
-              )
-            ) : (
-              <Text fontSize="small" color="gray">No tools configured</Text>
-            )}
+            <Flex justifyContent="space-between" alignItems="flex-start">
+              <View flex="1">
+                <Text fontSize="small" fontWeight="bold" marginBottom="10px">
+                  Associated Tools:
+                </Text>
+                {agentTools.length > 0 ? (
+                  agentTools.map((toolName, index) => 
+                    renderTool(toolName, toolObjects[index])
+                  )
+                ) : (
+                  <Text fontSize="small" color="gray">No tools configured</Text>
+                )}
+              </View>
+              <Flex gap="10px" direction="column" minWidth="140px">
+                <Button
+                  variation="primary"
+                  size="small"
+                  isFullWidth
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    navigate(`/execute?agent=${encodeURIComponent(agent.name)}`)
+                  }}
+                >
+                  Execute Agent
+                </Button>
+                <Button
+                  size="small"
+                  isFullWidth
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    navigate(`/history?agent=${encodeURIComponent(agent.name)}`)
+                  }}
+                >
+                  View History
+                </Button>
+              </Flex>
+            </Flex>
           </View>
         )}
       </Card>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Card,
   Heading,
@@ -24,6 +25,7 @@ interface Agent {
 }
 
 const AgentExecution: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgent, setSelectedAgent] = useState('')
   const [input, setInput] = useState('')
@@ -36,6 +38,28 @@ const AgentExecution: React.FC = () => {
   useEffect(() => {
     fetchAgents()
   }, [])
+
+  // Handle URL parameter for agent selection
+  useEffect(() => {
+    const agentParam = searchParams.get('agent')
+    if (agentParam && agents.length > 0) {
+      // Check if the agent exists in the list
+      const agentExists = agents.some(agent => agent.name === agentParam)
+      if (agentExists) {
+        setSelectedAgent(agentParam)
+      }
+    }
+  }, [searchParams, agents])
+
+  // Update URL when agent selection changes
+  const handleAgentChange = (agentName: string) => {
+    setSelectedAgent(agentName)
+    if (agentName) {
+      setSearchParams({ agent: agentName })
+    } else {
+      setSearchParams({})
+    }
+  }
 
   const fetchAgents = async () => {
     setLoading(true)
@@ -149,7 +173,7 @@ const AgentExecution: React.FC = () => {
             <SelectField
               label="Select Agent"
               value={selectedAgent}
-              onChange={(e) => setSelectedAgent(e.target.value)}
+              onChange={(e) => handleAgentChange(e.target.value)}
               marginBottom="15px"
             >
               <option value="">-- Select an agent --</option>
