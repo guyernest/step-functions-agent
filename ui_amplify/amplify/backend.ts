@@ -5,6 +5,7 @@ import { listAgentsFromRegistry } from './backend/function/listAgentsFromRegistr
 import { listToolsFromRegistry } from './backend/function/listToolsFromRegistry/resource';
 import { startAgentExecution } from './backend/function/startAgentExecution/resource';
 import { listStepFunctionExecutions } from './backend/function/listStepFunctionExecutions/resource';
+import { getStepFunctionExecution } from './backend/function/getStepFunctionExecution/resource';
 import { PolicyStatement, Effect, Policy } from 'aws-cdk-lib/aws-iam';
 
 /**
@@ -17,6 +18,7 @@ const backend = defineBackend({
   listToolsFromRegistry,
   startAgentExecution,
   listStepFunctionExecutions,
+  getStepFunctionExecution,
 });
 
 // Set the Cognito User Pool name
@@ -87,3 +89,15 @@ const stepFunctionsListPolicy = new PolicyStatement({
 });
 
 backend.listStepFunctionExecutions.resources.lambda.addToRolePolicy(stepFunctionsListPolicy);
+
+// Grant Step Functions permissions to the getStepFunctionExecution Lambda
+const stepFunctionsDetailPolicy = new PolicyStatement({
+  effect: Effect.ALLOW,
+  actions: [
+    'states:DescribeExecution',
+    'states:GetExecutionHistory'
+  ],
+  resources: ['*']
+});
+
+backend.getStepFunctionExecution.resources.lambda.addToRolePolicy(stepFunctionsDetailPolicy);

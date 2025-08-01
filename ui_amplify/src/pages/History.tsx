@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Card,
   Heading,
@@ -70,6 +71,7 @@ const formatDuration = (startDate: string, stopDate?: string) => {
 }
 
 const History: React.FC = () => {
+  const navigate = useNavigate()
   const [executions, setExecutions] = useState<Execution[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -216,8 +218,7 @@ const History: React.FC = () => {
                     <Button
                       size="small"
                       onClick={() => {
-                        // TODO: Navigate to detail view
-                        console.log('View details:', execution.executionArn)
+                        navigate(`/execution/${encodeURIComponent(execution.executionArn)}`)
                       }}
                     >
                       View Details

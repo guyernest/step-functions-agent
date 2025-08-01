@@ -7,6 +7,7 @@ import Registries from './pages/Registries'
 import History from './pages/History'
 import ApprovalDashboard from './pages/ApprovalDashboard'
 import Settings from './pages/Settings'
+import ExecutionDetail from './pages/ExecutionDetail'
 
 const queryClient = new QueryClient()
 
@@ -38,6 +39,7 @@ function App() {
                 <Route path="/execute" element={<AgentExecution />} />
                 <Route path="/registries" element={<Registries />} />
                 <Route path="/history" element={<History />} />
+                <Route path="/execution/:executionArn" element={<ExecutionDetail />} />
                 <Route path="/approvals" element={<ApprovalDashboard />} />
                 <Route path="/settings" element={<Settings />} />
               </Routes>

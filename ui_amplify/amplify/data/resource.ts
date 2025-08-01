@@ -3,6 +3,7 @@ import { listAgentsFromRegistry } from '../backend/function/listAgentsFromRegist
 import { listToolsFromRegistry } from '../backend/function/listToolsFromRegistry/resource';
 import { startAgentExecution } from '../backend/function/startAgentExecution/resource';
 import { listStepFunctionExecutions } from '../backend/function/listStepFunctionExecutions/resource';
+import { getStepFunctionExecution } from '../backend/function/getStepFunctionExecution/resource';
 
 const schema = a.schema({
   Todo: a
@@ -49,6 +50,15 @@ const schema = a.schema({
     })
     .returns(a.json())
     .handler(a.handler.function(listStepFunctionExecutions))
+    .authorization((allow) => [allow.authenticated()]),
+  
+  getStepFunctionExecution: a
+    .query()
+    .arguments({
+      executionArn: a.string().required()
+    })
+    .returns(a.json())
+    .handler(a.handler.function(getStepFunctionExecution))
     .authorization((allow) => [allow.authenticated()]),
 });
 
