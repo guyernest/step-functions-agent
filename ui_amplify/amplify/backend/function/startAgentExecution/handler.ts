@@ -1,5 +1,7 @@
 import { SFNClient, StartExecutionCommand, ListStateMachinesCommand } from '@aws-sdk/client-sfn';
 
+declare const process: { env: { AWS_REGION?: string } };
+
 const client = new SFNClient({ region: process.env.AWS_REGION });
 
 export const handler = async (event: any): Promise<any> => {

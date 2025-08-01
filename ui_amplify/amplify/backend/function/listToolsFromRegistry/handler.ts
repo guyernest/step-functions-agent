@@ -1,5 +1,7 @@
 import { DynamoDBClient, ScanCommand } from '@aws-sdk/client-dynamodb';
 
+declare const process: { env: { AWS_REGION?: string } };
+
 const client = new DynamoDBClient({ region: process.env.AWS_REGION });
 
 export const handler = async (event: any): Promise<any> => {
@@ -32,7 +34,7 @@ export const handler = async (event: any): Promise<any> => {
 
     // Transform the DynamoDB items to a cleaner format
     // tool-registry table structure: tool_name, description, input_schema, etc.
-    const tools = (response.Items || []).map(item => ({
+    const tools = (response.Items || []).map((item: any) => ({
       id: item.tool_name?.S || '',
       name: item.tool_name?.S || '',
       description: item.description?.S || '',
@@ -42,7 +44,7 @@ export const handler = async (event: any): Promise<any> => {
     }));
 
     return {
-      tools: tools.sort((a, b) => a.name.localeCompare(b.name))
+      tools: tools.sort((a: any, b: any) => a.name.localeCompare(b.name))
     };
   } catch (error) {
     console.error('Error listing tools:', error);

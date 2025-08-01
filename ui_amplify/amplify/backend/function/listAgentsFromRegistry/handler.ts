@@ -1,5 +1,7 @@
 import { DynamoDBClient, ScanCommand } from '@aws-sdk/client-dynamodb';
 
+declare const process: { env: { AWS_REGION?: string } };
+
 const client = new DynamoDBClient({ region: process.env.AWS_REGION });
 
 export const handler = async (event: any): Promise<any> => {
@@ -53,7 +55,7 @@ export const handler = async (event: any): Promise<any> => {
         
         return itemType === 'AGENT' || itemType === 'agent' || (hasAgentName && isNotTool);
       })
-      .map(item => {
+      .map((item: any) => {
         // Parse tools if they exist
         let tools: string[] = [];
         if (item.tools?.S) {
@@ -77,7 +79,7 @@ export const handler = async (event: any): Promise<any> => {
       });
 
     return {
-      agents: agents.sort((a, b) => a.name.localeCompare(b.name))
+      agents: agents.sort((a: any, b: any) => a.name.localeCompare(b.name))
     };
   } catch (error) {
     console.error('Error listing agents:', error);
