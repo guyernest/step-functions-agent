@@ -1,14 +1,22 @@
-// @ts-ignore - AWS SDK is provided by Lambda runtime
-const { DynamoDBClient, ScanCommand } = require('@aws-sdk/client-dynamodb');
-
 declare const process: { env: { AWS_REGION?: string } };
 
-const client = new DynamoDBClient({ region: process.env.AWS_REGION });
+let client: any;
+let ScanCommand: any;
+
+async function initializeAWS() {
+  if (!client) {
+    const { DynamoDBClient, ScanCommand: SC } = await import('@aws-sdk/client-dynamodb');
+    ScanCommand = SC;
+    client = new DynamoDBClient({ region: process.env.AWS_REGION });
+  }
+}
 
 export const handler = async (event: any): Promise<any> => {
   console.log('Received event:', JSON.stringify(event, null, 2));
   console.log('Event arguments:', event.arguments);
   console.log('Event tableName:', event.arguments?.tableName);
+
+  await initializeAWS();
 
   try {
     // Get table name from event arguments
