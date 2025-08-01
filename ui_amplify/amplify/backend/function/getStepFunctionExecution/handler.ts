@@ -1,6 +1,8 @@
 // @ts-ignore - AWS SDK is provided by Lambda runtime
 const { SFNClient, DescribeExecutionCommand, GetExecutionHistoryCommand } = require('@aws-sdk/client-sfn');
 
+declare const process: { env: { AWS_REGION?: string } };
+
 const client = new SFNClient({ region: process.env.AWS_REGION });
 
 interface Message {

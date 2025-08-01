@@ -1,6 +1,8 @@
 // @ts-ignore - AWS SDK is provided by Lambda runtime
 const { DynamoDBClient, ScanCommand } = require('@aws-sdk/client-dynamodb');
 
+declare const process: { env: { AWS_REGION?: string } };
+
 const client = new DynamoDBClient({ region: process.env.AWS_REGION });
 
 export const handler = async (event: any): Promise<any> => {

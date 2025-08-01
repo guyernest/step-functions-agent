@@ -1,6 +1,8 @@
 // @ts-ignore - AWS SDK is provided by Lambda runtime
 const { SFNClient, ListExecutionsCommand, ListStateMachinesCommand } = require('@aws-sdk/client-sfn');
 
+declare const process: { env: { AWS_REGION?: string } };
+
 const client = new SFNClient({ region: process.env.AWS_REGION });
 
 interface Execution {
@@ -30,8 +32,8 @@ export const handler = async (event: any): Promise<any> => {
       const listSMResponse = await client.send(listSMCommand);
       
       stateMachineArns = listSMResponse.stateMachines
-        ?.map(sm => sm.stateMachineArn)
-        ?.filter((arn): arn is string => arn !== undefined) || [];
+        ?.map((sm: any) => sm.stateMachineArn)
+        ?.filter((arn: any): arn is string => arn !== undefined) || [];
       
       console.log('Found state machines:', stateMachineArns.length);
     }
@@ -54,7 +56,7 @@ export const handler = async (event: any): Promise<any> => {
       const smName = arnParts[arnParts.length - 1];
       const agentName = smName.replace('-prod', '');
       
-      const executions = (response.executions || []).map(exec => ({
+      const executions = (response.executions || []).map((exec: any) => ({
         executionArn: exec.executionArn || '',
         stateMachineArn: exec.stateMachineArn || arn,
         name: exec.name || '',
