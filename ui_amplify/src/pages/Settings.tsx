@@ -6,9 +6,7 @@ import {
   View,
   Button,
   TextField,
-  Alert,
-  Flex,
-  SelectField
+  Alert
 } from '@aws-amplify/ui-react'
 
 const Settings: React.FC = () => {

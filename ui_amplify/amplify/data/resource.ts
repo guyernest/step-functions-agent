@@ -1,6 +1,7 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 import { listAgentsFromRegistry } from '../backend/function/listAgentsFromRegistry/resource';
 import { listToolsFromRegistry } from '../backend/function/listToolsFromRegistry/resource';
+import { startAgentExecution } from '../backend/function/startAgentExecution/resource';
 
 const schema = a.schema({
   Todo: a
@@ -25,6 +26,17 @@ const schema = a.schema({
     })
     .returns(a.json())
     .handler(a.handler.function(listToolsFromRegistry))
+    .authorization((allow) => [allow.authenticated()]),
+  
+  startAgentExecution: a
+    .mutation()
+    .arguments({
+      agentName: a.string().required(),
+      input: a.string(),
+      executionName: a.string()
+    })
+    .returns(a.json())
+    .handler(a.handler.function(startAgentExecution))
     .authorization((allow) => [allow.authenticated()]),
 });
 

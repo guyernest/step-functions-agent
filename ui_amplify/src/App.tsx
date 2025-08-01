@@ -1,4 +1,3 @@
-import React from 'react'
 import { Authenticator } from '@aws-amplify/ui-react'
 import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'

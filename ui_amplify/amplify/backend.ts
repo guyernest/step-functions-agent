@@ -3,6 +3,7 @@ import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { listAgentsFromRegistry } from './backend/function/listAgentsFromRegistry/resource';
 import { listToolsFromRegistry } from './backend/function/listToolsFromRegistry/resource';
+import { startAgentExecution } from './backend/function/startAgentExecution/resource';
 import { PolicyStatement, Effect, Policy } from 'aws-cdk-lib/aws-iam';
 
 /**
@@ -13,6 +14,7 @@ const backend = defineBackend({
   data,
   listAgentsFromRegistry,
   listToolsFromRegistry,
+  startAgentExecution,
 });
 
 // Set the Cognito User Pool name
@@ -28,7 +30,11 @@ const stepFunctionsPolicy = new PolicyStatement({
     'states:SendTaskSuccess',
     'states:SendTaskFailure',
     'states:ListActivities',
-    'states:DescribeActivity'
+    'states:DescribeActivity',
+    'states:StartExecution',
+    'states:ListStateMachines',
+    'states:DescribeExecution',
+    'states:ListTagsForResource'
   ],
   resources: ['*']
 });
@@ -53,3 +59,16 @@ const dynamoDbPolicy = new PolicyStatement({
 
 backend.listAgentsFromRegistry.resources.lambda.addToRolePolicy(dynamoDbPolicy);
 backend.listToolsFromRegistry.resources.lambda.addToRolePolicy(dynamoDbPolicy);
+
+// Grant Step Functions permissions to the startAgentExecution Lambda
+const stepFunctionsExecutionPolicy = new PolicyStatement({
+  effect: Effect.ALLOW,
+  actions: [
+    'states:StartExecution',
+    'states:ListStateMachines',
+    'states:ListTagsForResource'
+  ],
+  resources: ['*']
+});
+
+backend.startAgentExecution.resources.lambda.addToRolePolicy(stepFunctionsExecutionPolicy);
