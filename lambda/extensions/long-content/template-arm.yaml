@@ -8,31 +8,31 @@ Parameters:
     Default: dev
     Description: Deployment stage name
     AllowedValues:
-      - dev
-      - test
-      - prod
-      
+    - dev
+    - test
+    - prod
+
   AgentContextTableName:
     Type: String
     Default: AgentContext
     Description: Name of the DynamoDB table to store large content
-  
+
   MaxContentSize:
     Type: Number
     Default: 5000
     Description: Maximum size of content fields before storing in DynamoDB
-    
+
   # Add a parameter to control whether to create the DynamoDB table
   CreateDynamoDBTable:
     Type: String
     Default: "false"
     Description: Whether to create the DynamoDB table or not (set to 'false' if the table already exists)
     AllowedValues:
-      - "true"
-      - "false"
+    - "true"
+    - "false"
 
 Conditions:
-  ShouldCreateTable: !Equals [!Ref CreateDynamoDBTable, "true"]
+  ShouldCreateTable: !Equals [ !Ref CreateDynamoDBTable, "true" ]
 
 Resources:
   # DynamoDB table for storing large content - Only created if CreateDynamoDBTable is true
@@ -43,29 +43,29 @@ Resources:
       TableName: !Ref AgentContextTableName
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: id
-          AttributeType: S
+      - AttributeName: id
+        AttributeType: S
       KeySchema:
-        - AttributeName: id
-          KeyType: HASH
+      - AttributeName: id
+        KeyType: HASH
       SSESpecification:
         SSEEnabled: true
       TimeToLiveSpecification:
         AttributeName: expires_at
         Enabled: true
       Tags:
-        - Key: Project
-          Value: LambdaRuntimeAPIProxy
-        - Key: Environment
-          Value: !Ref DeploymentStage
+      - Key: Project
+        Value: LambdaRuntimeAPIProxy
+      - Key: Environment
+        Value: !Ref DeploymentStage
 
   # The Lambda Layer for our ARM64 extension
   ProxyExtensionLayer:
-    Type: AWS::Serverless::LayerVersion
+    Type: AWS::Lambda::LayerVersion
     Properties:
       LayerName: !Sub "lambda-runtime-api-proxy-arm-${DeploymentStage}"
       Description: Lambda Runtime API Proxy extension for ARM64
-      ContentUri: ./extension-arm.zip
+      Content: ./extension-arm.zip
       CompatibleRuntimes:
         - python3.9
         - python3.10
@@ -74,15 +74,12 @@ Resources:
         - nodejs16.x
         - nodejs18.x
         - nodejs20.x
+        - provided.al2
         - java11
         - java17
         - java21
-        - provided
-        - provided.al2
-        - provided.al2023
       CompatibleArchitectures:
         - arm64
-      RetentionPolicy: Retain
 
   # Python Lambda function to test the Runtime API Proxy extension on ARM64
   ProxyTestFunction:

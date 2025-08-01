@@ -1,8 +1,9 @@
 version = 0.1
 [default.deploy.parameters]
-stack_name = "extension-proxy-take-3"
+stack_name = "long-content-extension-arm"
 resolve_s3 = true
-s3_prefix = "extension-proxy-take-3"
+s3_prefix = "long-content-extension-arm"
 region = "us-west-2"
 capabilities = "CAPABILITY_IAM"
+parameter_overrides = "DeploymentStage=\"test\" AgentContextTableName=\"AgentContext\" MaxContentSize=\"5000\" CreateDynamoDBTable=\"false\""
 image_repositories = []
