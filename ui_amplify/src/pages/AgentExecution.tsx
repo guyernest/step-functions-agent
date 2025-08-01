@@ -73,9 +73,19 @@ const AgentExecution: React.FC = () => {
     setSuccess(null)
 
     try {
+      // Format the plain text input into the expected JSON structure
+      const formattedInput = input.trim() ? JSON.stringify({
+        messages: [
+          {
+            role: "user",
+            content: input.trim()
+          }
+        ]
+      }) : undefined
+
       const response = await client.mutations.startAgentExecution({
         agentName: selectedAgent,
-        input: input || undefined,
+        input: formattedInput,
         executionName: executionName || undefined
       })
 
@@ -151,13 +161,57 @@ const AgentExecution: React.FC = () => {
             </SelectField>
 
             <TextAreaField
-              label="Input (JSON)"
-              placeholder='{"messages": [{"role": "user", "content": "What can you do?"}]}'
+              label="Message"
+              placeholder="What can you do?"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              rows={5}
-              marginBottom="15px"
+              rows={3}
+              marginBottom="5px"
+              descriptiveText="Enter your message or question for the agent"
             />
+            
+            {!input && selectedAgent && (
+              <View marginBottom="15px">
+                <Text fontSize="small" color="gray">Example prompts:</Text>
+                <Flex gap="5px" wrap="wrap" marginTop="5px">
+                  {selectedAgent.includes('sql') && (
+                    <>
+                      <Button size="small" variation="link" onClick={() => setInput('Show me all tables in the database')}>
+                        Show tables
+                      </Button>
+                      <Button size="small" variation="link" onClick={() => setInput('Get the top 10 customers by revenue')}>
+                        Top customers
+                      </Button>
+                    </>
+                  )}
+                  {selectedAgent.includes('weather') && (
+                    <>
+                      <Button size="small" variation="link" onClick={() => setInput('What is the weather in New York?')}>
+                        Weather in NY
+                      </Button>
+                      <Button size="small" variation="link" onClick={() => setInput('Will it rain tomorrow in London?')}>
+                        Rain forecast
+                      </Button>
+                    </>
+                  )}
+                  {selectedAgent.includes('research') && (
+                    <>
+                      <Button size="small" variation="link" onClick={() => setInput('Research Apple Inc stock performance')}>
+                        Research Apple
+                      </Button>
+                      <Button size="small" variation="link" onClick={() => setInput('What are the latest tech industry trends?')}>
+                        Tech trends
+                      </Button>
+                    </>
+                  )}
+                  {!selectedAgent.includes('sql') && !selectedAgent.includes('weather') && !selectedAgent.includes('research') && (
+                    <Button size="small" variation="link" onClick={() => setInput('What can you help me with?')}>
+                      What can you do?
+                    </Button>
+                  )}
+                </Flex>
+              </View>
+            )}
 
             <TextField
               label="Execution Name (optional)"
@@ -192,12 +246,12 @@ const AgentExecution: React.FC = () => {
         <Heading level={4}>About Agent Execution</Heading>
         <Text marginTop="10px">
           This page allows you to start executions of registered Step Functions agents. 
-          Select an agent from the dropdown, provide optional input in JSON format, 
+          Select an agent from the dropdown, type your message or question, 
           and click "Start Execution" to begin.
         </Text>
         <Text marginTop="10px">
-          The input should be in the format expected by the agent's state machine. 
-          If no input is provided, a default message will be sent.
+          Simply enter your request in plain text - the system will automatically 
+          format it for the agent. Leave empty to send a default greeting.
         </Text>
       </Card>
     </View>
