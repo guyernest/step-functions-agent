@@ -1,6 +1,5 @@
-import { SFNClient, ListExecutionsCommand, ListStateMachinesCommand } from '@aws-sdk/client-sfn';
-
-declare const process: { env: { AWS_REGION?: string } };
+// @ts-ignore - AWS SDK is provided by Lambda runtime
+const { SFNClient, ListExecutionsCommand, ListStateMachinesCommand } = require('@aws-sdk/client-sfn');
 
 const client = new SFNClient({ region: process.env.AWS_REGION });
 

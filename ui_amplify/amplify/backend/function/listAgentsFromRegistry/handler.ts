@@ -1,6 +1,5 @@
-import { DynamoDBClient, ScanCommand } from '@aws-sdk/client-dynamodb';
-
-declare const process: { env: { AWS_REGION?: string } };
+// @ts-ignore - AWS SDK is provided by Lambda runtime
+const { DynamoDBClient, ScanCommand } = require('@aws-sdk/client-dynamodb');
 
 const client = new DynamoDBClient({ region: process.env.AWS_REGION });
 
@@ -40,7 +39,7 @@ export const handler = async (event: any): Promise<any> => {
     // Transform the DynamoDB items to a cleaner format
     // The agents might be stored in the same table as tools, so check for both patterns
     const agents = (response.Items || [])
-      .filter(item => {
+      .filter((item: any) => {
         // Check if this is an agent (might have type field or be determined by name pattern)
         const itemType = item.type?.S;
         const hasAgentName = item.agent_name?.S;

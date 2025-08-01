@@ -1,8 +1,0 @@
-{
-  "name": "get-step-function-execution",
-  "version": "1.0.0",
-  "type": "module",
-  "dependencies": {
-    "@aws-sdk/client-sfn": "^3.0.0"
-  }
-}
