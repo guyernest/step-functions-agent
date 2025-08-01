@@ -1,4 +1,6 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
+import { listAgentsFromRegistry } from '../backend/function/listAgentsFromRegistry/resource';
+import { listToolsFromRegistry } from '../backend/function/listToolsFromRegistry/resource';
 
 const schema = a.schema({
   Todo: a
@@ -6,6 +8,24 @@ const schema = a.schema({
       content: a.string(),
     })
     .authorization((allow) => [allow.guest()]),
+  
+  listAgentsFromRegistry: a
+    .query()
+    .arguments({
+      tableName: a.string()
+    })
+    .returns(a.json())
+    .handler(a.handler.function(listAgentsFromRegistry))
+    .authorization((allow) => [allow.authenticated()]),
+  
+  listToolsFromRegistry: a
+    .query()
+    .arguments({
+      tableName: a.string()
+    })
+    .returns(a.json())
+    .handler(a.handler.function(listToolsFromRegistry))
+    .authorization((allow) => [allow.authenticated()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

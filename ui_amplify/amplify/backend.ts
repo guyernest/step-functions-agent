@@ -1,6 +1,8 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
+import { listAgentsFromRegistry } from './backend/function/listAgentsFromRegistry/resource';
+import { listToolsFromRegistry } from './backend/function/listToolsFromRegistry/resource';
 import { PolicyStatement, Effect, Policy } from 'aws-cdk-lib/aws-iam';
 
 /**
@@ -9,6 +11,8 @@ import { PolicyStatement, Effect, Policy } from 'aws-cdk-lib/aws-iam';
 const backend = defineBackend({
   auth,
   data,
+  listAgentsFromRegistry,
+  listToolsFromRegistry,
 });
 
 // Set the Cognito User Pool name
@@ -29,9 +33,23 @@ const stepFunctionsPolicy = new PolicyStatement({
   resources: ['*']
 });
 
-// Add the policy to the authenticated role
-const policy = new Policy(backend.auth.resources.authenticatedUserIamRole.stack, 'StepFunctionsActivityPolicy', {
+// Add the policies to the authenticated role
+const stepFunctionsActivityPolicy = new Policy(backend.auth.resources.authenticatedUserIamRole.stack, 'StepFunctionsActivityPolicy', {
   statements: [stepFunctionsPolicy]
 });
 
-backend.auth.resources.authenticatedUserIamRole.attachInlinePolicy(policy);
+backend.auth.resources.authenticatedUserIamRole.attachInlinePolicy(stepFunctionsActivityPolicy);
+
+// Grant DynamoDB permissions to the Lambda functions
+const dynamoDbPolicy = new PolicyStatement({
+  effect: Effect.ALLOW,
+  actions: [
+    'dynamodb:Scan',
+    'dynamodb:Query',
+    'dynamodb:GetItem'
+  ],
+  resources: ['*'] // You can restrict this to specific table ARNs
+});
+
+backend.listAgentsFromRegistry.resources.lambda.addToRolePolicy(dynamoDbPolicy);
+backend.listToolsFromRegistry.resources.lambda.addToRolePolicy(dynamoDbPolicy);

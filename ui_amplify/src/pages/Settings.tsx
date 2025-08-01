@@ -7,25 +7,34 @@ import {
   Button,
   TextField,
   Alert,
-  Flex
+  Flex,
+  SelectField
 } from '@aws-amplify/ui-react'
 
 const Settings: React.FC = () => {
   const [accountId, setAccountId] = useState('')
   const [region, setRegion] = useState('us-west-2')
+  const [agentRegistryTableName, setAgentRegistryTableName] = useState('AgentRegistry-prod')
+  const [toolRegistryTableName, setToolRegistryTableName] = useState('tool-registry-prod')
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     // Load saved settings
     const savedAccountId = localStorage.getItem('awsAccountId') || ''
     const savedRegion = localStorage.getItem('awsRegion') || 'us-west-2'
+    const savedAgentRegistryTableName = localStorage.getItem('agentRegistryTableName') || 'AgentRegistry-prod'
+    const savedToolRegistryTableName = localStorage.getItem('toolRegistryTableName') || 'tool-registry-prod'
     setAccountId(savedAccountId)
     setRegion(savedRegion)
+    setAgentRegistryTableName(savedAgentRegistryTableName)
+    setToolRegistryTableName(savedToolRegistryTableName)
   }, [])
 
   const handleSave = () => {
     localStorage.setItem('awsAccountId', accountId)
     localStorage.setItem('awsRegion', region)
+    localStorage.setItem('agentRegistryTableName', agentRegistryTableName)
+    localStorage.setItem('toolRegistryTableName', toolRegistryTableName)
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
   }
@@ -58,6 +67,24 @@ const Settings: React.FC = () => {
           onChange={(e) => setRegion(e.target.value)}
           placeholder="us-west-2"
           descriptiveText="The AWS region where your Step Functions are deployed"
+          marginTop="10px"
+        />
+
+        <TextField
+          label="Agent Registry Table Name"
+          value={agentRegistryTableName}
+          onChange={(e) => setAgentRegistryTableName(e.target.value)}
+          placeholder="AgentRegistry-prod"
+          descriptiveText="The DynamoDB table name for the agent registry"
+          marginTop="10px"
+        />
+
+        <TextField
+          label="Tool Registry Table Name"
+          value={toolRegistryTableName}
+          onChange={(e) => setToolRegistryTableName(e.target.value)}
+          placeholder="tool-registry-prod"
+          descriptiveText="The DynamoDB table name for the tool registry"
           marginTop="10px"
         />
 
