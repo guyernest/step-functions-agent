@@ -53,14 +53,28 @@ export const handler = async (event: any): Promise<any> => {
         
         return itemType === 'AGENT' || itemType === 'agent' || (hasAgentName && isNotTool);
       })
-      .map(item => ({
-        id: item.agent_name?.S || item.name?.S || '',
-        name: item.agent_name?.S || item.name?.S || '',
-        description: item.description?.S || '',
-        version: item.version?.S || '1.0.0',
-        type: 'agent',
-        createdAt: item.created_at?.S || item.createdAt?.S || new Date().toISOString()
-      }));
+      .map(item => {
+        // Parse tools if they exist
+        let tools: string[] = [];
+        if (item.tools?.S) {
+          try {
+            const toolsData = JSON.parse(item.tools.S);
+            tools = toolsData.map((tool: any) => tool.tool_name || tool.name || '');
+          } catch (e) {
+            console.error('Error parsing tools:', e);
+          }
+        }
+        
+        return {
+          id: item.agent_name?.S || item.name?.S || '',
+          name: item.agent_name?.S || item.name?.S || '',
+          description: item.description?.S || '',
+          version: item.version?.S || '1.0.0',
+          type: 'agent',
+          createdAt: item.created_at?.S || item.createdAt?.S || new Date().toISOString(),
+          tools: tools
+        };
+      });
 
     return {
       agents: agents.sort((a, b) => a.name.localeCompare(b.name))
