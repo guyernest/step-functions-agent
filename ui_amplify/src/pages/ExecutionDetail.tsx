@@ -9,17 +9,20 @@ import {
   Loader,
   Alert,
   Badge,
-  Flex
+  Flex,
+  Divider
 } from '@aws-amplify/ui-react'
 import { generateClient } from 'aws-amplify/data'
 import type { Schema } from '../../amplify/data/resource'
+import MessageRenderer from '../components/MessageRenderer'
 
 const client = generateClient<Schema>()
 
 interface Message {
   role: string
-  content: string
+  content: any // Can be string, object, or array
   timestamp?: string
+  type?: string
 }
 
 interface ExecutionDetail {
@@ -100,22 +103,42 @@ const ExecutionDetail: React.FC = () => {
   }
 
   const renderMessage = (message: Message, index: number) => {
-    const roleColor = message.role === 'user' ? '#1976D2' : 
-                     message.role === 'assistant' ? '#388E3C' : '#666'
+    // Check if this is actually a tool result disguised as a user message
+    const isToolResult = message.role === 'user' && 
+                        Array.isArray(message.content) && 
+                        message.content.length > 0 &&
+                        message.content[0].type === 'tool_result'
+    
+    const displayRole = isToolResult ? 'tool' : message.role
+    
+    const roleColor = displayRole === 'user' ? '#1976D2' : 
+                     displayRole === 'assistant' ? '#388E3C' : 
+                     displayRole === 'tool' ? '#9C27B0' : '#666'
+    
+    const roleIcon = displayRole === 'user' ? '👤' : 
+                    displayRole === 'assistant' ? '🤖' : 
+                    displayRole === 'tool' ? '🔧' : '📋'
+    
+    const roleLabel = isToolResult ? 'Tool Result' : 
+                     displayRole.charAt(0).toUpperCase() + displayRole.slice(1)
     
     return (
       <Card key={index} variation="elevated" marginBottom="10px">
-        <Flex justifyContent="space-between" alignItems="center" marginBottom="5px">
-          <Text fontWeight="bold" color={roleColor}>
-            {message.role.charAt(0).toUpperCase() + message.role.slice(1)}
-          </Text>
+        <Flex justifyContent="space-between" alignItems="center" marginBottom="10px">
+          <Flex alignItems="center" gap="10px">
+            <Text fontSize="large">{roleIcon}</Text>
+            <Text fontWeight="bold" color={roleColor}>
+              {roleLabel}
+            </Text>
+          </Flex>
           {message.timestamp && (
             <Text fontSize="small" color="gray">
               {formatDate(message.timestamp)}
             </Text>
           )}
         </Flex>
-        <Text style={{ whiteSpace: 'pre-wrap' }}>{message.content}</Text>
+        <Divider marginBottom="10px" />
+        <MessageRenderer content={message.content} role={displayRole} />
       </Card>
     )
   }
