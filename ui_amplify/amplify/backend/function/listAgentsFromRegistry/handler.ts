@@ -1,9 +1,8 @@
-// @ts-ignore - AWS SDK is provided by Lambda runtime
-const AWS = require('aws-sdk');
+import { DynamoDBClient, ScanCommand } from '@aws-sdk/client-dynamodb';
 
 declare const process: { env: { AWS_REGION?: string } };
 
-const dynamodb = new AWS.DynamoDB({ region: process.env.AWS_REGION });
+const client = new DynamoDBClient({ region: process.env.AWS_REGION });
 
 export const handler = async (event: any): Promise<any> => {
   console.log('Received event:', JSON.stringify(event, null, 2));
@@ -26,11 +25,11 @@ export const handler = async (event: any): Promise<any> => {
     
     // Scan the DynamoDB table for all agents
     // First, let's scan without filter to see what's in the table
-    const params = {
+    const command = new ScanCommand({
       TableName: tableName
-    };
+    });
 
-    const response = await dynamodb.scan(params).promise();
+    const response = await client.send(command);
     console.log('DynamoDB response:', JSON.stringify(response, null, 2));
 
     // Log the first item to see the structure
