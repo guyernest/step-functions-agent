@@ -128,32 +128,20 @@ const Dashboard: React.FC = () => {
     setError(null)
 
     try {
-      // Fetch agents
-      const agentTableName = localStorage.getItem('agentRegistryTableName') || 'AgentRegistry-prod'
-      const agentResponse = await client.queries.listAgentsFromRegistry({ tableName: agentTableName })
+      // Fetch agents - no tableName needed anymore
+      const agentResponse = await client.queries.listAgentsFromRegistry({})
       
       if (agentResponse.data) {
-        const agentData = typeof agentResponse.data === 'string' 
-          ? JSON.parse(agentResponse.data) 
-          : agentResponse.data
-        
-        if (agentData.agents) {
-          setAgentCount(agentData.agents.length)
-        }
+        const agents = agentResponse.data.filter(agent => agent !== null && agent !== undefined)
+        setAgentCount(agents.length)
       }
 
-      // Fetch tools
-      const toolTableName = localStorage.getItem('toolRegistryTableName') || 'tool-registry-prod'
-      const toolResponse = await client.queries.listToolsFromRegistry({ tableName: toolTableName })
+      // Fetch tools - no tableName needed anymore
+      const toolResponse = await client.queries.listToolsFromRegistry({})
       
       if (toolResponse.data) {
-        const toolData = typeof toolResponse.data === 'string' 
-          ? JSON.parse(toolResponse.data) 
-          : toolResponse.data
-        
-        if (toolData.tools) {
-          setToolCount(toolData.tools.length)
-        }
+        const tools = toolResponse.data.filter(tool => tool !== null && tool !== undefined)
+        setToolCount(tools.length)
       }
     } catch (err) {
       console.error('Error fetching counts:', err)

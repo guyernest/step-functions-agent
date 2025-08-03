@@ -1,34 +1,52 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
-import { listAgentsFromRegistry } from '../backend/function/listAgentsFromRegistry/resource';
-import { listToolsFromRegistry } from '../backend/function/listToolsFromRegistry/resource';
 import { startAgentExecution } from '../backend/function/startAgentExecution/resource';
 import { listStepFunctionExecutions } from '../backend/function/listStepFunctionExecutions/resource';
 import { getStepFunctionExecution } from '../backend/function/getStepFunctionExecution/resource';
 import { getExecutionStatistics } from '../backend/function/getExecutionStatistics/resource';
 
 const schema = a.schema({
-  Todo: a
-    .model({
-      content: a.string(),
-    })
-    .authorization((allow) => [allow.guest()]),
+  // Custom types for external DynamoDB tables
+  Agent: a.customType({
+    id: a.string().required(),
+    name: a.string().required(),
+    description: a.string(),
+    version: a.string(),
+    type: a.string(),
+    createdAt: a.string(),
+    tools: a.string().array(),
+  }),
+  
+  Tool: a.customType({
+    id: a.string().required(),
+    name: a.string().required(),
+    description: a.string(),
+    version: a.string(),
+    type: a.string(),
+    createdAt: a.string(),
+  }),
   
   listAgentsFromRegistry: a
     .query()
-    .arguments({
-      tableName: a.string()
-    })
-    .returns(a.json())
-    .handler(a.handler.function(listAgentsFromRegistry))
+    .arguments({})
+    .returns(a.ref('Agent').array())
+    .handler(
+      a.handler.custom({
+        dataSource: 'AgentRegistryDataSource',
+        entry: './listAgentsFromRegistry.js',
+      })
+    )
     .authorization((allow) => [allow.authenticated()]),
   
   listToolsFromRegistry: a
     .query()
-    .arguments({
-      tableName: a.string()
-    })
-    .returns(a.json())
-    .handler(a.handler.function(listToolsFromRegistry))
+    .arguments({})
+    .returns(a.ref('Tool').array())
+    .handler(
+      a.handler.custom({
+        dataSource: 'ToolRegistryDataSource',
+        entry: './listToolsFromRegistry.js',
+      })
+    )
     .authorization((allow) => [allow.authenticated()]),
   
   startAgentExecution: a
@@ -74,6 +92,7 @@ export type Schema = ClientSchema<typeof schema>;
 
 export const data = defineData({
   schema,
+  name: 'StepFunctionsAgentFramework',
   authorizationModes: {
     defaultAuthorizationMode: 'userPool',
     apiKeyAuthorizationMode: {
@@ -107,6 +126,6 @@ Fetch records from the database and use them in your frontend component.
 
 /* For example, in a React component, you can use this snippet in your
   function's RETURN statement */
-// const { data: todos } = await client.models.Todo.list()
+// const { data: agents } = await client.queries.listAgentsFromRegistry()
 
-// return <ul>{todos.map(todo => <li key={todo.id}>{todo.content}</li>)}</ul>
+// return <ul>{agents.map(agent => <li key={agent.id}>{agent.name}</li>)}</ul>

@@ -1,13 +1,12 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
-import { listAgentsFromRegistry } from './backend/function/listAgentsFromRegistry/resource';
-import { listToolsFromRegistry } from './backend/function/listToolsFromRegistry/resource';
 import { startAgentExecution } from './backend/function/startAgentExecution/resource';
 import { listStepFunctionExecutions } from './backend/function/listStepFunctionExecutions/resource';
 import { getStepFunctionExecution } from './backend/function/getStepFunctionExecution/resource';
 import { getExecutionStatistics } from './backend/function/getExecutionStatistics/resource';
 import { PolicyStatement, Effect, Policy } from 'aws-cdk-lib/aws-iam';
+import { aws_dynamodb } from 'aws-cdk-lib';
 
 /**
  * @see https://docs.amplify.aws/react/build-a-backend/ to add storage, functions, and more
@@ -15,8 +14,6 @@ import { PolicyStatement, Effect, Policy } from 'aws-cdk-lib/aws-iam';
 const backend = defineBackend({
   auth,
   data,
-  listAgentsFromRegistry,
-  listToolsFromRegistry,
   startAgentExecution,
   listStepFunctionExecutions,
   getStepFunctionExecution,
@@ -52,19 +49,36 @@ const stepFunctionsActivityPolicy = new Policy(backend.auth.resources.authentica
 
 backend.auth.resources.authenticatedUserIamRole.attachInlinePolicy(stepFunctionsActivityPolicy);
 
-// Grant DynamoDB permissions to the Lambda functions
-const dynamoDbPolicy = new PolicyStatement({
-  effect: Effect.ALLOW,
-  actions: [
-    'dynamodb:Scan',
-    'dynamodb:Query',
-    'dynamodb:GetItem'
-  ],
-  resources: ['*'] // You can restrict this to specific table ARNs
-});
+// Add external DynamoDB tables as data sources
+const externalDataSourcesStack = backend.createStack('ExternalDataSources');
 
-backend.listAgentsFromRegistry.resources.lambda.addToRolePolicy(dynamoDbPolicy);
-backend.listToolsFromRegistry.resources.lambda.addToRolePolicy(dynamoDbPolicy);
+// Define table names - always use prod for now
+const agentRegistryTableName = 'AgentRegistry-prod';
+const toolRegistryTableName = 'ToolRegistry-prod';
+
+// Reference the existing DynamoDB tables
+const agentRegistryTable = aws_dynamodb.Table.fromTableName(
+  externalDataSourcesStack,
+  'AgentRegistryTable',
+  agentRegistryTableName
+);
+
+const toolRegistryTable = aws_dynamodb.Table.fromTableName(
+  externalDataSourcesStack,
+  'ToolRegistryTable',
+  toolRegistryTableName
+);
+
+// Add the tables as data sources to the GraphQL API
+backend.data.addDynamoDbDataSource(
+  'AgentRegistryDataSource',
+  agentRegistryTable
+);
+
+backend.data.addDynamoDbDataSource(
+  'ToolRegistryDataSource',
+  toolRegistryTable
+);
 
 // Grant Step Functions permissions to the startAgentExecution Lambda
 const stepFunctionsExecutionPolicy = new PolicyStatement({

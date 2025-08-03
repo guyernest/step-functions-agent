@@ -64,19 +64,21 @@ const AgentExecution: React.FC = () => {
   const fetchAgents = async () => {
     setLoading(true)
     try {
-      const tableName = localStorage.getItem('agentRegistryTableName') || 'AgentRegistry-prod'
-      const response = await client.queries.listAgentsFromRegistry({ tableName })
+      const response = await client.queries.listAgentsFromRegistry({})
       
       if (response.data) {
-        const data = typeof response.data === 'string' 
-          ? JSON.parse(response.data) 
-          : response.data
-        
-        if (data.agents) {
-          setAgents(data.agents)
-        } else if (data.error) {
-          setError(data.error)
-        }
+        const validAgents = response.data
+          .filter(agent => agent !== null && agent !== undefined)
+          .map(agent => ({
+            id: agent.id,
+            name: agent.name,
+            description: agent.description || '',
+            version: agent.version || '1.0.0',
+            type: agent.type || 'agent',
+            createdAt: agent.createdAt || new Date().toISOString(),
+            tools: (agent.tools || []).filter((tool): tool is string => tool !== null && tool !== undefined)
+          }))
+        setAgents(validAgents)
       }
     } catch (err) {
       console.error('Error fetching agents:', err)

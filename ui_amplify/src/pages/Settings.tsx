@@ -12,27 +12,19 @@ import {
 const Settings: React.FC = () => {
   const [accountId, setAccountId] = useState('')
   const [region, setRegion] = useState('us-west-2')
-  const [agentRegistryTableName, setAgentRegistryTableName] = useState('AgentRegistry-prod')
-  const [toolRegistryTableName, setToolRegistryTableName] = useState('ToolRegistry-prod')
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     // Load saved settings
     const savedAccountId = localStorage.getItem('awsAccountId') || ''
     const savedRegion = localStorage.getItem('awsRegion') || 'us-west-2'
-    const savedAgentRegistryTableName = localStorage.getItem('agentRegistryTableName') || 'AgentRegistry-prod'
-    const savedToolRegistryTableName = localStorage.getItem('toolRegistryTableName') || 'ToolRegistry-prod'
     setAccountId(savedAccountId)
     setRegion(savedRegion)
-    setAgentRegistryTableName(savedAgentRegistryTableName)
-    setToolRegistryTableName(savedToolRegistryTableName)
   }, [])
 
   const handleSave = () => {
     localStorage.setItem('awsAccountId', accountId)
     localStorage.setItem('awsRegion', region)
-    localStorage.setItem('agentRegistryTableName', agentRegistryTableName)
-    localStorage.setItem('toolRegistryTableName', toolRegistryTableName)
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
   }
@@ -68,27 +60,24 @@ const Settings: React.FC = () => {
           marginTop="10px"
         />
 
-        <TextField
-          label="Agent Registry Table Name"
-          value={agentRegistryTableName}
-          onChange={(e) => setAgentRegistryTableName(e.target.value)}
-          placeholder="AgentRegistry-prod"
-          descriptiveText="The DynamoDB table name for the agent registry"
-          marginTop="10px"
-        />
-
-        <TextField
-          label="Tool Registry Table Name"
-          value={toolRegistryTableName}
-          onChange={(e) => setToolRegistryTableName(e.target.value)}
-          placeholder="ToolRegistry-prod"
-          descriptiveText="The DynamoDB table name for the tool registry"
-          marginTop="10px"
-        />
-
         <Button onClick={handleSave} variation="primary" marginTop="20px">
           Save Settings
         </Button>
+      </Card>
+      
+      <Card variation="elevated" marginTop="20px">
+        <Heading level={4}>Registry Tables</Heading>
+        <Text marginTop="10px">
+          The Agent and Tool registry tables are now automatically configured based on the deployment environment:
+        </Text>
+        <View marginTop="10px">
+          <Text fontSize="small" fontFamily="monospace" backgroundColor="gray.10" padding="10px">
+            Agent Registry: AgentRegistry-prod
+          </Text>
+          <Text fontSize="small" fontFamily="monospace" backgroundColor="gray.10" padding="10px" marginTop="5px">
+            Tool Registry: ToolRegistry-prod
+          </Text>
+        </View>
       </Card>
 
       <Card variation="elevated" marginTop="20px">

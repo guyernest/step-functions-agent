@@ -51,27 +51,28 @@ const Registries: React.FC = () => {
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    const agentTableName = localStorage.getItem('agentRegistryTableName') || 'AgentRegistry-prod'
-    const toolTableName = localStorage.getItem('toolRegistryTableName') || 'tool-registry-prod'
-    fetchAgents(agentTableName)
-    fetchTools(toolTableName)
+    fetchAgents()
+    fetchTools()
   }, [])
 
-  const fetchAgents = async (tableName: string) => {
+  const fetchAgents = async () => {
     try {
-      const response = await client.queries.listAgentsFromRegistry({ tableName })
+      const response = await client.queries.listAgentsFromRegistry({})
       console.log('Agents response:', response)
       
       if (response.data) {
-        const data = typeof response.data === 'string' 
-          ? JSON.parse(response.data) 
-          : response.data
-        
-        if (data.agents) {
-          setAgents(data.agents)
-        } else if (data.error) {
-          setAgentError(data.error)
-        }
+        const validAgents = response.data
+          .filter(agent => agent !== null && agent !== undefined)
+          .map(agent => ({
+            id: agent.id,
+            name: agent.name,
+            description: agent.description || '',
+            version: agent.version || '1.0.0',
+            type: agent.type || 'agent',
+            createdAt: agent.createdAt || new Date().toISOString(),
+            tools: (agent.tools || []).filter((tool): tool is string => tool !== null && tool !== undefined)
+          }))
+        setAgents(validAgents)
       }
     } catch (err) {
       console.error('Error fetching agents:', err)
@@ -81,21 +82,23 @@ const Registries: React.FC = () => {
     }
   }
 
-  const fetchTools = async (tableName: string) => {
+  const fetchTools = async () => {
     try {
-      const response = await client.queries.listToolsFromRegistry({ tableName })
+      const response = await client.queries.listToolsFromRegistry({})
       console.log('Tools response:', response)
       
       if (response.data) {
-        const data = typeof response.data === 'string' 
-          ? JSON.parse(response.data) 
-          : response.data
-        
-        if (data.tools) {
-          setTools(data.tools)
-        } else if (data.error) {
-          setToolError(data.error)
-        }
+        const validTools = response.data
+          .filter(tool => tool !== null && tool !== undefined)
+          .map(tool => ({
+            id: tool.id,
+            name: tool.name,
+            description: tool.description || '',
+            version: tool.version || '1.0.0',
+            type: tool.type || 'tool',
+            createdAt: tool.createdAt || new Date().toISOString()
+          }))
+        setTools(validTools)
       }
     } catch (err) {
       console.error('Error fetching tools:', err)
