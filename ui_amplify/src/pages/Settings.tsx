@@ -13,7 +13,7 @@ const Settings: React.FC = () => {
   const [accountId, setAccountId] = useState('')
   const [region, setRegion] = useState('us-west-2')
   const [agentRegistryTableName, setAgentRegistryTableName] = useState('AgentRegistry-prod')
-  const [toolRegistryTableName, setToolRegistryTableName] = useState('tool-registry-prod')
+  const [toolRegistryTableName, setToolRegistryTableName] = useState('ToolRegistry-prod')
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
@@ -21,7 +21,7 @@ const Settings: React.FC = () => {
     const savedAccountId = localStorage.getItem('awsAccountId') || ''
     const savedRegion = localStorage.getItem('awsRegion') || 'us-west-2'
     const savedAgentRegistryTableName = localStorage.getItem('agentRegistryTableName') || 'AgentRegistry-prod'
-    const savedToolRegistryTableName = localStorage.getItem('toolRegistryTableName') || 'tool-registry-prod'
+    const savedToolRegistryTableName = localStorage.getItem('toolRegistryTableName') || 'ToolRegistry-prod'
     setAccountId(savedAccountId)
     setRegion(savedRegion)
     setAgentRegistryTableName(savedAgentRegistryTableName)
@@ -81,7 +81,7 @@ const Settings: React.FC = () => {
           label="Tool Registry Table Name"
           value={toolRegistryTableName}
           onChange={(e) => setToolRegistryTableName(e.target.value)}
-          placeholder="tool-registry-prod"
+          placeholder="ToolRegistry-prod"
           descriptiveText="The DynamoDB table name for the tool registry"
           marginTop="10px"
         />
