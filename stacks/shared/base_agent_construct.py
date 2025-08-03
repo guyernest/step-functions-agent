@@ -145,7 +145,9 @@ class BaseAgentConstruct(Construct):
                         "agent_name": {"S": complete_agent_spec["agent_name"]},
                         "version": {"S": complete_agent_spec["version"]}
                     }
-                }
+                },
+                # Ignore error if item doesn't exist - makes delete idempotent
+                ignore_error_codes_matching=".*does not match.*|.*not found.*"
             ),
             policy=cr.AwsCustomResourcePolicy.from_statements([
                 iam.PolicyStatement(

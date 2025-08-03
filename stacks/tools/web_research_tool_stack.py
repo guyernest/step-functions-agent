@@ -189,3 +189,12 @@ class WebResearchToolStack(Stack):
 
         # Store Lambda function reference for monitoring
         self.web_research_lambda_function = self.go_research_lambda
+        
+        # Create export for other stacks
+        CfnOutput(
+            self,
+            "WebResearchLambdaArnExport",
+            value=self.go_research_lambda.function_arn,
+            export_name=f"WebResearchLambdaArn-{self.env_name}",
+            description="ARN of the web research Lambda function"
+        )

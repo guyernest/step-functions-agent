@@ -149,7 +149,9 @@ class BaseToolConstruct(Construct):
                     "Key": {
                         "tool_name": {"S": complete_tool_spec["tool_name"]}
                     }
-                }
+                },
+                # Ignore error if item doesn't exist - makes delete idempotent
+                ignore_error_codes_matching=".*does not match.*|.*not found.*"
             ),
             policy=cr.AwsCustomResourcePolicy.from_statements([
                 iam.PolicyStatement(

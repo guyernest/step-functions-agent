@@ -99,6 +99,7 @@ def main():
         env=env,
         description=f"DB interface tool for {environment} environment"
     )
+    db_interface_tool.add_dependency(shared_infrastructure_stack)
     
     # E2B Tool - provides Python code execution capabilities
     e2b_tool = E2BToolStack(
@@ -135,6 +136,7 @@ def main():
         env=env,
         description=f"Web research tools for {environment} environment"
     )
+    web_research_tools.add_dependency(shared_infrastructure_stack)
     
     # CloudWatch Tools - provides monitoring and log analysis capabilities
     cloudwatch_tools = CloudWatchToolStack(
