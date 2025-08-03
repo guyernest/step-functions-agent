@@ -32,9 +32,13 @@
   "dependencies": {
     "@aws-amplify/ui-react": "^6.11.2",
     "@tanstack/react-query": "^5.83.1",
+    "@types/react-syntax-highlighter": "^15.5.13",
     "aws-amplify": "^6.15.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "react-router-dom": "^7.7.1"
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.7.1",
+    "react-syntax-highlighter": "^15.6.1",
+    "remark-gfm": "^4.0.1"
   }
 }

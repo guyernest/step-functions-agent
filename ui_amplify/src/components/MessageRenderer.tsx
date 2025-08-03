@@ -13,6 +13,10 @@ import {
   Image,
   Link
 } from '@aws-amplify/ui-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 interface MessageContent {
   type?: string
@@ -43,8 +47,18 @@ const detectContentType = (content: any): string => {
       const parsed = JSON.parse(content)
       return detectContentType(parsed) // Recursively detect type of parsed JSON
     } catch {}
-    // Check if it looks like code
-    if (content.includes('```')) return 'markdown-code'
+    // Check if it looks like markdown (has markdown patterns)
+    if (content.includes('```') || 
+        content.includes('**') || 
+        content.includes('__') ||
+        content.includes('# ') || 
+        content.includes('## ') ||
+        content.includes('- ') || 
+        content.includes('* ') ||
+        content.includes('[') && content.includes('](') ||
+        content.includes('|') && content.includes('---|')) {
+      return 'markdown'
+    }
     if (content.match(/^(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER)\s/i)) return 'sql'
     return 'text'
   }
@@ -74,6 +88,73 @@ const detectContentType = (content: any): string => {
   return 'unknown'
 }
 
+// Custom components for ReactMarkdown
+const markdownComponents = {
+  h1: ({children}: any) => <Heading level={1} marginBottom="10px">{children}</Heading>,
+  h2: ({children}: any) => <Heading level={2} marginBottom="10px">{children}</Heading>,
+  h3: ({children}: any) => <Heading level={3} marginBottom="10px">{children}</Heading>,
+  h4: ({children}: any) => <Heading level={4} marginBottom="10px">{children}</Heading>,
+  h5: ({children}: any) => <Heading level={5} marginBottom="10px">{children}</Heading>,
+  h6: ({children}: any) => <Heading level={6} marginBottom="10px">{children}</Heading>,
+  p: ({children}: any) => <Text marginBottom="10px">{children}</Text>,
+  a: ({href, children}: any) => <Link href={href} isExternal>{children}</Link>,
+  img: ({src, alt}: any) => <Image src={src} alt={alt || ''} maxWidth="100%" height="auto" marginBottom="10px" />,
+  ul: ({children}: any) => <View as="ul" paddingLeft="20px" marginBottom="10px">{children}</View>,
+  ol: ({children}: any) => <View as="ol" paddingLeft="20px" marginBottom="10px">{children}</View>,
+  li: ({children}: any) => <Text as="li" marginBottom="5px">{children}</Text>,
+  blockquote: ({children}: any) => (
+    <Card variation="outlined" backgroundColor="gray.10" padding="10px" marginBottom="10px">
+      <View style={{ borderLeft: '4px solid #ccc', paddingLeft: '10px' }}>
+        {children}
+      </View>
+    </Card>
+  ),
+  code: ({inline, className, children, ...props}: any) => {
+    const match = /language-(\w+)/.exec(className || '')
+    const language = match ? match[1] : null
+    
+    if (inline) {
+      return <Text as="code" fontFamily="monospace" fontSize="small" backgroundColor="gray.10" padding="2px 4px" borderRadius="3px">{children}</Text>
+    }
+    
+    return language ? (
+      <Card variation="outlined" padding="0" marginBottom="10px" style={{ overflow: 'hidden' }}>
+        <SyntaxHighlighter
+          language={language}
+          style={vscDarkPlus}
+          customStyle={{
+            margin: 0,
+            padding: '1rem',
+            fontSize: '0.875rem',
+            borderRadius: '0'
+          }}
+          {...props}
+        >
+          {String(children).replace(/\n$/, '')}
+        </SyntaxHighlighter>
+      </Card>
+    ) : (
+      <Card variation="outlined" backgroundColor="gray.10" padding="10px" marginBottom="10px">
+        <Text fontFamily="monospace" fontSize="small" style={{ whiteSpace: 'pre-wrap' }}>
+          {children}
+        </Text>
+      </Card>
+    )
+  },
+  table: ({children}: any) => (
+    <View style={{ overflowX: 'auto' }} marginBottom="10px">
+      <Table size="small">
+        {children}
+      </Table>
+    </View>
+  ),
+  thead: ({children}: any) => <TableHead>{children}</TableHead>,
+  tbody: ({children}: any) => <TableBody>{children}</TableBody>,
+  tr: ({children}: any) => <TableRow>{children}</TableRow>,
+  th: ({children}: any) => <TableCell as="th">{children}</TableCell>,
+  td: ({children}: any) => <TableCell>{children}</TableCell>,
+}
+
 // Render different content types
 const renderContent = (content: any, type: string) => {
   switch (type) {
@@ -82,12 +163,31 @@ const renderContent = (content: any, type: string) => {
         <Text style={{ whiteSpace: 'pre-wrap' }}>{content}</Text>
       )
     
+    case 'markdown':
+      return (
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={markdownComponents}
+        >
+          {content}
+        </ReactMarkdown>
+      )
+    
     case 'sql':
       return (
-        <Card variation="outlined" backgroundColor="gray.10">
-          <Text fontFamily="monospace" fontSize="small" style={{ whiteSpace: 'pre-wrap' }}>
+        <Card variation="outlined" padding="0" style={{ overflow: 'hidden' }}>
+          <SyntaxHighlighter
+            language="sql"
+            style={vscDarkPlus}
+            customStyle={{
+              margin: 0,
+              padding: '1rem',
+              fontSize: '0.875rem',
+              borderRadius: '0'
+            }}
+          >
             {content}
-          </Text>
+          </SyntaxHighlighter>
         </Card>
       )
     
@@ -95,10 +195,19 @@ const renderContent = (content: any, type: string) => {
       try {
         const parsed = typeof content === 'string' ? JSON.parse(content) : content
         return (
-          <Card variation="outlined" backgroundColor="gray.10">
-            <Text fontFamily="monospace" fontSize="small" style={{ whiteSpace: 'pre-wrap' }}>
+          <Card variation="outlined" padding="0" style={{ overflow: 'hidden' }}>
+            <SyntaxHighlighter
+              language="json"
+              style={vscDarkPlus}
+              customStyle={{
+                margin: 0,
+                padding: '1rem',
+                fontSize: '0.875rem',
+                borderRadius: '0'
+              }}
+            >
               {JSON.stringify(parsed, null, 2)}
-            </Text>
+            </SyntaxHighlighter>
           </Card>
         )
       } catch {
@@ -263,10 +372,28 @@ const renderContent = (content: any, type: string) => {
       )
     
     default:
+      if (typeof content === 'object') {
+        return (
+          <Card variation="outlined" padding="0" style={{ overflow: 'hidden' }}>
+            <SyntaxHighlighter
+              language="json"
+              style={vscDarkPlus}
+              customStyle={{
+                margin: 0,
+                padding: '1rem',
+                fontSize: '0.875rem',
+                borderRadius: '0'
+              }}
+            >
+              {JSON.stringify(content, null, 2)}
+            </SyntaxHighlighter>
+          </Card>
+        )
+      }
       return (
         <Card variation="outlined" backgroundColor="gray.10">
           <Text fontFamily="monospace" fontSize="small" style={{ whiteSpace: 'pre-wrap' }}>
-            {typeof content === 'object' ? JSON.stringify(content, null, 2) : String(content)}
+            {String(content)}
           </Text>
         </Card>
       )
@@ -308,14 +435,19 @@ const renderMessageItem = (item: MessageContent) => {
           <Text fontSize="large">🔧</Text>
           <Text fontWeight="bold">Using tool: {toolName}</Text>
         </Flex>
-        <Card variation="outlined" backgroundColor="gray.10" padding="10px">
-          <Text 
-            fontFamily="monospace" 
-            fontSize="small" 
-            style={{ whiteSpace: 'pre-wrap' }}
+        <Card variation="outlined" padding="0" style={{ overflow: 'hidden' }}>
+          <SyntaxHighlighter
+            language="json"
+            style={vscDarkPlus}
+            customStyle={{
+              margin: 0,
+              padding: '1rem',
+              fontSize: '0.875rem',
+              borderRadius: '0'
+            }}
           >
             {JSON.stringify(toolInput, null, 2)}
-          </Text>
+          </SyntaxHighlighter>
         </Card>
       </Card>
     )

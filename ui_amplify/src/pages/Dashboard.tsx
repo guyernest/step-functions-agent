@@ -10,7 +10,8 @@ import {
   Flex,
   Button,
   Loader,
-  Alert
+  Alert,
+  Badge
 } from '@aws-amplify/ui-react'
 import { generateClient } from 'aws-amplify/data'
 import type { Schema } from '../../amplify/data/resource'
@@ -24,6 +25,20 @@ interface MetricCardProps {
   onClick?: () => void
   loading?: boolean
   description?: string
+}
+
+const formatDuration = (seconds: number) => {
+  if (seconds < 60) {
+    return `${seconds}s`
+  }
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  if (minutes < 60) {
+    return `${minutes}m ${remainingSeconds}s`
+  }
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+  return `${hours}h ${remainingMinutes}m`
 }
 
 const MetricCard: React.FC<MetricCardProps> = ({ 
@@ -72,15 +87,37 @@ const MetricCard: React.FC<MetricCardProps> = ({
   )
 }
 
+interface ExecutionStats {
+  totalExecutions: number
+  runningExecutions: number
+  succeededExecutions: number
+  failedExecutions: number
+  abortedExecutions: number
+  averageDurationSeconds: number
+  executionsByAgent: Record<string, number>
+  recentFailures: Array<{
+    agentName: string
+    executionName: string
+    startDate: string
+    error?: string
+  }>
+  successRate: number
+  todayExecutions: number
+  weekExecutions: number
+}
+
 const Dashboard: React.FC = () => {
   const navigate = useNavigate()
   const [agentCount, setAgentCount] = useState<number>(0)
   const [toolCount, setToolCount] = useState<number>(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [stats, setStats] = useState<ExecutionStats | null>(null)
 
   useEffect(() => {
     fetchCounts()
+    // Temporarily disable statistics until sandbox updates
+    // fetchStatistics()
   }, [])
 
   const fetchCounts = async () => {
@@ -120,6 +157,26 @@ const Dashboard: React.FC = () => {
       setError('Failed to fetch registry data')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchStatistics = async () => {
+    try {
+      const response = await client.queries.getExecutionStatistics({})
+      
+      if (response.data) {
+        const data = typeof response.data === 'string' 
+          ? JSON.parse(response.data) 
+          : response.data
+        
+        if (data.statistics) {
+          setStats(data.statistics)
+        } else if (data.error) {
+          console.error('Error in statistics response:', data.error)
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching statistics:', err)
     }
   }
 
@@ -202,8 +259,9 @@ const Dashboard: React.FC = () => {
 
         <MetricCard
           title="Active Executions"
-          value="Coming Soon"
+          value={stats?.runningExecutions || 0}
           description="Currently running agents"
+          onClick={() => navigate('/history?status=RUNNING')}
           icon={
             <View
               backgroundColor="orange.20"
@@ -225,9 +283,9 @@ const Dashboard: React.FC = () => {
         />
 
         <MetricCard
-          title="Pending Approvals"
-          value="Coming Soon"
-          description="Waiting for human input"
+          title="Success Rate"
+          value={stats ? `${stats.successRate}%` : '0%'}
+          description="Successful executions"
           icon={
             <View
               backgroundColor="purple.20"
@@ -235,11 +293,116 @@ const Dashboard: React.FC = () => {
               padding="8px"
             >
               <Icon
-                ariaLabel="Approvals"
+                ariaLabel="Success"
                 viewBox={{ width: 24, height: 24 }}
                 paths={[
                   {
-                    d: "M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2ZM13 17H11V15H13V17ZM13 13H11V7H13V13Z",
+                    d: "M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z",
+                    fill: "currentColor"
+                  }
+                ]}
+              />
+            </View>
+          }
+        />
+      </Grid>
+
+      {/* Additional Statistics Row */}
+      <Grid
+        templateColumns="1fr 1fr 1fr 1fr"
+        gap="20px"
+        marginBottom="30px"
+      >
+        <MetricCard
+          title="Total Executions"
+          value={stats?.totalExecutions || 0}
+          description="All time executions"
+          onClick={() => navigate('/history')}
+          icon={
+            <View
+              backgroundColor="gray.20"
+              borderRadius="4px"
+              padding="8px"
+            >
+              <Icon
+                ariaLabel="Total"
+                viewBox={{ width: 24, height: 24 }}
+                paths={[
+                  {
+                    d: "M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z",
+                    fill: "currentColor"
+                  }
+                ]}
+              />
+            </View>
+          }
+        />
+        
+        <MetricCard
+          title="Today's Executions"
+          value={stats?.todayExecutions || 0}
+          description="Executions started today"
+          icon={
+            <View
+              backgroundColor="blue.20"
+              borderRadius="4px"
+              padding="8px"
+            >
+              <Icon
+                ariaLabel="Today"
+                viewBox={{ width: 24, height: 24 }}
+                paths={[
+                  {
+                    d: "M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z",
+                    fill: "currentColor"
+                  }
+                ]}
+              />
+            </View>
+          }
+        />
+        
+        <MetricCard
+          title="Failed Executions"
+          value={stats?.failedExecutions || 0}
+          description="Total failures"
+          onClick={() => navigate('/history?status=FAILED')}
+          icon={
+            <View
+              backgroundColor="red.20"
+              borderRadius="4px"
+              padding="8px"
+            >
+              <Icon
+                ariaLabel="Failed"
+                viewBox={{ width: 24, height: 24 }}
+                paths={[
+                  {
+                    d: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z",
+                    fill: "currentColor"
+                  }
+                ]}
+              />
+            </View>
+          }
+        />
+        
+        <MetricCard
+          title="Avg. Duration"
+          value={stats ? formatDuration(stats.averageDurationSeconds) : '0s'}
+          description="Average execution time"
+          icon={
+            <View
+              backgroundColor="green.20"
+              borderRadius="4px"
+              padding="8px"
+            >
+              <Icon
+                ariaLabel="Duration"
+                viewBox={{ width: 24, height: 24 }}
+                paths={[
+                  {
+                    d: "M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z",
                     fill: "currentColor"
                   }
                 ]}
@@ -281,14 +444,31 @@ const Dashboard: React.FC = () => {
         </Card>
 
         <Card variation="elevated">
-          <Heading level={4}>System Overview</Heading>
-          <Text marginTop="15px">
-            Welcome to the Step Functions Agent Management Console. This dashboard provides
-            quick access to all agent operations and monitoring capabilities.
-          </Text>
-          <Text marginTop="10px" fontSize="small" color="gray">
-            Click on any metric card above to navigate to detailed views.
-          </Text>
+          <Heading level={4}>Execution Summary</Heading>
+          {stats && stats.executionsByAgent && Object.keys(stats.executionsByAgent).length > 0 ? (
+            <View marginTop="15px">
+              <Text fontSize="small" fontWeight="bold" marginBottom="10px">Executions by Agent:</Text>
+              {Object.entries(stats.executionsByAgent)
+                .sort(([, a], [, b]) => b - a)
+                .slice(0, 5)
+                .map(([agent, count]) => (
+                  <Flex key={agent} justifyContent="space-between" alignItems="center" marginBottom="5px">
+                    <Text fontSize="small">{agent}</Text>
+                    <Badge>{count}</Badge>
+                  </Flex>
+                ))
+              }
+              {Object.keys(stats.executionsByAgent).length > 5 && (
+                <Text fontSize="small" color="gray" marginTop="5px">
+                  And {Object.keys(stats.executionsByAgent).length - 5} more...
+                </Text>
+              )}
+            </View>
+          ) : (
+            <Text marginTop="15px" fontSize="small" color="gray">
+              No execution data available yet.
+            </Text>
+          )}
         </Card>
       </Grid>
     </View>

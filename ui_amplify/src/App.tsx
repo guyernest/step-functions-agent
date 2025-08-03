@@ -8,6 +8,7 @@ import History from './pages/History'
 import ApprovalDashboard from './pages/ApprovalDashboard'
 import Settings from './pages/Settings'
 import ExecutionDetail from './pages/ExecutionDetail'
+import Test from './pages/Test'
 
 const queryClient = new QueryClient()
 
@@ -42,6 +43,7 @@ function App() {
                 <Route path="/execution/:executionArn" element={<ExecutionDetail />} />
                 <Route path="/approvals" element={<ApprovalDashboard />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/test" element={<Test />} />
               </Routes>
             </div>
           </Router>
