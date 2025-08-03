@@ -115,10 +115,13 @@ const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<ExecutionStats | null>(null)
 
   useEffect(() => {
-    fetchCounts()
-    // Temporarily disable statistics until sandbox updates
-    // fetchStatistics()
+    fetchAllData()
   }, [])
+
+  const fetchAllData = async () => {
+    await fetchCounts()
+    await fetchStatistics()
+  }
 
   const fetchCounts = async () => {
     setLoading(true)
@@ -184,7 +187,7 @@ const Dashboard: React.FC = () => {
     <View>
       <Flex justifyContent="space-between" alignItems="center" marginBottom="20px">
         <Heading level={2}>Dashboard</Heading>
-        <Button onClick={fetchCounts} size="small" variation="link">
+        <Button onClick={fetchAllData} size="small" variation="link">
           Refresh
         </Button>
       </Flex>
