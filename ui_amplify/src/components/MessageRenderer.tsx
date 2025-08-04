@@ -1,4 +1,5 @@
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Card,
   Text,
@@ -11,7 +12,9 @@ import {
   Flex,
   Heading,
   Image,
-  Link
+  Link,
+  Button,
+  Alert
 } from '@aws-amplify/ui-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -31,6 +34,7 @@ interface MessageContent {
 interface MessageRendererProps {
   content: string | MessageContent | MessageContent[]
   role: string
+  messageType?: string
 }
 
 // Helper function to detect content type
@@ -400,8 +404,8 @@ const renderContent = (content: any, type: string) => {
   }
 }
 
-// Main component
-export const MessageRenderer: React.FC<MessageRendererProps> = ({ content }) => {
+// Helper function to render content recursively
+const renderContentRecursive = (content: any) => {
   if (typeof content === 'string') {
     const type = detectContentType(content)
     return renderContent(content, type)
@@ -488,4 +492,51 @@ const renderMessageItem = (item: MessageContent) => {
   return renderContent(item, type)
 }
 
-export default MessageRenderer
+// Main component
+export const MessageRenderer: React.FC<MessageRendererProps> = ({ content, messageType }) => {
+  const navigate = useNavigate()
+  
+  // Special handling for approval requests
+  if (messageType === 'approval_request' && typeof content === 'string') {
+    const isWaitingForApproval = content.startsWith('Waiting for human approval:')
+    if (isWaitingForApproval) {
+      try {
+        // Extract the JSON data after the prefix
+        const jsonStr = content.substring('Waiting for human approval:'.length).trim()
+        const approvalData = JSON.parse(jsonStr)
+        
+        return (
+          <Alert
+            variation="warning"
+            isDismissible={false}
+          >
+            <Flex direction="column" gap="10px">
+              <Text fontWeight="bold">Human Approval Required</Text>
+              <View backgroundColor="gray.10" padding="10px" borderRadius="5px">
+                <Text fontSize="small" fontFamily="monospace">
+                  Tool: {approvalData.tool_name}
+                </Text>
+                {approvalData.tool_input?.query && (
+                  <Text fontSize="small" fontFamily="monospace" marginTop="5px">
+                    Query: {approvalData.tool_input.query}
+                  </Text>
+                )}
+              </View>
+              <Button
+                variation="primary"
+                onClick={() => navigate('/approvals')}
+              >
+                Go to Approval Dashboard
+              </Button>
+            </Flex>
+          </Alert>
+        )
+      } catch (e) {
+        // If parsing fails, fall through to regular rendering
+      }
+    }
+  }
+  
+  // Regular message rendering continues here
+  return renderContentRecursive(content)
+}

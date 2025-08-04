@@ -14,7 +14,7 @@ import {
 } from '@aws-amplify/ui-react'
 import { generateClient } from 'aws-amplify/data'
 import type { Schema } from '../../amplify/data/resource'
-import MessageRenderer from '../components/MessageRenderer'
+import { MessageRenderer } from '../components/MessageRenderer'
 
 const client = generateClient<Schema>()
 
@@ -187,7 +187,7 @@ const ExecutionDetail: React.FC = () => {
           )}
         </Flex>
         <Divider marginBottom="10px" />
-        <MessageRenderer content={message.content} role={displayRole} />
+        <MessageRenderer content={message.content} role={displayRole} messageType={message.type} />
       </Card>
     )
   }
