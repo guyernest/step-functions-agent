@@ -14,6 +14,13 @@ const schema = a.schema({
     type: a.string(),
     createdAt: a.string(),
     tools: a.string().array(),
+    systemPrompt: a.string(),
+    llmProvider: a.string(),
+    llmModel: a.string(),
+    status: a.string(),
+    parameters: a.string(),
+    metadata: a.string(),
+    observability: a.string(),
   }),
   
   Tool: a.customType({
@@ -85,6 +92,22 @@ const schema = a.schema({
     .arguments({})
     .returns(a.json())
     .handler(a.handler.function(getExecutionStatistics))
+    .authorization((allow) => [allow.authenticated()]),
+  
+  updateAgentSystemPrompt: a
+    .mutation()
+    .arguments({
+      agentName: a.string().required(),
+      version: a.string().required(),
+      systemPrompt: a.string().required()
+    })
+    .returns(a.json())
+    .handler(
+      a.handler.custom({
+        dataSource: 'AgentRegistryDataSource',
+        entry: './updateAgentSystemPrompt.js',
+      })
+    )
     .authorization((allow) => [allow.authenticated()]),
 });
 

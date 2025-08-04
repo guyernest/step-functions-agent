@@ -16,6 +16,7 @@ import {
 } from '@aws-amplify/ui-react'
 import { generateClient } from 'aws-amplify/data'
 import type { Schema } from '../../amplify/data/resource'
+import AgentDetailsModal from '../components/AgentDetailsModal'
 
 const client = generateClient<Schema>()
 
@@ -27,6 +28,13 @@ interface Agent {
   type: string
   createdAt: string
   tools?: string[] // Tool names associated with this agent
+  systemPrompt?: string
+  llmProvider?: string
+  llmModel?: string
+  status?: string
+  parameters?: string
+  metadata?: string
+  observability?: string
 }
 
 interface Tool {
@@ -48,6 +56,8 @@ const Registries: React.FC = () => {
   const [agentError, setAgentError] = useState<string | null>(null)
   const [toolError, setToolError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set())
 
   useEffect(() => {
@@ -70,7 +80,14 @@ const Registries: React.FC = () => {
             version: agent.version || '1.0.0',
             type: agent.type || 'agent',
             createdAt: agent.createdAt || new Date().toISOString(),
-            tools: (agent.tools || []).filter((tool): tool is string => tool !== null && tool !== undefined)
+            tools: (agent.tools || []).filter((tool): tool is string => tool !== null && tool !== undefined),
+            systemPrompt: agent.systemPrompt || undefined,
+            llmProvider: agent.llmProvider || undefined,
+            llmModel: agent.llmModel || undefined,
+            status: agent.status || undefined,
+            parameters: agent.parameters || undefined,
+            metadata: agent.metadata || undefined,
+            observability: agent.observability || undefined
           }))
         setAgents(validAgents)
       }
@@ -287,6 +304,17 @@ const Registries: React.FC = () => {
                 >
                   View History
                 </Button>
+                <Button
+                  size="small"
+                  isFullWidth
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setSelectedAgent(agent)
+                    setIsModalOpen(true)
+                  }}
+                >
+                  View Details
+                </Button>
               </Flex>
             </Flex>
           </View>
@@ -354,6 +382,21 @@ const Registries: React.FC = () => {
           Use the search bar to filter by agent name, tool name, or description.
         </Text>
       </Card>
+
+      {selectedAgent && (
+        <AgentDetailsModal
+          agent={selectedAgent}
+          isOpen={isModalOpen}
+          onClose={() => {
+            setIsModalOpen(false)
+            setSelectedAgent(null)
+          }}
+          onUpdate={() => {
+            // Refresh agents after update
+            fetchAgents()
+          }}
+        />
+      )}
     </View>
   )
 }

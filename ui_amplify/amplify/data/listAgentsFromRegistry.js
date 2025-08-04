@@ -49,7 +49,14 @@ export function response(ctx) {
         version: item.version || '1.0.0',
         type: 'agent',
         createdAt: item.created_at || '',
-        tools: tools
+        tools: tools,
+        systemPrompt: item.system_prompt || '',
+        llmProvider: item.llm_provider || '',
+        llmModel: item.llm_model || '',
+        status: item.status || 'active',
+        parameters: item.parameters || '{}',
+        metadata: item.metadata || '{}',
+        observability: item.observability || '{}'
       };
     });
   
