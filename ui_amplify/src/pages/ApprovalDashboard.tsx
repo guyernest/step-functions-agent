@@ -148,7 +148,7 @@ const ApprovalDashboard: React.FC = () => {
     const region = localStorage.getItem('awsRegion') || 'us-west-2'
     const accountId = localStorage.getItem('awsAccountId') || ''
     if (accountId) {
-      setActivityArn(`arn:aws:states:${region}:${accountId}:activity:HumanApprovalActivityForSQLQueryExecution`)
+      setActivityArn(`arn:aws:states:${region}:${accountId}:activity:sql-agent-approval-activity-prod`)
     }
   }, [])
 

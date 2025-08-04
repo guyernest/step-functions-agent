@@ -57,6 +57,24 @@ const formatDate = (dateString: string) => {
   return date.toLocaleString()
 }
 
+const calculateDuration = (startDate: string, endDate?: string) => {
+  const start = new Date(startDate).getTime()
+  const end = endDate ? new Date(endDate).getTime() : Date.now()
+  const durationMs = end - start
+  
+  const seconds = Math.floor(durationMs / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+  
+  if (hours > 0) {
+    return `${hours}h ${minutes % 60}m ${seconds % 60}s`
+  } else if (minutes > 0) {
+    return `${minutes}m ${seconds % 60}s`
+  } else {
+    return `${seconds}s`
+  }
+}
+
 const ExecutionDetail: React.FC = () => {
   const { executionArn } = useParams<{ executionArn: string }>()
   const navigate = useNavigate()
@@ -64,6 +82,9 @@ const ExecutionDetail: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [autoRefresh, setAutoRefresh] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   useEffect(() => {
     if (executionArn) {
@@ -71,8 +92,30 @@ const ExecutionDetail: React.FC = () => {
     }
   }, [executionArn])
 
-  const fetchExecutionDetails = async (arn: string) => {
-    setLoading(true)
+  // Auto-refresh for running executions
+  useEffect(() => {
+    if (!execution || !autoRefresh) return
+
+    // Only refresh if execution is still running
+    if (execution.status === 'RUNNING') {
+      const interval = setInterval(() => {
+        fetchExecutionDetails(decodeURIComponent(executionArn!), true)
+      }, 3000) // Refresh every 3 seconds
+
+      return () => clearInterval(interval)
+    } else {
+      // Stop auto-refresh when execution completes
+      setAutoRefresh(false)
+    }
+  }, [execution, executionArn, autoRefresh])
+
+  const fetchExecutionDetails = async (arn: string, isRefresh = false) => {
+    // Only show loading on initial load, not on refresh
+    if (!isRefresh) {
+      setLoading(true)
+    } else {
+      setIsRefreshing(true)
+    }
     setError(null)
 
     try {
@@ -90,6 +133,7 @@ const ExecutionDetail: React.FC = () => {
         if (data.execution) {
           setExecution(data.execution)
           setMessages(data.messages || [])
+          setLastUpdated(new Date())
         } else if (data.error) {
           setError(data.error + (data.details ? ': ' + data.details : ''))
         }
@@ -98,7 +142,12 @@ const ExecutionDetail: React.FC = () => {
       console.error('Error fetching execution details:', err)
       setError('Failed to fetch execution details')
     } finally {
-      setLoading(false)
+      // Only set loading false if we were showing loading
+      if (!isRefresh) {
+        setLoading(false)
+      } else {
+        setIsRefreshing(false)
+      }
     }
   }
 
@@ -167,7 +216,14 @@ const ExecutionDetail: React.FC = () => {
       {execution && (
         <>
           <Card variation="elevated" marginBottom="20px">
-            <Heading level={4}>Execution Information</Heading>
+            <Flex justifyContent="space-between" alignItems="center">
+              <Heading level={4}>Execution Information</Heading>
+              {lastUpdated && execution.status === 'RUNNING' && (
+                <Text fontSize="small" color="gray">
+                  Last updated: {lastUpdated.toLocaleTimeString()}
+                </Text>
+              )}
+            </Flex>
             <View marginTop="10px">
               <Flex gap="20px" wrap="wrap">
                 <View>
@@ -180,9 +236,21 @@ const ExecutionDetail: React.FC = () => {
                 </View>
                 <View>
                   <Text fontWeight="bold">Status:</Text>
-                  <Badge variation={getStatusBadgeVariation(execution.status)}>
-                    {execution.status}
-                  </Badge>
+                  <Flex alignItems="center" gap="10px">
+                    <Badge variation={getStatusBadgeVariation(execution.status)}>
+                      {execution.status}
+                    </Badge>
+                    {execution.status === 'RUNNING' && (
+                      <>
+                        <Loader size="small" />
+                        {isRefreshing && (
+                          <Text fontSize="small" color="gray">
+                            Refreshing...
+                          </Text>
+                        )}
+                      </>
+                    )}
+                  </Flex>
                 </View>
                 <View>
                   <Text fontWeight="bold">Start Time:</Text>
@@ -194,6 +262,10 @@ const ExecutionDetail: React.FC = () => {
                     <Text>{formatDate(execution.stopDate)}</Text>
                   </View>
                 )}
+                <View>
+                  <Text fontWeight="bold">Duration:</Text>
+                  <Text>{calculateDuration(execution.startDate, execution.stopDate)}</Text>
+                </View>
               </Flex>
             </View>
           </Card>

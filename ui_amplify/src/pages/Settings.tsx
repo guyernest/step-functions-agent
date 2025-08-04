@@ -89,7 +89,7 @@ const Settings: React.FC = () => {
         {accountId && (
           <View marginTop="10px">
             <Text fontSize="small" fontFamily="monospace" backgroundColor="gray.10" padding="10px">
-              Human Approval: arn:aws:states:{region}:{accountId}:activity:HumanApprovalActivityForSQLQueryExecution
+              SQL Agent Approval: arn:aws:states:{region}:{accountId}:activity:sql-agent-approval-activity-prod
             </Text>
             <Text fontSize="small" fontFamily="monospace" backgroundColor="gray.10" padding="10px" marginTop="5px">
               Remote Execution: arn:aws:states:{region}:{accountId}:activity:local-automation-remote-activity-prod

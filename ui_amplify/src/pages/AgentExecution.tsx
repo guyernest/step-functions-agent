@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import {
   Card,
   Heading,
@@ -26,6 +26,7 @@ interface Agent {
 
 const AgentExecution: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgent, setSelectedAgent] = useState('')
   const [input, setInput] = useState('')
@@ -34,6 +35,7 @@ const AgentExecution: React.FC = () => {
   const [executing, setExecuting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [executionArn, setExecutionArn] = useState<string | null>(null)
 
   useEffect(() => {
     fetchAgents()
@@ -125,10 +127,16 @@ const AgentExecution: React.FC = () => {
         if (data.error) {
           setError(data.error + (data.details ? ': ' + data.details : ''))
         } else {
-          setSuccess(`Execution started successfully! ARN: ${data.executionArn}`)
+          setSuccess(`Execution started successfully!`)
+          setExecutionArn(data.executionArn)
           // Clear form
           setInput('')
           setExecutionName('')
+          
+          // Optionally auto-navigate after a short delay
+          setTimeout(() => {
+            navigate(`/execution/${encodeURIComponent(data.executionArn)}`)
+          }, 2000)
         }
       }
     } catch (err) {
@@ -154,14 +162,40 @@ const AgentExecution: React.FC = () => {
         </Alert>
       )}
       
-      {success && (
+      {success && executionArn && (
         <Alert 
           variation="success" 
           marginTop="10px"
-          onDismiss={() => setSuccess(null)}
+          onDismiss={() => {
+            setSuccess(null)
+            setExecutionArn(null)
+          }}
           isDismissible
         >
-          {success}
+          <Flex direction="column" gap="10px">
+            <Text>{success}</Text>
+            <Text fontSize="small" fontFamily="monospace" color="gray">
+              {executionArn}
+            </Text>
+            <Flex gap="10px">
+              <Button
+                size="small"
+                variation="primary"
+                onClick={() => navigate(`/execution/${encodeURIComponent(executionArn)}`)}
+              >
+                View Execution Details
+              </Button>
+              <Button
+                size="small"
+                onClick={() => navigate('/history')}
+              >
+                Go to History
+              </Button>
+            </Flex>
+            <Text fontSize="small" color="gray">
+              Redirecting to execution details in 2 seconds...
+            </Text>
+          </Flex>
         </Alert>
       )}
 
