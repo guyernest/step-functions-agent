@@ -1,5 +1,5 @@
 import { Authenticator } from '@aws-amplify/ui-react'
-import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Dashboard from './pages/Dashboard'
 import AgentExecution from './pages/AgentExecution'
@@ -9,6 +9,7 @@ import ApprovalDashboard from './pages/ApprovalDashboard'
 import Settings from './pages/Settings'
 import ExecutionDetail from './pages/ExecutionDetail'
 import Test from './pages/Test'
+import Layout from './components/Layout'
 
 const queryClient = new QueryClient()
 
@@ -18,22 +19,7 @@ function App() {
       <Authenticator>
         {({ signOut, user }) => (
           <Router>
-            <div style={{ padding: '20px' }}>
-              <header style={{ marginBottom: '20px', borderBottom: '1px solid #ddd', paddingBottom: '10px' }}>
-                <h1>Step Functions Agent UI</h1>
-                <nav style={{ margin: '10px 0' }}>
-                  <Link to="/dashboard" style={{ marginRight: '20px' }}>Dashboard</Link>
-                  <Link to="/execute" style={{ marginRight: '20px' }}>Execute Agent</Link>
-                  <Link to="/registries" style={{ marginRight: '20px' }}>Registries</Link>
-                  <Link to="/history" style={{ marginRight: '20px' }}>History</Link>
-                  <Link to="/approvals" style={{ marginRight: '20px' }}>Approvals</Link>
-                  <Link to="/settings" style={{ marginRight: '20px' }}>Settings</Link>
-                </nav>
-                <div>
-                  Welcome {user?.username}! 
-                  <button onClick={signOut} style={{ marginLeft: '10px' }}>Sign out</button>
-                </div>
-              </header>
+            <Layout user={user} signOut={signOut}>
               <Routes>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard" element={<Dashboard />} />
@@ -45,7 +31,7 @@ function App() {
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/test" element={<Test />} />
               </Routes>
-            </div>
+            </Layout>
           </Router>
         )}
       </Authenticator>
