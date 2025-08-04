@@ -99,7 +99,8 @@ const stepFunctionsListPolicy = new PolicyStatement({
   actions: [
     'states:ListExecutions',
     'states:ListStateMachines',
-    'states:DescribeExecution'
+    'states:DescribeExecution',
+    'states:ListTagsForResource'
   ],
   resources: ['*']
 });
@@ -124,7 +125,8 @@ const stepFunctionsStatsPolicy = new PolicyStatement({
   actions: [
     'states:ListExecutions',
     'states:ListStateMachines',
-    'states:DescribeExecution'
+    'states:DescribeExecution',
+    'states:ListTagsForResource'
   ],
   resources: ['*']
 });

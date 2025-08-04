@@ -4,6 +4,7 @@ from aws_cdk import (
     Fn,
     RemovalPolicy,
     CfnOutput,
+    Tags,
     aws_logs as logs,
     aws_iam as iam,
     aws_stepfunctions as sfn,
@@ -273,6 +274,13 @@ class BaseAgentStack(Stack, AgentRegistryMixin):
             ),
             tracing_enabled=True
         )
+        
+        # Add specific tags for UI filtering
+        Tags.of(self.state_machine).add("Application", "StepFunctionsAgent")
+        Tags.of(self.state_machine).add("Type", "Agent")
+        Tags.of(self.state_machine).add("AgentName", self.agent_name)
+        Tags.of(self.state_machine).add("Environment", self.env_name)
+        Tags.of(self.state_machine).add("ManagedBy", "StepFunctionsAgentUI")
         
         # Store the state machine name for external reference
         self.state_machine_name = f"{self.agent_name}-{self.env_name}"

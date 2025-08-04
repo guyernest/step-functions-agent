@@ -1,4 +1,4 @@
-import { SFNClient, StartExecutionCommand, ListStateMachinesCommand } from '@aws-sdk/client-sfn';
+import { SFNClient, StartExecutionCommand, ListStateMachinesCommand, ListTagsForResourceCommand } from '@aws-sdk/client-sfn';
 
 declare const process: { env: { AWS_REGION?: string } };
 
@@ -23,13 +23,34 @@ export const handler = async (event: any): Promise<any> => {
     
     console.log('Found state machines:', listResponse.stateMachines?.length);
     
-    // Find the state machine that matches the agent name
-    const stateMachine = listResponse.stateMachines?.find((sm: any) => 
-      sm.name && (
-        sm.name.toLowerCase() === agentName.toLowerCase() ||
-        sm.name.toLowerCase() === `${agentName.toLowerCase()}-prod`
-      )
-    );
+    // Find the state machine that matches the agent name by checking tags
+    let stateMachine = null;
+    
+    for (const sm of listResponse.stateMachines || []) {
+      if (!sm.stateMachineArn) continue;
+      
+      try {
+        // Get tags for this state machine
+        const tagsCommand = new ListTagsForResourceCommand({
+          resourceArn: sm.stateMachineArn
+        });
+        const tagsResponse = await client.send(tagsCommand);
+        const tags = tagsResponse.tags || [];
+        
+        // Check if this state machine has the required tags and matches the agent name
+        const hasAgentTag = tags.some(tag => tag.key === 'Type' && tag.value === 'Agent');
+        const hasApplicationTag = tags.some(tag => tag.key === 'Application' && tag.value === 'StepFunctionsAgent');
+        const agentNameTag = tags.find(tag => tag.key === 'AgentName');
+        
+        if (hasAgentTag && hasApplicationTag && agentNameTag?.value && 
+            agentNameTag.value.toLowerCase() === agentName.toLowerCase()) {
+          stateMachine = sm;
+          break;
+        }
+      } catch (error) {
+        console.log('Error getting tags for state machine:', sm.stateMachineArn, error);
+      }
+    }
     
     if (!stateMachine) {
       return {

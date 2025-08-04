@@ -1,4 +1,4 @@
-import { SFNClient, ListExecutionsCommand, ListStateMachinesCommand } from '@aws-sdk/client-sfn';
+import { SFNClient, ListExecutionsCommand, ListStateMachinesCommand, ListTagsForResourceCommand } from '@aws-sdk/client-sfn';
 
 declare const process: { env: { AWS_REGION?: string } };
 
@@ -26,13 +26,37 @@ export const handler = async (event: any): Promise<any> => {
     if (stateMachineArn) {
       stateMachineArns = [stateMachineArn];
     } else {
-      // List all state machines that are agents (by naming convention or tags)
+      // List all state machines
       const listSMCommand = new ListStateMachinesCommand({});
       const listSMResponse = await client.send(listSMCommand);
       
-      stateMachineArns = listSMResponse.stateMachines
-        ?.map((sm: any) => sm.stateMachineArn)
-        ?.filter((arn: any): arn is string => arn !== undefined) || [];
+      // Filter state machines by checking tags
+      const filteredStateMachines: string[] = [];
+      
+      for (const sm of listSMResponse.stateMachines || []) {
+        if (!sm.stateMachineArn) continue;
+        
+        try {
+          // Get tags for this state machine
+          const tagsCommand = new ListTagsForResourceCommand({
+            resourceArn: sm.stateMachineArn
+          });
+          const tagsResponse = await client.send(tagsCommand);
+          const tags = tagsResponse.tags || [];
+          
+          // Check if this state machine has the required tags
+          const hasAgentTag = tags.some(tag => tag.key === 'Type' && tag.value === 'Agent');
+          const hasApplicationTag = tags.some(tag => tag.key === 'Application' && tag.value === 'StepFunctionsAgent');
+          
+          if (hasAgentTag && hasApplicationTag) {
+            filteredStateMachines.push(sm.stateMachineArn);
+          }
+        } catch (error) {
+          console.log('Error getting tags for state machine:', sm.stateMachineArn, error);
+        }
+      }
+      
+      stateMachineArns = filteredStateMachines;
       
       console.log('Found state machines:', stateMachineArns.length);
     }
@@ -49,11 +73,24 @@ export const handler = async (event: any): Promise<any> => {
       
       const response = await client.send(command);
       
-      // Extract agent name from state machine ARN
-      // Example: arn:aws:states:us-west-2:123456789012:stateMachine:weather-agent-prod
-      const arnParts = arn.split(':');
-      const smName = arnParts[arnParts.length - 1];
-      const agentName = smName.replace('-prod', '');
+      // Get agent name from tags
+      let agentName = 'unknown';
+      try {
+        const tagsCommand = new ListTagsForResourceCommand({
+          resourceArn: arn
+        });
+        const tagsResponse = await client.send(tagsCommand);
+        const agentNameTag = tagsResponse.tags?.find(tag => tag.key === 'AgentName');
+        if (agentNameTag?.value) {
+          agentName = agentNameTag.value;
+        }
+      } catch (error) {
+        console.log('Error getting agent name from tags:', error);
+        // Fallback to extracting from ARN
+        const arnParts = arn.split(':');
+        const smName = arnParts[arnParts.length - 1];
+        agentName = smName;
+      }
       
       const executions = (response.executions || []).map((exec: any) => ({
         executionArn: exec.executionArn || '',
