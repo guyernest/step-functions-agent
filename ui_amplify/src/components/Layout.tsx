@@ -9,7 +9,7 @@ import {
   Card,
   Icon
 } from '@aws-amplify/ui-react'
-import { MdDashboard, MdPlayArrow, MdStorage, MdHistory, MdApproval, MdSettings, MdLogout } from 'react-icons/md'
+import { MdDashboard, MdPlayArrow, MdStorage, MdHistory, MdApproval, MdSettings, MdLogout, MdInsights, MdAttachMoney } from 'react-icons/md'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -25,6 +25,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, signOut }) => {
     { path: '/registries', label: 'Registries', icon: MdStorage },
     { path: '/history', label: 'History', icon: MdHistory },
     { path: '/approvals', label: 'Approvals', icon: MdApproval },
+    { path: '/metrics', label: 'Metrics', icon: MdInsights },
+    { path: '/model-costs', label: 'Model Costs', icon: MdAttachMoney },
     { path: '/settings', label: 'Settings', icon: MdSettings },
   ]
 

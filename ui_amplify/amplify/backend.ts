@@ -5,6 +5,7 @@ import { startAgentExecution } from './backend/function/startAgentExecution/reso
 import { listStepFunctionExecutions } from './backend/function/listStepFunctionExecutions/resource';
 import { getStepFunctionExecution } from './backend/function/getStepFunctionExecution/resource';
 import { getExecutionStatistics } from './backend/function/getExecutionStatistics/resource';
+import { getCloudWatchMetrics } from './backend/function/getCloudWatchMetrics/resource';
 import { PolicyStatement, Effect, Policy } from 'aws-cdk-lib/aws-iam';
 import { aws_dynamodb } from 'aws-cdk-lib';
 
@@ -18,6 +19,7 @@ const backend = defineBackend({
   listStepFunctionExecutions,
   getStepFunctionExecution,
   getExecutionStatistics,
+  getCloudWatchMetrics,
 });
 
 // Set the Cognito User Pool name
@@ -132,3 +134,29 @@ const stepFunctionsStatsPolicy = new PolicyStatement({
 });
 
 backend.getExecutionStatistics.resources.lambda.addToRolePolicy(stepFunctionsStatsPolicy);
+
+// Grant CloudWatch permissions to the getCloudWatchMetrics Lambda
+const cloudWatchMetricsPolicy = new PolicyStatement({
+  effect: Effect.ALLOW,
+  actions: [
+    'cloudwatch:GetMetricData',
+    'cloudwatch:GetMetricStatistics',
+    'cloudwatch:ListMetrics'
+  ],
+  resources: ['*']
+});
+
+backend.getCloudWatchMetrics.resources.lambda.addToRolePolicy(cloudWatchMetricsPolicy);
+
+// Grant DynamoDB permissions to the getCloudWatchMetrics Lambda for reading model costs
+const dynamoDBMetricsPolicy = new PolicyStatement({
+  effect: Effect.ALLOW,
+  actions: [
+    'dynamodb:ListTables',
+    'dynamodb:Scan',
+    'dynamodb:GetItem'
+  ],
+  resources: ['*']
+});
+
+backend.getCloudWatchMetrics.resources.lambda.addToRolePolicy(dynamoDBMetricsPolicy);

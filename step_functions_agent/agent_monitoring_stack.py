@@ -80,27 +80,55 @@ class AgentMonitoringStack(Stack):
         for agent in agents:
             high_level_facade.add_medium_header(f'Agent: {agent}')
 
-             # Create the query
-            input_tokens_query = cloudwatch.MathExpression(
-                expression=f"SELECT SUM(InputTokens) FROM \"AI-Agents\" WHERE state_machine_name = '{agent}' GROUP BY model",
-                label="Input Tokens"  # Label that will appear on the dashboard
-            )
+            # Create regular metric queries instead of SQL-based Metric Insights
+            # These work for all time ranges, not just 3 hours
+            input_tokens_metrics = []
+            output_tokens_metrics = []
+            
+            # Common models to track
+            models = ['gpt-4o', 'gpt-4o-mini', 'claude-3-7', 'gemini-2.0-flash', 'amazon.nova-pro', 'grok-2']
+            
+            for model in models:
+                input_metric = cloudwatch.Metric(
+                    namespace="AI-Agents",
+                    metric_name="InputTokens",
+                    dimensions_map={
+                        "agent": agent,
+                        "model": model,
+                        "state_machine_name": agent
+                    },
+                    statistic="Sum",
+                    label=f"{model} Input"
+                )
+                input_tokens_metrics.append(input_metric)
+                
+                output_metric = cloudwatch.Metric(
+                    namespace="AI-Agents",
+                    metric_name="OutputTokens",
+                    dimensions_map={
+                        "agent": agent,
+                        "model": model,
+                        "state_machine_name": agent
+                    },
+                    statistic="Sum",
+                    label=f"{model} Output"
+                )
+                output_tokens_metrics.append(output_metric)
 
             input_tokens_widget = cloudwatch.GraphWidget(
-                title="Top Models by Input Tokens",
-                left=[input_tokens_query],
-                width=12  # Setting width to half the dashboard (24 units is full width)
-            )
-
-            output_tokens_query = cloudwatch.MathExpression(
-                expression=f"SELECT SUM(OutputTokens) FROM \"AI-Agents\" WHERE state_machine_name = '{agent}' GROUP BY model",
-                label="Output Tokens"  # Label that will appear on the dashboard
+                title=f"{agent} - Input Tokens by Model",
+                left=input_tokens_metrics,
+                width=12,
+                height=6,
+                period=Duration.minutes(5)
             )
 
             output_tokens_widget = cloudwatch.GraphWidget(
-                title="Top Models by Output Tokens",
-                left=[output_tokens_query],
-                width=12  # Setting width to half the dashboard
+                title=f"{agent} - Output Tokens by Model",
+                left=output_tokens_metrics,
+                width=12,
+                height=6,
+                period=Duration.minutes(5)
             )
 
             # Add them as a row 
@@ -118,23 +146,23 @@ class AgentMonitoringStack(Stack):
         # gpt-3.5-turbo: input $0.0015 / 1K tokens, output $0.002 / 1K tokens
 
 
-            # Create the math expression
+            # Create the math expression with correct dimension syntax
         math_expression = cloudwatch.MathExpression(
             expression="""
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens gpt-4o', 'Sum')) * 2.50 / 10^6 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens gpt-4o', 'Sum')) * 10.00 / 10^6 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens gpt-4o-mini', 'Sum')) * 0.15 / 10^6 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens gpt-4o-mini', 'Sum')) * 0.60 / 10^6 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens claude sonnet', 'Sum')) * 3.00 / 10^6 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens claude sonnet', 'Sum')) * 15.00 / 10^6 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens gemini-2.0-flash', 'Sum')) * 0.10 / 10^6 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens gemini-2.0-flash', 'Sum')) * 0.40 / 10^6 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens amazon.nova-pro', 'Sum')) * 0.8 / 10^6 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens amazon.nova-pro', 'Sum')) * 3.20 / 10^6 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} InputTokens grok-2', 'Sum')) * 2.0 / 10^6 +
-            SUM(SEARCH('{AI-Agents,model,state_machine_name} OutputTokens grok-2', 'Sum')) * 10.00 / 10^6
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} MetricName="InputTokens" model="gpt-4o"', 'Sum')) * 2.50 / 10^6 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} MetricName="OutputTokens" model="gpt-4o"', 'Sum')) * 10.00 / 10^6 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} MetricName="InputTokens" model="gpt-4o-mini"', 'Sum')) * 0.15 / 10^6 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} MetricName="OutputTokens" model="gpt-4o-mini"', 'Sum')) * 0.60 / 10^6 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} MetricName="InputTokens" model="claude-3-7"', 'Sum')) * 3.00 / 10^6 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} MetricName="OutputTokens" model="claude-3-7"', 'Sum')) * 15.00 / 10^6 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} MetricName="InputTokens" model="gemini-2.0-flash"', 'Sum')) * 0.10 / 10^6 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} MetricName="OutputTokens" model="gemini-2.0-flash"', 'Sum')) * 0.40 / 10^6 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} MetricName="InputTokens" model="amazon.nova-pro"', 'Sum')) * 0.8 / 10^6 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} MetricName="OutputTokens" model="amazon.nova-pro"', 'Sum')) * 3.20 / 10^6 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} MetricName="InputTokens" model="grok-2"', 'Sum')) * 2.0 / 10^6 +
+            SUM(SEARCH('{AI-Agents,agent,model,state_machine_name} MetricName="OutputTokens" model="grok-2"', 'Sum')) * 10.00 / 10^6
             """,
-            label="Cost Calculation"  # Label that will appear on the dashboard
+            label="Total Cost (USD)"
         )
 
         # Add the math expression to the dashboard

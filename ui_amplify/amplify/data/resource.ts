@@ -3,8 +3,21 @@ import { startAgentExecution } from '../backend/function/startAgentExecution/res
 import { listStepFunctionExecutions } from '../backend/function/listStepFunctionExecutions/resource';
 import { getStepFunctionExecution } from '../backend/function/getStepFunctionExecution/resource';
 import { getExecutionStatistics } from '../backend/function/getExecutionStatistics/resource';
+import { getCloudWatchMetrics } from '../backend/function/getCloudWatchMetrics/resource';
 
 const schema = a.schema({
+  // Model for storing custom model costs
+  ModelCost: a
+    .model({
+      modelName: a.string().required(),
+      inputPrice: a.float().required(),
+      outputPrice: a.float().required(),
+      lastUpdated: a.datetime(),
+      updatedBy: a.string(),
+      isActive: a.boolean().default(true),
+    })
+    .authorization((allow) => [allow.authenticated()]),
+  
   // Custom types for external DynamoDB tables
   Agent: a.customType({
     id: a.string().required(),
@@ -108,6 +121,19 @@ const schema = a.schema({
         entry: './updateAgentSystemPrompt.js',
       })
     )
+    .authorization((allow) => [allow.authenticated()]),
+  
+  getCloudWatchMetrics: a
+    .query()
+    .arguments({
+      metricType: a.string().required(),
+      startTime: a.string(),
+      endTime: a.string(),
+      period: a.integer(),
+      agentName: a.string()
+    })
+    .returns(a.json())
+    .handler(a.handler.function(getCloudWatchMetrics))
     .authorization((allow) => [allow.authenticated()]),
 });
 

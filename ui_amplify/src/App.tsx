@@ -10,6 +10,8 @@ import Settings from './pages/Settings'
 import ExecutionDetail from './pages/ExecutionDetail'
 import Test from './pages/Test'
 import Layout from './components/Layout'
+import Metrics from './pages/Metrics'
+import ModelCosts from './pages/ModelCosts'
 
 const queryClient = new QueryClient()
 
@@ -28,6 +30,8 @@ function App() {
                 <Route path="/history" element={<History />} />
                 <Route path="/execution/:executionArn" element={<ExecutionDetail />} />
                 <Route path="/approvals" element={<ApprovalDashboard />} />
+                <Route path="/metrics" element={<Metrics />} />
+                <Route path="/model-costs" element={<ModelCosts />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/test" element={<Test />} />
               </Routes>
