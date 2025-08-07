@@ -144,8 +144,8 @@ const Registries: React.FC = () => {
             type: tool.type || 'tool',
             createdAt: tool.createdAt || new Date().toISOString(),
             language: tool.language || 'python',
-            lambda_function_name: tool.lambda_function_name || '',
-            lambda_arn: tool.lambda_arn || ''
+            lambda_function_name: tool.lambda_function_name || undefined,
+            lambda_arn: tool.lambda_arn || undefined
           }))
         setTools(validTools)
       }
