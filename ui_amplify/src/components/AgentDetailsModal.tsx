@@ -10,12 +10,26 @@ import {
   Divider,
   View,
   Alert,
-  Tabs
+  Tabs,
+  Icon,
+  Loader
 } from '@aws-amplify/ui-react'
 import { generateClient } from 'aws-amplify/data'
 import type { Schema } from '../../amplify/data/resource'
 
 const client = generateClient<Schema>()
+
+interface Tool {
+  id: string
+  name: string
+  description: string
+  version: string
+  type: string
+  createdAt: string
+  language?: string
+  lambda_function_name?: string
+  lambda_arn?: string
+}
 
 interface AgentDetailsModalProps {
   agent: any
@@ -35,13 +49,56 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [tools, setTools] = useState<Tool[]>([])
+  const [loadingTools, setLoadingTools] = useState(false)
 
   useEffect(() => {
     if (agent?.systemPrompt) {
       setSystemPrompt(agent.systemPrompt)
       setOriginalSystemPrompt(agent.systemPrompt)
     }
-  }, [agent])
+    
+    // Fetch tool details when agent changes
+    if (agent && isOpen) {
+      fetchToolDetails()
+    }
+  }, [agent, isOpen])
+
+  const fetchToolDetails = async () => {
+    if (!agent?.tools || agent.tools.length === 0) return
+    
+    setLoadingTools(true)
+    try {
+      const response = await client.queries.listToolsFromRegistry({})
+      
+      if (response.data) {
+        const allTools = response.data
+          .filter(tool => tool !== null && tool !== undefined)
+          .map(tool => ({
+            id: tool.id,
+            name: tool.name,
+            description: tool.description || '',
+            version: tool.version || '1.0.0',
+            type: tool.type || 'tool',
+            createdAt: tool.createdAt || new Date().toISOString(),
+            language: tool.language || 'python',
+            lambda_function_name: tool.lambda_function_name,
+            lambda_arn: tool.lambda_arn
+          }))
+        
+        // Filter tools that belong to this agent
+        const agentTools = allTools.filter(tool => 
+          agent.tools.includes(tool.name)
+        )
+        
+        setTools(agentTools)
+      }
+    } catch (error) {
+      console.error('Error fetching tool details:', error)
+    } finally {
+      setLoadingTools(false)
+    }
+  }
 
   const handleSave = async () => {
     if (!agent) return
@@ -92,6 +149,32 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
     } catch {
       return {}
     }
+  }
+
+  // Helper function to get language badge color
+  const getLanguageColor = (language?: string): string => {
+    const lang = language?.toLowerCase() || 'python'
+    const colors: { [key: string]: string } = {
+      python: '#3776AB',
+      typescript: '#007ACC',
+      go: '#00ADD8',
+      rust: '#CE412B',
+      java: '#F89820'
+    }
+    return colors[lang] || '#666666'
+  }
+
+  // Helper function to format language display name
+  const formatLanguageName = (language?: string): string => {
+    const lang = language?.toLowerCase() || 'python'
+    const names: { [key: string]: string } = {
+      python: 'Python',
+      typescript: 'TypeScript',
+      go: 'Go',
+      rust: 'Rust',
+      java: 'Java'
+    }
+    return names[lang] || lang.charAt(0).toUpperCase() + lang.slice(1)
   }
 
   if (!isOpen || !agent) return null
@@ -197,35 +280,35 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
                     <View marginTop="20px">
                       <Heading level={5}>Parameters</Heading>
                       <View backgroundColor="gray.10" padding="10px" borderRadius="5px" marginTop="10px">
-                        <Text fontSize="small" fontFamily="monospace">
+                        <Flex direction="column" gap="5px">
                           {Object.entries(parameters).map(([key, value]) => (
-                            <div key={key}>
+                            <Text key={key} fontSize="small" fontFamily="monospace">
                               <strong>{key}:</strong> {JSON.stringify(value)}
-                            </div>
+                            </Text>
                           ))}
-                        </Text>
+                        </Flex>
                       </View>
 
                       <Heading level={5} marginTop="20px">Observability</Heading>
                       <View backgroundColor="gray.10" padding="10px" borderRadius="5px" marginTop="10px">
-                        <Text fontSize="small" fontFamily="monospace">
+                        <Flex direction="column" gap="5px">
                           {Object.entries(observability).map(([key, value]) => (
-                            <div key={key}>
+                            <Text key={key} fontSize="small" fontFamily="monospace">
                               <strong>{key}:</strong> {JSON.stringify(value)}
-                            </div>
+                            </Text>
                           ))}
-                        </Text>
+                        </Flex>
                       </View>
 
                       <Heading level={5} marginTop="20px">Metadata</Heading>
                       <View backgroundColor="gray.10" padding="10px" borderRadius="5px" marginTop="10px">
-                        <Text fontSize="small" fontFamily="monospace">
+                        <Flex direction="column" gap="5px">
                           {Object.entries(metadata).map(([key, value]) => (
-                            <div key={key}>
+                            <Text key={key} fontSize="small" fontFamily="monospace">
                               <strong>{key}:</strong> {JSON.stringify(value)}
-                            </div>
+                            </Text>
                           ))}
-                        </Text>
+                        </Flex>
                       </View>
                     </View>
                   )
@@ -235,13 +318,65 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
                   value: 'tools',
                   content: (
                     <View marginTop="20px">
-                      {agent.tools && agent.tools.length > 0 ? (
-                        <Flex direction="column" gap="10px">
-                          {agent.tools.map((tool: string, index: number) => (
-                            <Badge key={index} size="large">
-                              {tool}
-                            </Badge>
-                          ))}
+                      {loadingTools ? (
+                        <Loader size="large" />
+                      ) : agent.tools && agent.tools.length > 0 ? (
+                        <Flex direction="column" gap="15px">
+                          {agent.tools.map((toolName: string, index: number) => {
+                            const toolDetail = tools.find(t => t.name === toolName)
+                            
+                            return (
+                              <Card key={index} variation="outlined">
+                                <Flex direction="column" gap="10px">
+                                  <Flex alignItems="center" gap="10px">
+                                    <Icon
+                                      ariaLabel="Tool"
+                                      viewBox={{ width: 16, height: 16 }}
+                                      paths={[
+                                        {
+                                          d: "M22.7 19L13.6 9.9C14.5 7.6 14 4.9 12.1 3C10.1 1 7.1 0.6 4.7 1.7L9 6L6 9L1.6 4.7C0.4 7.1 0.9 10.1 2.9 12.1C4.8 14 7.5 14.5 9.8 13.6L18.9 22.7C19.3 23.1 19.9 23.1 20.3 22.7L22.6 20.4C23.1 20 23.1 19.4 22.7 19Z",
+                                          fill: "currentColor"
+                                        }
+                                      ]}
+                                    />
+                                    <Text fontWeight="bold" fontSize="medium">{toolName}</Text>
+                                    {toolDetail && (
+                                      <Flex gap="5px">
+                                        <Badge 
+                                          size="small" 
+                                          backgroundColor={getLanguageColor(toolDetail.language)}
+                                          color="white"
+                                        >
+                                          {formatLanguageName(toolDetail.language)}
+                                        </Badge>
+                                        <Badge size="small" variation="info">
+                                          {toolDetail.version}
+                                        </Badge>
+                                      </Flex>
+                                    )}
+                                  </Flex>
+                                  
+                                  {toolDetail && (
+                                    <>
+                                      {toolDetail.description && (
+                                        <Text fontSize="small" color="gray">
+                                          {toolDetail.description}
+                                        </Text>
+                                      )}
+                                      
+                                      {toolDetail.lambda_function_name && (
+                                        <View backgroundColor="gray.10" padding="8px" borderRadius="4px">
+                                          <Text fontSize="small" fontFamily="monospace">
+                                            <strong>Lambda:</strong> {toolDetail.lambda_function_name}
+                                          </Text>
+                                        </View>
+                                      )}
+                                    </>
+                                  )}
+                                </Flex>
+                              </Card>
+                            )
+                          })}
                         </Flex>
                       ) : (
                         <Text>No tools configured</Text>

@@ -44,6 +44,9 @@ interface Tool {
   version: string
   type: string
   createdAt: string
+  language?: string
+  lambda_function_name?: string
+  lambda_arn?: string
 }
 
 
@@ -59,6 +62,32 @@ const Registries: React.FC = () => {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set())
+
+  // Helper function to get language badge color
+  const getLanguageColor = (language?: string): string => {
+    const lang = language?.toLowerCase() || 'python'
+    const colors: { [key: string]: string } = {
+      python: '#3776AB',
+      typescript: '#007ACC',
+      go: '#00ADD8',
+      rust: '#CE412B',
+      java: '#F89820'
+    }
+    return colors[lang] || '#666666'
+  }
+
+  // Helper function to format language display name
+  const formatLanguageName = (language?: string): string => {
+    const lang = language?.toLowerCase() || 'python'
+    const names: { [key: string]: string } = {
+      python: 'Python',
+      typescript: 'TypeScript',
+      go: 'Go',
+      rust: 'Rust',
+      java: 'Java'
+    }
+    return names[lang] || lang.charAt(0).toUpperCase() + lang.slice(1)
+  }
 
   useEffect(() => {
     fetchAgents()
@@ -113,7 +142,10 @@ const Registries: React.FC = () => {
             description: tool.description || '',
             version: tool.version || '1.0.0',
             type: tool.type || 'tool',
-            createdAt: tool.createdAt || new Date().toISOString()
+            createdAt: tool.createdAt || new Date().toISOString(),
+            language: tool.language || 'python',
+            lambda_function_name: tool.lambda_function_name || '',
+            lambda_arn: tool.lambda_arn || ''
           }))
         setTools(validTools)
       }
@@ -207,9 +239,20 @@ const Registries: React.FC = () => {
               </Text>
             )}
           </View>
-          {tool && (
-            <Badge size="small">{tool.version}</Badge>
-          )}
+          <Flex gap="5px" alignItems="center">
+            {tool && (
+              <>
+                <Badge 
+                  size="small" 
+                  backgroundColor={getLanguageColor(tool.language)}
+                  color="white"
+                >
+                  {formatLanguageName(tool.language)}
+                </Badge>
+                <Badge size="small">{tool.version}</Badge>
+              </>
+            )}
+          </Flex>
         </Flex>
       </Card>
     )

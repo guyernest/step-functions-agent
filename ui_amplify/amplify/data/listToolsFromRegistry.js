@@ -26,7 +26,10 @@ export function response(ctx) {
       description: item.description || '',
       version: item.version || '1.0.0',
       type: 'tool',
-      createdAt: item.created_at || item.createdAt || ''
+      createdAt: item.created_at || item.createdAt || '',
+      language: item.language || 'python',
+      lambda_function_name: item.lambda_function_name || '',
+      lambda_arn: item.lambda_arn || ''
     }));
   
   return tools;
