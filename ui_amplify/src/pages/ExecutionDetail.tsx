@@ -241,14 +241,7 @@ const ExecutionDetail: React.FC = () => {
                       {execution.status}
                     </Badge>
                     {execution.status === 'RUNNING' && (
-                      <>
-                        <Loader size="small" />
-                        {isRefreshing && (
-                          <Text fontSize="small" color="gray">
-                            Refreshing...
-                          </Text>
-                        )}
-                      </>
+                      <Loader size="small" />
                     )}
                   </Flex>
                 </View>
