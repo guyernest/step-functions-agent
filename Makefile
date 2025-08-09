@@ -40,13 +40,18 @@ help:
 	@echo "================================================="
 	@echo ""
 	@echo "Main targets:"
-	@echo "  help         - Display this help message"
-	@echo "  all          - Run all steps (clean, setup, build, test)"
-	@echo "  setup        - Set up all environments and create .env file"
-	@echo "  build        - Build all lambda functions"
-	@echo "  test         - Run tests for all components"
-	@echo "  clean        - Clean build artifacts and temporary files"
-	@echo "  deploy-prep  - Prepare for deployment (clean, setup, build, test)"
+	@echo "  help           - Display this help message"
+	@echo "  all            - Run all steps (clean, setup, build, test)"
+	@echo "  setup          - Set up all environments and create .env file"
+	@echo "  build          - Build all lambda functions"
+	@echo "  test           - Run tests for all components"
+	@echo "  venv           - Create Python virtual environment with uv"
+	@echo "  install-call-llm - Install call_llm dependencies with uv"
+	@echo "  test-call-llm  - Run call_llm tests with proper environment (uses .env file)"
+	@echo "  test-robustness- Run only the robustness improvement tests"
+	@echo "  clean          - Clean build artifacts and temporary files"
+	@echo "  clean-venv     - Clean and recreate virtual environment"
+	@echo "  deploy-prep    - Prepare for deployment (clean, setup, build, test)"
 	@echo ""
 	@echo "Language-specific targets:"
 	@echo "  setup-python      - Set up Python environment"
@@ -177,7 +182,7 @@ build-go:
 	done
 
 # Run tests
-test: test-python test-typescript test-rust test-java test-go
+test: test-python test-typescript test-rust test-java test-go test-call-llm
 
 test-python:
 	@echo "Running Python tests..."
@@ -187,6 +192,47 @@ test-python:
 			cd $$dir && python -m pytest tests/ && cd -; \
 		fi \
 	done
+
+# Virtual environment setup
+VENV := venv
+VENV_BIN := $(VENV)/bin
+VENV_PYTHON := $(shell pwd)/$(VENV)/bin/python
+VENV_PIP := $(VENV_BIN)/pip
+UV := uv
+
+# Create and setup virtual environment with uv
+venv:
+	@echo "Creating Python virtual environment with uv..."
+	@$(UV) venv $(VENV) --python 3.12
+	@echo "Virtual environment created. Activate with: source venv/bin/activate"
+
+# Install call_llm dependencies
+install-call-llm: venv
+	@echo "Installing call_llm dependencies with uv..."
+	@cd $(CALL_LLM_DIR) && \
+		$(UV) pip compile --python $(VENV_PYTHON) requirements.in -o requirements.txt && \
+		$(UV) pip compile --python $(VENV_PYTHON) requirements-dev.in -o requirements-dev.txt && \
+		$(UV) pip sync --python $(VENV_PYTHON) requirements-dev.txt
+
+# Test call_llm with proper environment setup
+test-call-llm: install-call-llm
+	@echo "Running call_llm tests with environment setup..."
+	@. $(VENV_BIN)/activate && \
+		export AWS_PROFILE=CGI-PoC && \
+		export USE_ENV_KEYS=true && \
+		echo "Python version: $$(python --version)" && \
+		echo "AWS Profile: $$AWS_PROFILE" && \
+		cd $(CALL_LLM_DIR) && \
+		python -m pytest tests/ --ignore=tests/test_gemini_handler.py -v
+
+# Test only the robustness improvements
+test-robustness: install-call-llm
+	@echo "Running robustness improvement tests..."
+	@. $(VENV_BIN)/activate && \
+		export AWS_PROFILE=CGI-PoC && \
+		export USE_ENV_KEYS=true && \
+		cd $(CALL_LLM_DIR) && \
+		python -m pytest tests/test_robustness_improvements.py -v
 
 test-typescript:
 	@echo "Running TypeScript tests..."
@@ -235,6 +281,12 @@ clean:
 	find . -type d -name "build" -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 	find . -type d -name ".venv" -exec rm -rf {} +
+
+# Clean and recreate virtual environment
+clean-venv:
+	@echo "Cleaning virtual environment..."
+	@rm -rf $(VENV)
+	@make venv
 
 # Prepare for deployment
 deploy-prep: clean setup build test

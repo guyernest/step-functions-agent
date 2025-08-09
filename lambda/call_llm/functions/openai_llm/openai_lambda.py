@@ -8,8 +8,10 @@ def lambda_handler(event, context):
         system = event.get('system')
         messages = event.get('messages', [])
         tools = event.get('tools', [])
+        model_id = event.get('model_id')  # Extract model_id from event
         
-        llm = OpenAILLM()
+        logger.info(f"Using model_id: {model_id}")
+        llm = OpenAILLM(model_id=model_id)
         assistant_message = llm.generate_response(system, messages, tools)
         
         messages.append(assistant_message["message"])
@@ -23,13 +25,13 @@ def lambda_handler(event, context):
             }
         }
     except Exception as e:
-        logger.error(e)
+        logger.error(f"Lambda handler error: {str(e)}")
         raise e # To trigger the retry logic in the caller
 
 if __name__ == "__main__":
         # Test event for GPT-4
     test_event_gpt4 = {
-        "model": "gpt-4o",
+        "model_id": "gpt-4o",
         "messages": [
             {"role": "user", "content": "What is 25*4+64*3?"}
         ],

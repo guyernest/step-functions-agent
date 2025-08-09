@@ -1,0 +1,6 @@
+# Development and testing dependencies
+-r requirements.in  # Include all production dependencies
+pytest>=8.0
+pytest-mock>=3.14
+pytest-env  # For setting environment variables in tests
+pytest-cov  # For test coverage reports

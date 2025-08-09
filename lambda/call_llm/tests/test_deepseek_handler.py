@@ -1,4 +1,5 @@
 import pytest
+import os
 
 from functions.openai_llm.deepseek_lambda import lambda_handler
 
@@ -56,6 +57,8 @@ def input_event():
     }
 
 def test_lambda_handler(input_event):
+    if not os.environ.get('DEEPSEEK_API_KEY'):
+        pytest.skip("DEEPSEEK_API_KEY not found in environment")
     response = lambda_handler(input_event, None)
     print(response)
 

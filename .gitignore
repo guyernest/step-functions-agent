@@ -58,3 +58,4 @@ node_modules
 amplify_outputs*
 amplifyconfiguration*
 notebooks/
+claude-instance/

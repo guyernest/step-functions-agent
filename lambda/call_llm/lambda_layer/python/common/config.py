@@ -45,9 +45,45 @@ def log_library_versions():
 
 def get_api_keys():
     """
-    Get LLM API keys from the centralized secrets manager.
+    Get LLM API keys from the centralized secrets manager or .env file.
     Uses environment-specific secret path for better isolation.
     """
+    # First, try to load from environment variables (for local testing with .env)
+    if os.environ.get("USE_ENV_KEYS", "false").lower() == "true":
+        print("DEBUG: Using API keys from environment variables")
+        try:
+            from dotenv import load_dotenv
+            
+            # Load .env file from project root
+            env_path = os.path.join(os.path.dirname(__file__), '../../../../../.env')
+            if os.path.exists(env_path):
+                load_dotenv(env_path)
+                print(f"DEBUG: Loaded .env file from {env_path}")
+            
+            keys = {}
+            # Map environment variables to the expected key names
+            env_mapping = {
+                "OPENAI_API_KEY": "OPENAI_API_KEY",
+                "ANTHROPIC_API_KEY": "ANTHROPIC_API_KEY",
+                "XAI_API_KEY": "XAI_API_KEY",
+                "DEEPSEEK_API_KEY": "DEEPSEEK_API_KEY",
+                "GOOGLE_API_KEY": "GOOGLE_API_KEY"
+            }
+            
+            for env_var, key_name in env_mapping.items():
+                value = os.environ.get(env_var)
+                if value:
+                    keys[key_name] = value
+                    print(f"DEBUG: Found {key_name} in environment")
+            
+            if keys:
+                print(f"DEBUG: Successfully loaded {len(keys)} keys from environment")
+                return keys
+            else:
+                print("DEBUG: No API keys found in environment, falling back to Secrets Manager")
+        except ImportError:
+            print("DEBUG: dotenv not installed, falling back to Secrets Manager")
+    
     try:
         # Log library versions for debugging
         log_library_versions()

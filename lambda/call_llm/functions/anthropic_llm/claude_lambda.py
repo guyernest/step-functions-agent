@@ -37,8 +37,10 @@ def lambda_handler(event, context):
         system = event.get('system')
         messages = event.get('messages', [])
         tools = event.get('tools', [])
+        model_id = event.get('model_id')  # Extract model_id from event
         
-        llm = ClaudeLLM()
+        logger.info(f"Using model_id: {model_id}")
+        llm = ClaudeLLM(model_id=model_id)
         assistant_message = llm.generate_response(system, messages, tools)
         
         # Update messages with assistant's response
@@ -59,7 +61,7 @@ def lambda_handler(event, context):
 if __name__ == "__main__":
     # Test event for Claude 3
     test_event_claude = {
-        "model": "claude-3-5-sonnet-20241022",
+        "model_id": "claude-3-5-sonnet-20241022",
         "system": "You are chatbot, who is helping people with answers to their questions.",
         "messages": [
             {

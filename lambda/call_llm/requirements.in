@@ -3,3 +3,6 @@ openai
 ai21>=2.13.0
 google-genai==0.6.0
 aws-lambda-powertools>=2.30.2  # AWS Lambda Powertools for Python
+boto3  # AWS SDK for Python
+python-dotenv  # For loading .env files in tests
+pydantic  # Data validation

@@ -1,17 +1,18 @@
 # call_llm/functions/anthropic/claude_handler.py
 import anthropic
 from anthropic.types import Message, TextBlock, ToolUseBlock
-from common.base_llm import BaseLLM
+from common.base_llm import BaseLLM, logger
 from common.config import get_api_keys
 
 from typing import List, Dict
 
-MODEL_ID = "claude-3-7-sonnet-latest"
+DEFAULT_MODEL_ID = "claude-3-7-sonnet-latest"
 
 class ClaudeLLM(BaseLLM):
-    def __init__(self):
+    def __init__(self, model_id: str = None):
         api_keys = get_api_keys()
         self.client = anthropic.Anthropic(api_key=api_keys["ANTHROPIC_API_KEY"])
+        self.model_id = model_id or DEFAULT_MODEL_ID
     
     def prepare_messages(self, system: str, messages: List[Dict], tools: List[Dict]) -> Dict:
 
@@ -111,7 +112,7 @@ class ClaudeLLM(BaseLLM):
             },
             "function_calls": [],
             "metadata": {
-                "model": MODEL_ID,
+                "model": self.model_id,
                 "stop_reason": message.stop_reason,
                 "stop_sequence": message.stop_sequence,
                 "type": message.type,
@@ -144,10 +145,14 @@ class ClaudeLLM(BaseLLM):
         return message_dict
     
     def generate_response(self, system: str, messages: List[Dict], tools: List[Dict]) -> Dict:
-        prepared_messages = self.prepare_messages(system, messages, tools)
-        print("prepared_messages", prepared_messages)
-        response = self.client.messages.create(
-            model=MODEL_ID,
-            **prepared_messages
-        )
-        return self.convert_to_json(response)
+        try:
+            prepared_messages = self.prepare_messages(system, messages, tools)
+            print("prepared_messages", prepared_messages)
+            response = self.client.messages.create(
+                model=self.model_id,
+                **prepared_messages
+            )
+            return self.convert_to_json(response)
+        except Exception as e:
+            logger.error(f"Claude API call failed with model {self.model_id}: {str(e)}")
+            return self.create_error_response(f"API call failed: {str(e)}", {"model": self.model_id})
