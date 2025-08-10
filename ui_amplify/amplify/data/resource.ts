@@ -47,6 +47,7 @@ const schema = a.schema({
     language: a.string(),
     lambda_function_name: a.string(),
     lambda_arn: a.string(),
+    inputSchema: a.string(),
   }),
   
   listAgentsFromRegistry: a

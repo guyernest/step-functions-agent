@@ -90,20 +90,26 @@ export default function ToolTest() {
     
     // Try to get input schema from tool
     const tool = tools.find(t => t.name === toolName);
+    console.log('Selected tool:', tool);
+    console.log('Tool inputSchema:', tool?.inputSchema);
+    
     if (tool) {
       // Parse input_schema if it exists (it might be stored as a string in DynamoDB)
       try {
         if (typeof tool.inputSchema === 'string') {
           const schema = JSON.parse(tool.inputSchema);
+          console.log('Parsed schema:', schema);
           setInputSchema(schema);
           // Generate example input based on schema
           const exampleInput = generateExampleFromSchema(schema);
           setTestInput(JSON.stringify(exampleInput, null, 2));
         } else if (tool.inputSchema) {
+          console.log('Schema is object:', tool.inputSchema);
           setInputSchema(tool.inputSchema);
           const exampleInput = generateExampleFromSchema(tool.inputSchema);
           setTestInput(JSON.stringify(exampleInput, null, 2));
         } else {
+          console.log('No input schema found for tool');
           setInputSchema(null);
           setTestInput('{}');
         }
@@ -285,25 +291,23 @@ export default function ToolTest() {
                   <Flex direction="column" gap="0.5rem">
                     {Object.entries(inputSchema.properties as Record<string, any>).map(([key, prop]) => (
                       <View key={key} padding="0.5rem" backgroundColor="rgba(0,0,0,0.02)" borderRadius="4px">
-                        <Flex justifyContent="space-between" alignItems="start">
-                          <Flex direction="column" gap="0.25rem">
-                            <Flex alignItems="center" gap="0.5rem">
-                              <Text fontWeight="bold">{key}</Text>
-                              {inputSchema.required?.includes(key) && (
-                                <Badge variation="error" size="small">Required</Badge>
-                              )}
-                              <Badge size="small">{prop.type}</Badge>
-                            </Flex>
-                            {prop.description && (
-                              <Text fontSize="small" color="gray">{prop.description}</Text>
+                        <Flex direction="column" gap="0.25rem">
+                          <Flex alignItems="center" gap="0.5rem">
+                            <Text fontWeight="bold">{key}</Text>
+                            {inputSchema.required?.includes(key) && (
+                              <Badge variation="error" size="small">Required</Badge>
                             )}
-                            {prop.default !== undefined && (
-                              <Text fontSize="small" color="gray">Default: {JSON.stringify(prop.default)}</Text>
-                            )}
-                            {prop.enum && (
-                              <Text fontSize="small" color="gray">Allowed values: {prop.enum.join(', ')}</Text>
-                            )}
+                            <Badge size="small">{prop.type}</Badge>
                           </Flex>
+                          {prop.description && (
+                            <Text fontSize="small" color="gray">{prop.description}</Text>
+                          )}
+                          {prop.default !== undefined && (
+                            <Text fontSize="small" color="gray">Default: {JSON.stringify(prop.default)}</Text>
+                          )}
+                          {prop.enum && (
+                            <Text fontSize="small" color="gray">Allowed values: {prop.enum.join(', ')}</Text>
+                          )}
                         </Flex>
                       </View>
                     ))}
