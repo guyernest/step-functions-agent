@@ -83,7 +83,6 @@ const ExecutionDetail: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [autoRefresh, setAutoRefresh] = useState(true)
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   useEffect(() => {
@@ -113,8 +112,6 @@ const ExecutionDetail: React.FC = () => {
     // Only show loading on initial load, not on refresh
     if (!isRefresh) {
       setLoading(true)
-    } else {
-      setIsRefreshing(true)
     }
     setError(null)
 
@@ -145,8 +142,6 @@ const ExecutionDetail: React.FC = () => {
       // Only set loading false if we were showing loading
       if (!isRefresh) {
         setLoading(false)
-      } else {
-        setIsRefreshing(false)
       }
     }
   }

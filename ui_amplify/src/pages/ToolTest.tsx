@@ -12,7 +12,6 @@ import {
   Alert,
   SelectField,
   TextAreaField,
-  Loader,
   Badge,
   Divider
 } from '@aws-amplify/ui-react';
@@ -72,9 +71,21 @@ export default function ToolTest() {
     try {
       setLoading(true);
       setError(null);
-      const response = await client.queries.listToolsFromRegistry();
+      const response = await client.queries.listToolsFromRegistry({});
       if (response.data) {
-        setTools(response.data);
+        // Filter out null/undefined values and map to ToolInfo type
+        const validTools = response.data
+          .filter((tool): tool is NonNullable<typeof tool> => tool !== null && tool !== undefined)
+          .map(tool => ({
+            id: tool.id,
+            name: tool.name,
+            description: tool.description || undefined,
+            lambda_arn: tool.lambda_arn || undefined,
+            lambda_function_name: tool.lambda_function_name || undefined,
+            language: tool.language || undefined,
+            inputSchema: tool.inputSchema || undefined,
+          }));
+        setTools(validTools);
       }
     } catch (err) {
       console.error('Error loading tools:', err);
@@ -189,11 +200,11 @@ export default function ToolTest() {
 
       if (response.data) {
         // Check if response.data is the string directly or has testToolExecution property
-        let dataToProcess = response.data;
+        let dataToProcess: any = response.data;
         
         // If response has a testToolExecution property, use that
         if (response.data && typeof response.data === 'object' && 'testToolExecution' in response.data) {
-          dataToProcess = response.data.testToolExecution;
+          dataToProcess = (response.data as any).testToolExecution;
         }
         
         // Now parse the data if it's a string
@@ -215,7 +226,8 @@ export default function ToolTest() {
         console.log('Setting test result:', result);
         setTestResult(result as TestResult);
       } else if (response.errors) {
-        setError(response.errors[0]?.message || 'Test execution failed');
+        const errorMessage = response.errors[0]?.message;
+        setError(typeof errorMessage === 'string' ? errorMessage : 'Test execution failed');
       }
     } catch (err) {
       console.error('Error testing tool:', err);
