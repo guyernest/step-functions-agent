@@ -4,6 +4,7 @@ import { listStepFunctionExecutions } from '../backend/function/listStepFunction
 import { getStepFunctionExecution } from '../backend/function/getStepFunctionExecution/resource';
 import { getExecutionStatistics } from '../backend/function/getExecutionStatistics/resource';
 import { getCloudWatchMetrics } from '../backend/function/getCloudWatchMetrics/resource';
+import { testToolExecution } from '../backend/function/testToolExecution/resource';
 
 const schema = a.schema({
   // Model for storing custom model costs
@@ -137,6 +138,16 @@ const schema = a.schema({
     })
     .returns(a.json())
     .handler(a.handler.function(getCloudWatchMetrics))
+    .authorization((allow) => [allow.authenticated()]),
+    
+  testToolExecution: a
+    .mutation()
+    .arguments({
+      toolName: a.string().required(),
+      testInput: a.string().required(),
+    })
+    .returns(a.json())
+    .handler(a.handler.function(testToolExecution))
     .authorization((allow) => [allow.authenticated()]),
 });
 

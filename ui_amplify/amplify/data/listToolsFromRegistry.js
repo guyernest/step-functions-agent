@@ -29,7 +29,8 @@ export function response(ctx) {
       createdAt: item.created_at || item.createdAt || '',
       language: item.language || 'python',
       lambda_function_name: item.lambda_function_name || '',
-      lambda_arn: item.lambda_arn || ''
+      lambda_arn: item.lambda_arn || '',
+      inputSchema: item.input_schema || null
     }));
   
   return tools;

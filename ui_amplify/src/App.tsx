@@ -9,6 +9,7 @@ import ApprovalDashboard from './pages/ApprovalDashboard'
 import Settings from './pages/Settings'
 import ExecutionDetail from './pages/ExecutionDetail'
 import Test from './pages/Test'
+import ToolTest from './pages/ToolTest'
 import Layout from './components/Layout'
 import Metrics from './pages/Metrics'
 import ModelCosts from './pages/ModelCosts'
@@ -34,6 +35,7 @@ function App() {
                 <Route path="/model-costs" element={<ModelCosts />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/test" element={<Test />} />
+                <Route path="/tool-test" element={<ToolTest />} />
               </Routes>
             </Layout>
           </Router>

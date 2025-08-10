@@ -6,6 +6,7 @@ import { listStepFunctionExecutions } from './backend/function/listStepFunctionE
 import { getStepFunctionExecution } from './backend/function/getStepFunctionExecution/resource';
 import { getExecutionStatistics } from './backend/function/getExecutionStatistics/resource';
 import { getCloudWatchMetrics } from './backend/function/getCloudWatchMetrics/resource';
+import { testToolExecution } from './backend/function/testToolExecution/resource';
 import { PolicyStatement, Effect, Policy } from 'aws-cdk-lib/aws-iam';
 import { aws_dynamodb } from 'aws-cdk-lib';
 
@@ -20,6 +21,7 @@ const backend = defineBackend({
   getStepFunctionExecution,
   getExecutionStatistics,
   getCloudWatchMetrics,
+  testToolExecution,
 });
 
 // Set the Cognito User Pool name
@@ -160,3 +162,15 @@ const dynamoDBMetricsPolicy = new PolicyStatement({
 });
 
 backend.getCloudWatchMetrics.resources.lambda.addToRolePolicy(dynamoDBMetricsPolicy);
+
+// Grant permissions to the testToolExecution Lambda
+const testToolExecutionPolicy = new PolicyStatement({
+  effect: Effect.ALLOW,
+  actions: [
+    'dynamodb:GetItem',
+    'lambda:InvokeFunction'
+  ],
+  resources: ['*']
+});
+
+backend.testToolExecution.resources.lambda.addToRolePolicy(testToolExecutionPolicy);

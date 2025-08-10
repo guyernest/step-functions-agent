@@ -250,6 +250,16 @@ const Registries: React.FC = () => {
                   {formatLanguageName(tool.language)}
                 </Badge>
                 <Badge size="small">{tool.version}</Badge>
+                <Button
+                  size="small"
+                  variation="link"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    navigate(`/tool-test?tool=${encodeURIComponent(toolName)}`)
+                  }}
+                >
+                  Test
+                </Button>
               </>
             )}
           </Flex>
