@@ -3,35 +3,26 @@ export function request(ctx) {
 }
 
 export function response(ctx) {
-  if (!ctx.result) {
+  if (!ctx.result || !ctx.result.items) {
     return [];
   }
   
-  if (!ctx.result.items) {
-    return [];
-  }
-  
-  var items = ctx.result.items;
-  
-  // Log first item to see structure (remove in production)
-  if (items.length > 0) {
-    console.log('First tool item:', JSON.stringify(items[0]));
-  }
-  
-  const tools = items
-    .filter(item => item.tool_name || item.name)
-    .map(item => ({
-      id: item.tool_name || item.name || '',
-      name: item.tool_name || item.name || '',
-      description: item.description || '',
-      version: item.version || '1.0.0',
-      type: 'tool',
-      createdAt: item.created_at || item.createdAt || '',
-      language: item.language || 'python',
-      lambda_function_name: item.lambda_function_name || '',
-      lambda_arn: item.lambda_arn || '',
-      inputSchema: item.input_schema || null
-    }));
-  
-  return tools;
+  return ctx.result.items
+    .filter(function(item) {
+      return item.tool_name || item.name;
+    })
+    .map(function(item) {
+      return {
+        id: item.tool_name || item.name || '',
+        name: item.tool_name || item.name || '',
+        description: item.description || '',
+        version: item.version || '1.0.0',
+        type: 'tool',
+        createdAt: item.created_at || item.createdAt || '',
+        language: item.language || 'python',
+        lambda_function_name: item.lambda_function_name || '',
+        lambda_arn: item.lambda_arn || '',
+        inputSchema: item.input_schema || null
+      };
+    });
 }

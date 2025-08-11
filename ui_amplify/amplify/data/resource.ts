@@ -50,6 +50,22 @@ const schema = a.schema({
     inputSchema: a.string(),
   }),
   
+  LLMModel: a.customType({
+    pk: a.string().required(),
+    provider: a.string().required(),
+    model_id: a.string().required(),
+    display_name: a.string().required(),
+    input_price_per_1k: a.float().required(),
+    output_price_per_1k: a.float().required(),
+    max_tokens: a.integer(),
+    supports_tools: a.boolean(),
+    supports_vision: a.boolean(),
+    is_active: a.string(),
+    is_default: a.boolean(),
+    created_at: a.string(),
+    updated_at: a.string(),
+  }),
+  
   listAgentsFromRegistry: a
     .query()
     .arguments({})
@@ -128,6 +144,22 @@ const schema = a.schema({
     )
     .authorization((allow) => [allow.authenticated()]),
   
+  updateAgentModel: a
+    .mutation()
+    .arguments({
+      agentName: a.string().required(),
+      version: a.string().required(),
+      modelId: a.string().required()
+    })
+    .returns(a.json())
+    .handler(
+      a.handler.custom({
+        dataSource: 'AgentRegistryDataSource',
+        entry: './updateAgentModel.js',
+      })
+    )
+    .authorization((allow) => [allow.authenticated()]),
+  
   getCloudWatchMetrics: a
     .query()
     .arguments({
@@ -149,6 +181,32 @@ const schema = a.schema({
     })
     .returns(a.json())
     .handler(a.handler.function(testToolExecution))
+    .authorization((allow) => [allow.authenticated()]),
+    
+  listLLMModels: a
+    .query()
+    .arguments({})
+    .returns(a.ref('LLMModel').array())
+    .handler(
+      a.handler.custom({
+        dataSource: 'LLMModelsDataSource',
+        entry: './listLLMModels.js',
+      })
+    )
+    .authorization((allow) => [allow.authenticated()]),
+    
+  listLLMModelsByProvider: a
+    .query()
+    .arguments({
+      provider: a.string().required(),
+    })
+    .returns(a.ref('LLMModel').array())
+    .handler(
+      a.handler.custom({
+        dataSource: 'LLMModelsDataSource',
+        entry: './listLLMModelsByProvider.js',
+      })
+    )
     .authorization((allow) => [allow.authenticated()]),
 });
 

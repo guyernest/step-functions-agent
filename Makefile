@@ -291,3 +291,8 @@ clean-venv:
 # Prepare for deployment
 deploy-prep: clean setup build test
 	@echo "Ready for deployment. Run 'cdk deploy' to deploy the stacks."
+
+# Populate LLM Models table
+populate-llm-models:
+	@echo "Populating LLM Models table..."
+	@AWS_PROFILE=CGI-PoC $(PYTHON) scripts/populate_llm_models.py

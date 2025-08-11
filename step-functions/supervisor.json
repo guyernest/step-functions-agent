@@ -23,7 +23,7 @@
         "Next": "Is done?",
         "Arguments": {
           "Payload": {
-            "model": "claude-3-haiku-20240307",
+            "model_id": "claude-3-haiku-20240307",
             "system": "\n        You are supervisor of a team of expert business analysts. \n        Your team job is to help users understand and analyze their internal data. \n        You have access to a set of tools, which are the different agents. \n        You must use them to complete the tasks. \n        When you see a user request that matches the capabilities of one of the agent, transfer the request to that agent, and don't try to solve it yourself. \n        Please note that the tool result of the agent can include two content parts, text and image. \n        When you are ready to reply to the user, please use the print_output tool to format the reply.\n        ",
             "messages": "{% $states.input.messages %}",
             "tools": [

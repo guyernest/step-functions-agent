@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'DynamoDB table for LLM Models management'
+
+Resources:
+  LLMModelsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: LLMModels-prod
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: provider
+          AttributeType: S
+        - AttributeName: is_active
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: provider-index
+          KeySchema:
+            - AttributeName: provider
+              KeyType: HASH
+            - AttributeName: is_active
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      Tags:
+        - Key: Environment
+          Value: prod
+        - Key: Application
+          Value: StepFunctionsAgent
+        - Key: Purpose
+          Value: LLMModelsRegistry
+
+Outputs:
+  TableName:
+    Description: Name of the LLM Models DynamoDB table
+    Value: !Ref LLMModelsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-table-name'
+  TableArn:
+    Description: ARN of the LLM Models DynamoDB table
+    Value: !GetAtt LLMModelsTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-table-arn'

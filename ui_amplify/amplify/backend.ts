@@ -8,7 +8,7 @@ import { getExecutionStatistics } from './backend/function/getExecutionStatistic
 import { getCloudWatchMetrics } from './backend/function/getCloudWatchMetrics/resource';
 import { testToolExecution } from './backend/function/testToolExecution/resource';
 import { PolicyStatement, Effect, Policy } from 'aws-cdk-lib/aws-iam';
-import { aws_dynamodb } from 'aws-cdk-lib';
+import { aws_dynamodb, RemovalPolicy } from 'aws-cdk-lib';
 
 /**
  * @see https://docs.amplify.aws/react/build-a-backend/ to add storage, functions, and more
@@ -60,7 +60,7 @@ const externalDataSourcesStack = backend.createStack('ExternalDataSources');
 const agentRegistryTableName = 'AgentRegistry-prod';
 const toolRegistryTableName = 'ToolRegistry-prod';
 
-// Reference the existing DynamoDB tables
+// Reference the existing external DynamoDB tables
 const agentRegistryTable = aws_dynamodb.Table.fromTableName(
   externalDataSourcesStack,
   'AgentRegistryTable',
@@ -73,6 +73,23 @@ const toolRegistryTable = aws_dynamodb.Table.fromTableName(
   toolRegistryTableName
 );
 
+// Create the LLMModels table as part of this stack
+const llmModelsTable = new aws_dynamodb.Table(externalDataSourcesStack, 'LLMModelsTable', {
+  tableName: 'LLMModels-prod',
+  partitionKey: { name: 'pk', type: aws_dynamodb.AttributeType.STRING },
+  billingMode: aws_dynamodb.BillingMode.PAY_PER_REQUEST,
+  pointInTimeRecovery: true,
+  removalPolicy: RemovalPolicy.RETAIN
+});
+
+// Add Global Secondary Index for provider queries
+llmModelsTable.addGlobalSecondaryIndex({
+  indexName: 'provider-index',
+  partitionKey: { name: 'provider', type: aws_dynamodb.AttributeType.STRING },
+  sortKey: { name: 'is_active', type: aws_dynamodb.AttributeType.STRING },
+  projectionType: aws_dynamodb.ProjectionType.ALL
+});
+
 // Add the tables as data sources to the GraphQL API
 backend.data.addDynamoDbDataSource(
   'AgentRegistryDataSource',
@@ -82,6 +99,11 @@ backend.data.addDynamoDbDataSource(
 backend.data.addDynamoDbDataSource(
   'ToolRegistryDataSource',
   toolRegistryTable
+);
+
+backend.data.addDynamoDbDataSource(
+  'LLMModelsDataSource',
+  llmModelsTable
 );
 
 // Grant Step Functions permissions to the startAgentExecution Lambda

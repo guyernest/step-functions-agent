@@ -82,7 +82,7 @@
           "system": "{% $system_prompt %}",
           "messages": "{% $states.input %}",
           "tools": "{% $tools %}",
-          "model": "{% $llm_model %}",
+          "model_id": "{% $llm_model %}",
           "temperature": "{% $parameters.temperature %}",
           "max_tokens": "{% $parameters.max_tokens %}"
         },

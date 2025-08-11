@@ -5,6 +5,7 @@ import {
   Text,
   Button,
   TextAreaField,
+  SelectField,
   Flex,
   Badge,
   Divider,
@@ -31,11 +32,39 @@ interface Tool {
   lambda_arn?: string
 }
 
+interface LLMModel {
+  pk: string
+  provider: string
+  model_id: string
+  display_name: string
+  input_price_per_1k: number
+  output_price_per_1k: number
+  max_tokens?: number | null
+  supports_tools?: boolean | null
+  supports_vision?: boolean | null
+  is_active?: string | null
+  is_default?: boolean | null
+}
+
 interface AgentDetailsModalProps {
   agent: any
   isOpen: boolean
   onClose: () => void
   onUpdate?: () => void
+}
+
+// Map agent registry provider names to LLMModels provider names
+// TODO: Long-term fix - update agent registry to use consistent provider names
+// Currently agent registry uses model family names (claude, gemini) while 
+// LLMModels table uses company names (anthropic, google)
+const PROVIDER_MAPPING: { [key: string]: string } = {
+  'claude': 'anthropic',
+  'gemini': 'google', 
+  'gpt': 'openai',
+  'openai': 'openai',
+  'amazon': 'amazon',
+  'xai': 'xai',
+  'deepseek': 'deepseek'
 }
 
 const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({ 
@@ -46,6 +75,10 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
 }) => {
   const [systemPrompt, setSystemPrompt] = useState('')
   const [originalSystemPrompt, setOriginalSystemPrompt] = useState('')
+  const [selectedModel, setSelectedModel] = useState('')
+  const [originalModel, setOriginalModel] = useState('')
+  const [availableModels, setAvailableModels] = useState<LLMModel[]>([])
+  const [loadingModels, setLoadingModels] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -58,11 +91,45 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
       setOriginalSystemPrompt(agent.systemPrompt)
     }
     
-    // Fetch tool details when agent changes
+    if (agent?.llmModel) {
+      setSelectedModel(agent.llmModel)
+      setOriginalModel(agent.llmModel)
+    }
+    
+    // Fetch tool details and models when agent changes
     if (agent && isOpen) {
       fetchToolDetails()
+      if (agent.llmProvider) {
+        // Map the agent's provider name to the LLMModels provider name
+        const mappedProvider = PROVIDER_MAPPING[agent.llmProvider] || agent.llmProvider
+        fetchAvailableModels(mappedProvider)
+      }
     }
   }, [agent, isOpen])
+
+  const fetchAvailableModels = async (provider: string) => {
+    setLoadingModels(true)
+    try {
+      const response = await client.queries.listLLMModelsByProvider({ provider })
+      
+      if (response.data) {
+        const models = response.data as LLMModel[]
+        // Sort models client-side: default first, then by name
+        const sortedModels = models.sort((a, b) => {
+          if (a.is_default !== b.is_default) {
+            return b.is_default ? 1 : -1
+          }
+          return a.display_name.localeCompare(b.display_name)
+        })
+        setAvailableModels(sortedModels)
+      }
+    } catch (error) {
+      console.error('Error fetching available models:', error)
+      setAvailableModels([])
+    } finally {
+      setLoadingModels(false)
+    }
+  }
 
   const fetchToolDetails = async () => {
     if (!agent?.tools || agent.tools.length === 0) return
@@ -108,16 +175,55 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
     setSaveSuccess(false)
     
     try {
-      const result = await client.mutations.updateAgentSystemPrompt({
-        agentName: agent.name,
-        version: agent.version || 'v1.0',
-        systemPrompt: systemPrompt
-      })
+      let hasChanges = false
+      let allSuccess = true
       
-      const responseData = result.data as any
-      if (responseData?.success) {
+      // Update system prompt if changed
+      if (systemPrompt !== originalSystemPrompt) {
+        const result = await client.mutations.updateAgentSystemPrompt({
+          agentName: agent.name,
+          version: agent.version || 'v1.0',
+          systemPrompt: systemPrompt
+        })
+        
+        // Parse the JSON string response
+        const responseData = typeof result.data === 'string' 
+          ? JSON.parse(result.data as string)
+          : result.data as any
+          
+        if (responseData?.success) {
+          setOriginalSystemPrompt(systemPrompt)
+          hasChanges = true
+        } else {
+          allSuccess = false
+          setSaveError(responseData?.error || 'Failed to update system prompt')
+        }
+      }
+      
+      // Update model if changed
+      if (selectedModel !== originalModel && selectedModel) {
+        const result = await client.mutations.updateAgentModel({
+          agentName: agent.name,
+          version: agent.version || 'v1.0',
+          modelId: selectedModel
+        })
+        
+        // Parse the JSON string response
+        const responseData = typeof result.data === 'string' 
+          ? JSON.parse(result.data as string)
+          : result.data as any
+          
+        if (responseData?.success) {
+          setOriginalModel(selectedModel)
+          hasChanges = true
+        } else {
+          allSuccess = false
+          setSaveError(responseData?.error || 'Failed to update model')
+        }
+      }
+      
+      if (hasChanges && allSuccess) {
         setSaveSuccess(true)
-        setOriginalSystemPrompt(systemPrompt)
         
         // Call onUpdate to refresh the parent data
         if (onUpdate) {
@@ -126,12 +232,10 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
         
         // Hide success message after 3 seconds
         setTimeout(() => setSaveSuccess(false), 3000)
-      } else {
-        setSaveError(responseData?.error || 'Failed to update system prompt')
       }
     } catch (error) {
-      console.error('Error updating system prompt:', error)
-      setSaveError('Failed to update system prompt')
+      console.error('Error updating agent:', error)
+      setSaveError('Failed to update agent configuration')
     } finally {
       setIsSaving(false)
     }
@@ -139,6 +243,7 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
 
   const handleReset = () => {
     setSystemPrompt(originalSystemPrompt)
+    setSelectedModel(originalModel)
     setSaveError(null)
     setSaveSuccess(false)
   }
@@ -259,13 +364,13 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
                           variation="primary"
                           onClick={handleSave}
                           isLoading={isSaving}
-                          isDisabled={systemPrompt === originalSystemPrompt}
+                          isDisabled={systemPrompt === originalSystemPrompt && selectedModel === originalModel}
                         >
                           Save Changes
                         </Button>
                         <Button
                           onClick={handleReset}
-                          isDisabled={systemPrompt === originalSystemPrompt}
+                          isDisabled={systemPrompt === originalSystemPrompt && selectedModel === originalModel}
                         >
                           Reset
                         </Button>
@@ -278,7 +383,73 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
                   value: 'configuration',
                   content: (
                     <View marginTop="20px">
-                      <Heading level={5}>Parameters</Heading>
+                      {saveSuccess && (
+                        <Alert variation="success" marginBottom="10px">
+                          Configuration updated successfully!
+                        </Alert>
+                      )}
+                      
+                      {saveError && (
+                        <Alert variation="error" marginBottom="10px">
+                          {saveError}
+                        </Alert>
+                      )}
+                      
+                      <Heading level={5}>Model Configuration</Heading>
+                      <View marginTop="10px" marginBottom="20px">
+                        <Flex direction="column" gap="10px">
+                          <Text fontSize="small">
+                            <strong>Provider:</strong> {agent.llmProvider || 'Not configured'}
+                          </Text>
+                          {loadingModels ? (
+                            <Loader size="small" />
+                          ) : availableModels.length > 0 ? (
+                            <SelectField
+                              label="Model"
+                              value={selectedModel}
+                              onChange={(e) => setSelectedModel(e.target.value)}
+                              descriptiveText="Select the LLM model for this agent"
+                            >
+                              {availableModels.map((model) => (
+                                <option key={model.pk} value={model.model_id}>
+                                  {model.display_name} 
+                                  {model.is_default && ' (Default)'}
+                                  {model.supports_tools && model.supports_vision && ' - Tools & Vision'}
+                                  {model.supports_tools && !model.supports_vision && ' - Tools'}
+                                  {!model.supports_tools && model.supports_vision && ' - Vision'}
+                                </option>
+                              ))}
+                            </SelectField>
+                          ) : (
+                            <Text fontSize="small" color="gray">
+                              No models available for provider: {agent.llmProvider}
+                            </Text>
+                          )}
+                        </Flex>
+                        
+                        {(selectedModel !== originalModel) && (
+                          <Flex gap="10px" marginTop="15px">
+                            <Button
+                              variation="primary"
+                              onClick={handleSave}
+                              isLoading={isSaving}
+                              isDisabled={selectedModel === originalModel}
+                            >
+                              Save Model Change
+                            </Button>
+                            <Button
+                              onClick={handleReset}
+                              isDisabled={selectedModel === originalModel}
+                            >
+                              Reset
+                            </Button>
+                          </Flex>
+                        )}
+                      </View>
+
+                      <Divider />
+
+                      <Heading level={5} marginTop="20px">Parameters</Heading>
                       <View backgroundColor="gray.10" padding="10px" borderRadius="5px" marginTop="10px">
                         <Flex direction="column" gap="5px">
                           {Object.entries(parameters).map(([key, value]) => (

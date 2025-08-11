@@ -88,7 +88,7 @@
                 }
               }
             ],
-            "model": "claude-3-5-sonnet-20241022"
+            "model_id": "claude-3-5-sonnet-20241022"
           },
           "FunctionName": "arn:aws:lambda:us-west-2:672915487120:function:CallGeminiLLM"
         },

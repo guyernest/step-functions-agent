@@ -88,7 +88,8 @@ class StepFunctionsGenerator:
                     "Next": "Load Tool Definitions",
                     "Assign": {
                         "agent_config": "{% $states.result.Item %}",
-                        "system_prompt": "{% $states.result.Item.system_prompt.S %}"
+                        "system_prompt": "{% $states.result.Item.system_prompt.S %}",
+                        "llm_model": "{% $states.result.Item.llm_model.S %}"
                     },
                     "Output": {
                         "messages": "{% $states.input.messages %}"
@@ -155,7 +156,8 @@ class StepFunctionsGenerator:
                         "Payload": {
                             "system": "{% $system_prompt %}",
                             "messages": "{% $states.input.messages %}",
-                            "tools": "{% $tools %}"
+                            "tools": "{% $tools %}",
+                            "model_id": "{% $llm_model %}"
                         },
                         "FunctionName": llm_arn
                     },
