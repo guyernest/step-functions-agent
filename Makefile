@@ -52,6 +52,7 @@ help:
 	@echo "  clean          - Clean build artifacts and temporary files"
 	@echo "  clean-venv     - Clean and recreate virtual environment"
 	@echo "  deploy-prep    - Prepare for deployment (clean, setup, build, test)"
+	@echo "  populate-llm-models - Populate LLM Models DynamoDB table with provider data"
 	@echo ""
 	@echo "Language-specific targets:"
 	@echo "  setup-python      - Set up Python environment"
@@ -295,4 +296,4 @@ deploy-prep: clean setup build test
 # Populate LLM Models table
 populate-llm-models:
 	@echo "Populating LLM Models table..."
-	@AWS_PROFILE=CGI-PoC $(PYTHON) scripts/populate_llm_models.py
+	@$(PYTHON) scripts/populate_llm_models.py

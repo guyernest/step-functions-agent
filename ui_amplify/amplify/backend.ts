@@ -7,6 +7,7 @@ import { getStepFunctionExecution } from './backend/function/getStepFunctionExec
 import { getExecutionStatistics } from './backend/function/getExecutionStatistics/resource';
 import { getCloudWatchMetrics } from './backend/function/getCloudWatchMetrics/resource';
 import { testToolExecution } from './backend/function/testToolExecution/resource';
+import { updateProviderAPIKey } from './backend/function/updateProviderAPIKey/resource';
 import { PolicyStatement, Effect, Policy } from 'aws-cdk-lib/aws-iam';
 import { aws_dynamodb, RemovalPolicy } from 'aws-cdk-lib';
 
@@ -22,6 +23,7 @@ const backend = defineBackend({
   getExecutionStatistics,
   getCloudWatchMetrics,
   testToolExecution,
+  updateProviderAPIKey,
 });
 
 // Set the Cognito User Pool name
@@ -196,3 +198,17 @@ const testToolExecutionPolicy = new PolicyStatement({
 });
 
 backend.testToolExecution.resources.lambda.addToRolePolicy(testToolExecutionPolicy);
+
+// Grant Secrets Manager permissions to the updateProviderAPIKey Lambda
+const secretsManagerPolicy = new PolicyStatement({
+  effect: Effect.ALLOW,
+  actions: [
+    'secretsmanager:GetSecretValue',
+    'secretsmanager:PutSecretValue',
+    'secretsmanager:CreateSecret',
+    'secretsmanager:UpdateSecret'
+  ],
+  resources: ['arn:aws:secretsmanager:*:*:secret:/ai-agent/llm-secrets/prod/*']
+});
+
+backend.updateProviderAPIKey.resources.lambda.addToRolePolicy(secretsManagerPolicy);

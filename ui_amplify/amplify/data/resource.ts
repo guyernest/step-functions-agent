@@ -5,6 +5,7 @@ import { getStepFunctionExecution } from '../backend/function/getStepFunctionExe
 import { getExecutionStatistics } from '../backend/function/getExecutionStatistics/resource';
 import { getCloudWatchMetrics } from '../backend/function/getCloudWatchMetrics/resource';
 import { testToolExecution } from '../backend/function/testToolExecution/resource';
+import { updateProviderAPIKey } from '../backend/function/updateProviderAPIKey/resource';
 
 const schema = a.schema({
   // Model for storing custom model costs
@@ -207,6 +208,74 @@ const schema = a.schema({
         entry: './listLLMModelsByProvider.js',
       })
     )
+    .authorization((allow) => [allow.authenticated()]),
+    
+  addLLMModel: a
+    .mutation()
+    .arguments({
+      provider: a.string().required(),
+      model_id: a.string().required(),
+      display_name: a.string().required(),
+      input_price_per_1k: a.float().required(),
+      output_price_per_1k: a.float().required(),
+      max_tokens: a.integer(),
+      supports_tools: a.boolean(),
+      supports_vision: a.boolean(),
+      is_default: a.boolean()
+    })
+    .returns(a.json())
+    .handler(
+      a.handler.custom({
+        dataSource: 'LLMModelsDataSource',
+        entry: './addLLMModel.js',
+      })
+    )
+    .authorization((allow) => [allow.authenticated()]),
+    
+  updateLLMModel: a
+    .mutation()
+    .arguments({
+      pk: a.string().required(),
+      display_name: a.string(),
+      input_price_per_1k: a.float(),
+      output_price_per_1k: a.float(),
+      max_tokens: a.integer(),
+      supports_tools: a.boolean(),
+      supports_vision: a.boolean(),
+      is_active: a.string(),
+      is_default: a.boolean()
+    })
+    .returns(a.json())
+    .handler(
+      a.handler.custom({
+        dataSource: 'LLMModelsDataSource',
+        entry: './updateLLMModel.js',
+      })
+    )
+    .authorization((allow) => [allow.authenticated()]),
+    
+  deleteLLMModel: a
+    .mutation()
+    .arguments({
+      pk: a.string().required()
+    })
+    .returns(a.json())
+    .handler(
+      a.handler.custom({
+        dataSource: 'LLMModelsDataSource',
+        entry: './deleteLLMModel.js',
+      })
+    )
+    .authorization((allow) => [allow.authenticated()]),
+    
+  updateProviderAPIKey: a
+    .mutation()
+    .arguments({
+      provider: a.string().required(),
+      apiKey: a.string().required()
+    })
+    .returns(a.json())
+    .handler(a.handler.function(updateProviderAPIKey))
     .authorization((allow) => [allow.authenticated()]),
 });
 

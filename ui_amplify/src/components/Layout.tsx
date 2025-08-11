@@ -26,7 +26,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, signOut }) => {
     { path: '/history', label: 'History', icon: MdHistory },
     { path: '/approvals', label: 'Approvals', icon: MdApproval },
     { path: '/metrics', label: 'Metrics', icon: MdInsights },
-    { path: '/model-costs', label: 'Model Costs', icon: MdAttachMoney },
+    { path: '/model-costs', label: 'Model Management', icon: MdAttachMoney },
     { path: '/tool-test', label: 'Tool Test', icon: MdBugReport },
     { path: '/settings', label: 'Settings', icon: MdSettings },
   ]

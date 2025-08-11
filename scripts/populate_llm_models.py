@@ -10,13 +10,15 @@ from decimal import Decimal
 from typing import List, Dict, Any
 import os
 
-# Initialize DynamoDB client with profile if set
-session_kwargs = {'region_name': 'eu-west-1'}
+# Initialize DynamoDB client
+# Use AWS_DEFAULT_REGION if set, otherwise default to us-west-2
+region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
+
 if os.environ.get('AWS_PROFILE'):
-    session = boto3.Session(profile_name=os.environ['AWS_PROFILE'], region_name='eu-west-1')
+    session = boto3.Session(profile_name=os.environ['AWS_PROFILE'], region_name=region)
     dynamodb = session.resource('dynamodb')
 else:
-    dynamodb = boto3.resource('dynamodb', **session_kwargs)
+    dynamodb = boto3.resource('dynamodb', region_name=region)
 
 table = dynamodb.Table('LLMModels-prod')
 
@@ -45,6 +47,17 @@ def create_model_item(provider: str, model_id: str, display_name: str,
 # Define all models with their configurations
 MODELS_DATA = [
     # Anthropic models
+    {
+        'provider': 'anthropic',
+        'model_id': 'claude-3-7-sonnet-latest',
+        'display_name': 'Claude 3.7 Sonnet',
+        'input_price': 3.00,
+        'output_price': 15.00,
+        'max_tokens': 8192,
+        'supports_tools': True,
+        'supports_vision': True,
+        'is_default': True
+    },
     {
         'provider': 'anthropic',
         'model_id': 'claude-3-5-sonnet-20241022',
