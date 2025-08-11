@@ -52,8 +52,6 @@ const PROVIDER_DISPLAY_NAMES: { [key: string]: string } = {
 }
 
 const ModelCosts: React.FC = () => {
-  const { user } = useAuthenticator()
-  const [models, setModels] = useState<LLMModel[]>([])
   const [groupedModels, setGroupedModels] = useState<GroupedModels>({})
   const [loading, setLoading] = useState(true)
   const [editingModel, setEditingModel] = useState<string | null>(null)
@@ -68,7 +66,7 @@ const ModelCosts: React.FC = () => {
     setLoading(true)
     try {
       // Fetch models from LLMModels table
-      const response = await client.queries.listLLMModels()
+      const response = await client.queries.listLLMModels({})
       
       if (response.data) {
         const llmModels = response.data as LLMModel[]
@@ -83,8 +81,6 @@ const ModelCosts: React.FC = () => {
           }
           return a.display_name.localeCompare(b.display_name)
         })
-        
-        setModels(sortedModels)
         
         // Group models by provider and sort within each group
         const grouped = sortedModels.reduce((acc, model) => {
@@ -109,7 +105,6 @@ const ModelCosts: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching model costs:', error)
-      setModels([])
       setGroupedModels({})
     } finally {
       setLoading(false)
