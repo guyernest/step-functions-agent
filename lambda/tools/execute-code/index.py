@@ -15,7 +15,9 @@ try:
 except ValueError:
     raise ValueError("E2B API keys not found in Secrets Manager")
 
-IMAGE_BUCKET_NAME = os.environ.get('IMAGE_BUCKET_NAME', 'mlguy-mlops-courses')
+IMAGE_BUCKET_NAME = os.environ.get('IMAGE_BUCKET_NAME')
+if not IMAGE_BUCKET_NAME:
+    raise ValueError("IMAGE_BUCKET_NAME environment variable is required but not set")
 
 def code_interpret(code):
     logger.info("Starting code interpretation")

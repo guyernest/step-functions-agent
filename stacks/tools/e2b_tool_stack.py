@@ -8,6 +8,7 @@ from aws_cdk import (
     aws_iam as iam,
     aws_lambda as _lambda,
     aws_lambda_python_alpha as _lambda_python,
+    aws_s3 as s3,
     RemovalPolicy
 )
 from constructs import Construct
@@ -39,6 +40,9 @@ class E2BToolStack(Stack):
         # Import shared infrastructure
         self._import_shared_resources()
         
+        # Create S3 bucket for code execution data
+        self._create_s3_bucket()
+        
         # Create tool-specific secrets
         self._create_execute_code_secrets()
         
@@ -63,6 +67,51 @@ class E2BToolStack(Stack):
         # Import shared LLM layer ARN
         self.shared_llm_layer_arn = Fn.import_value(
             f"SharedLLMLayerArn-{self.env_name}"
+        )
+
+    def _create_s3_bucket(self):
+        """Create S3 bucket for storing code execution outputs (charts, images, etc.)"""
+        
+        # Get AWS account ID and region for bucket naming
+        account_id = self.account
+        region = self.region
+        
+        # Create bucket with the specified naming template: execute-code-data-{account-id}-{region}
+        bucket_name = f"execute-code-data-{account_id}-{region}"
+        
+        self.execute_code_bucket = s3.Bucket(
+            self,
+            "ExecuteCodeDataBucket",
+            bucket_name=bucket_name,
+            # Security settings
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            
+            # Lifecycle management
+            lifecycle_rules=[
+                s3.LifecycleRule(
+                    id="delete-old-objects",
+                    enabled=True,
+                    expiration=Duration.days(30)  # Delete objects after 30 days
+                )
+            ],
+            
+            # Versioning and encryption
+            versioned=False,  # No versioning needed for temporary charts
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            
+            # CORS for presigned URLs
+            cors=[
+                s3.CorsRule(
+                    allowed_headers=["*"],
+                    allowed_methods=[s3.HttpMethods.GET],
+                    allowed_origins=["*"],
+                    max_age=3600
+                )
+            ],
+            
+            # Cleanup policy
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True
         )
 
     def _create_execute_code_secrets(self):
@@ -150,7 +199,7 @@ class E2BToolStack(Stack):
             )
         )
 
-        # Grant access to S3 for image uploads (if needed)
+        # Grant access to the specific S3 bucket for code execution outputs
         self.execute_code_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
@@ -159,7 +208,9 @@ class E2BToolStack(Stack):
                     "s3:GetObject",
                     "s3:PutObjectAcl"
                 ],
-                resources=["arn:aws:s3:::*/*"]
+                resources=[
+                    f"{self.execute_code_bucket.bucket_arn}/*"
+                ]
             )
         )
 
@@ -181,7 +232,8 @@ class E2BToolStack(Stack):
             environment={
                 "ENVIRONMENT": self.env_name,
                 "POWERTOOLS_SERVICE_NAME": "execute-code-tool",
-                "POWERTOOLS_LOG_LEVEL": "INFO"
+                "POWERTOOLS_LOG_LEVEL": "INFO",
+                "IMAGE_BUCKET_NAME": self.execute_code_bucket.bucket_name
             },
             layers=[
                 _lambda.LayerVersion.from_layer_version_arn(
@@ -231,4 +283,13 @@ class E2BToolStack(Stack):
             value=self.execute_code_lambda.function_arn,
             export_name=f"ExecuteCodeLambdaArn-{self.env_name}",
             description="ARN of the Execute Code Lambda function"
+        )
+        
+        # Export Execute Code S3 Bucket Name
+        CfnOutput(
+            self,
+            "ExecuteCodeBucketName",
+            value=self.execute_code_bucket.bucket_name,
+            export_name=f"ExecuteCodeBucketName-{self.env_name}",
+            description="Name of the S3 bucket for code execution outputs"
         )
