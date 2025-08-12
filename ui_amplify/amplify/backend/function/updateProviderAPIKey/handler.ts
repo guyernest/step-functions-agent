@@ -1,6 +1,8 @@
 import { SecretsManagerClient, PutSecretValueCommand, GetSecretValueCommand, CreateSecretCommand, ResourceNotFoundException } from '@aws-sdk/client-secrets-manager';
 import { AppSyncResolverHandler } from 'aws-lambda';
 
+declare const process: { env: { SECRET_PREFIX?: string } };
+
 const secretsManager = new SecretsManagerClient({});
 const SECRET_PREFIX = process.env.SECRET_PREFIX || '/ai-agent/llm-secrets/prod';
 
