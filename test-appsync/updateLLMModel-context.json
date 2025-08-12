@@ -1,0 +1,7 @@
+{
+  "arguments": {
+    "pk": "openai#gpt-4o",
+    "input_price_per_1k": 2.75,
+    "output_price_per_1k": 11.0
+  }
+}
