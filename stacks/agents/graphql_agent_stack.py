@@ -13,13 +13,13 @@ class GraphQLAgentStack(BaseAgentStack):
     - Minimal code (~20 lines vs ~340 lines)
     - Uses BaseAgentStack for common patterns
     - Configurable tool list per agent
-    - Uses Claude LLM for GraphQL tasks
+    - Uses Amazon Nova (Bedrock) LLM for GraphQL tasks
     """
 
     def __init__(self, scope: Construct, construct_id: str, env_name: str = "prod", **kwargs) -> None:
         
-        # Import Claude LLM ARN from shared stack
-        claude_lambda_arn = Fn.import_value(f"SharedClaudeLambdaArn-{env_name}")
+        # Import Bedrock (Nova) LLM ARN from shared stack
+        bedrock_lambda_arn = Fn.import_value(f"SharedBedrockLambdaArn-{env_name}")
         
         # Import GraphQL interface Lambda ARN
         graphql_lambda_arn = Fn.import_value(f"GraphQLInterfaceLambdaArn-{env_name}")
@@ -49,7 +49,7 @@ class GraphQLAgentStack(BaseAgentStack):
             scope,
             construct_id,
             agent_name="graphql-agent",
-            llm_arn=claude_lambda_arn,
+            llm_arn=bedrock_lambda_arn,
             tool_configs=tool_configs,
             env_name=env_name,
             system_prompt="You are an expert GraphQL assistant with deep knowledge of GraphQL schemas, queries, mutations, and subscriptions. Help users interact with GraphQL APIs by analyzing schemas, generating queries, and executing GraphQL operations. Always use the execute_graphql_query tool to execute queries against GraphQL endpoints and generate_query_prompt tool to help construct complex queries.",
@@ -83,8 +83,8 @@ Your primary responsibilities:
 
 Always use proper GraphQL syntax and follow best practices for query construction. Use the execute_graphql_query tool to execute queries and the generate_query_prompt tool to help users construct complex operations.""",
             "description": "GraphQL query generation, schema analysis, and API integration agent",
-            "llm_provider": "claude",
-            "llm_model": "claude-3-5-sonnet-20241022",
+            "llm_provider": "amazon",
+            "llm_model": "amazon.nova-pro-v1:0",
             "tools": [
                 {"tool_name": "execute_graphql_query", "enabled": True, "version": "latest"},
                 {"tool_name": "generate_query_prompt", "enabled": True, "version": "latest"}
