@@ -2,7 +2,7 @@ export function request(ctx) {
   var pk = ctx.arguments.pk;
   var updateExpression = 'SET updated_at = :updated_at';
   var expressionValues = {
-    ':updated_at': { S: new Date().toISOString() }
+    ':updated_at': { S: util.time.nowISO8601() }
   };
   
   // Build update expression dynamically based on provided arguments

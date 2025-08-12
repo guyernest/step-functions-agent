@@ -9,7 +9,7 @@ export function request(ctx) {
   var supportsVision = ctx.arguments.supports_vision;
   var isDefault = ctx.arguments.is_default;
   
-  var timestamp = new Date().toISOString();
+  var timestamp = util.time.nowISO8601();
   var pk = provider + '#' + modelId;
   
   return {
@@ -18,6 +18,7 @@ export function request(ctx) {
       pk: { S: pk }
     },
     attributeValues: {
+      pk: { S: pk },
       provider: { S: provider },
       model_id: { S: modelId },
       display_name: { S: displayName },
