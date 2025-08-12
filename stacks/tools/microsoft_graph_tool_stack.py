@@ -15,7 +15,6 @@ except ImportError:
     _lambda_python = None
 
 from constructs import Construct
-from .base_tool_construct import MultiToolConstruct
 from ..shared.tool_definitions import AdvancedTools
 import os
 import json
@@ -96,12 +95,16 @@ class MicrosoftGraphToolStack(Stack):
             ]
         )
         
-        # Grant access to secrets
+        # Grant access to both legacy and consolidated secrets
         graph_lambda_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 actions=["secretsmanager:GetSecretValue"],
-                resources=[self.microsoft_graph_secret.secret_arn]
+                resources=[
+                    self.microsoft_graph_secret.secret_arn,  # Legacy secret
+                    f"arn:aws:secretsmanager:{self.region}:{self.account}:secret:/ai-agent/tool-secrets/{self.env_name}*",  # Consolidated secret
+                    f"arn:aws:secretsmanager:{self.region}:{self.account}:secret:/ai-agent/MicrosoftGraphAPISecrets*"  # Another legacy path
+                ]
             )
         )
         
@@ -119,7 +122,11 @@ class MicrosoftGraphToolStack(Stack):
                 architecture=_lambda.Architecture.ARM_64,
                 timeout=Duration.minutes(5),
                 memory_size=512,
-                role=graph_lambda_role
+                role=graph_lambda_role,
+                environment={
+                    "ENVIRONMENT": self.env_name,
+                    "CONSOLIDATED_SECRET_NAME": f"/ai-agent/tool-secrets/{self.env_name}"
+                }
             )
         else:
             self.microsoft_graph_lambda = _lambda.Function(
@@ -133,7 +140,11 @@ class MicrosoftGraphToolStack(Stack):
                 handler="index.lambda_handler",
                 timeout=Duration.minutes(5),
                 memory_size=512,
-                role=graph_lambda_role
+                role=graph_lambda_role,
+                environment={
+                    "ENVIRONMENT": self.env_name,
+                    "CONSOLIDATED_SECRET_NAME": f"/ai-agent/tool-secrets/{self.env_name}"
+                }
             )
         
         self.microsoft_graph_lambda.apply_removal_policy(RemovalPolicy.DESTROY)
@@ -171,15 +182,16 @@ class MicrosoftGraphToolStack(Stack):
             }
         ]
         
-        # Use MultiToolConstruct to register Microsoft Graph tools
-        MultiToolConstruct(
+        # Use BaseToolConstruct directly to register Microsoft Graph tools with secret requirements
+        from .base_tool_construct import BaseToolConstruct
+        
+        BaseToolConstruct(
             self,
             "MicrosoftGraphToolsRegistry",
-            tool_groups=[
-                {
-                    "tool_specs": microsoft_tools,
-                    "lambda_function": self.microsoft_graph_lambda
-                }
-            ],
-            env_name=self.env_name
+            tool_specs=microsoft_tools,
+            lambda_function=self.microsoft_graph_lambda,
+            env_name=self.env_name,
+            secret_requirements={
+                "microsoft-graph": ["TENANT_ID", "CLIENT_ID", "CLIENT_SECRET"]
+            }
         )

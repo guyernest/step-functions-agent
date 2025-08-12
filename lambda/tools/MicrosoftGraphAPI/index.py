@@ -8,7 +8,7 @@ from typing import Optional
 # Imports for Lambda
 from aws_lambda_powertools import Logger
 from aws_lambda_powertools import Tracer
-from aws_lambda_powertools.utilities import parameters
+from tool_secrets import get_tool_secrets, get_legacy_secret
 
 # Initialize the logger and tracer
 logger = Logger(level="INFO")
@@ -17,10 +17,29 @@ tracer = Tracer()
 # Reading the secrets from the AWS Secrets Manager
 # Initialize these with your values from Azure AD
 
-keys = json.loads(parameters.get_secret("/ai-agent/MicrosoftGraphAPISecrets"))
-tenant_id = keys["TENANT_ID"]
-client_id = keys["CLIENT_ID"]
-client_secret = keys["CLIENT_SECRET"]
+# Try consolidated secret first, then fall back to legacy
+try:
+    logger.info("Retrieving Microsoft Graph credentials from consolidated tool secrets")
+    keys = get_tool_secrets('microsoft-graph')
+    
+    if keys and all(k in keys for k in ['TENANT_ID', 'CLIENT_ID', 'CLIENT_SECRET']):
+        tenant_id = keys["TENANT_ID"]
+        client_id = keys["CLIENT_ID"]
+        client_secret = keys["CLIENT_SECRET"]
+        logger.info("Microsoft Graph credentials retrieved from consolidated secret")
+    else:
+        # Fall back to legacy secret
+        logger.info("Falling back to legacy secret")
+        keys = get_legacy_secret("/ai-agent/MicrosoftGraphAPISecrets")
+        if not keys:
+            keys = get_legacy_secret("/ai-agent/tools/microsoft-graph/prod")
+        tenant_id = keys["TENANT_ID"]
+        client_id = keys["CLIENT_ID"]
+        client_secret = keys["CLIENT_SECRET"]
+        logger.info("Microsoft Graph credentials retrieved from legacy secret")
+except Exception as e:
+    logger.error(f"Failed to retrieve Microsoft Graph credentials: {e}")
+    raise
 # Define the GraphAPIClient class
 
 class GraphAPIClient:

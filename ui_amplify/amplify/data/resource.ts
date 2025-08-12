@@ -6,6 +6,9 @@ import { getExecutionStatistics } from '../backend/function/getExecutionStatisti
 import { getCloudWatchMetrics } from '../backend/function/getCloudWatchMetrics/resource';
 import { testToolExecution } from '../backend/function/testToolExecution/resource';
 import { updateProviderAPIKey } from '../backend/function/updateProviderAPIKey/resource';
+import { listToolSecrets } from '../backend/function/listToolSecrets/resource';
+import { getToolSecretValues } from '../backend/function/getToolSecretValues/resource';
+import { updateToolSecrets } from '../backend/function/updateToolSecrets/resource';
 
 const schema = a.schema({
   // Model for storing custom model costs
@@ -276,6 +279,30 @@ const schema = a.schema({
     })
     .returns(a.json())
     .handler(a.handler.function(updateProviderAPIKey))
+    .authorization((allow) => [allow.authenticated()]),
+    
+  listToolSecrets: a
+    .query()
+    .arguments({})
+    .returns(a.json())
+    .handler(a.handler.function(listToolSecrets))
+    .authorization((allow) => [allow.authenticated()]),
+    
+  getToolSecretValues: a
+    .query()
+    .arguments({})
+    .returns(a.json())
+    .handler(a.handler.function(getToolSecretValues))
+    .authorization((allow) => [allow.authenticated()]),
+    
+  updateToolSecrets: a
+    .mutation()
+    .arguments({
+      toolName: a.string().required(),
+      secrets: a.json().required()
+    })
+    .returns(a.json())
+    .handler(a.handler.function(updateToolSecrets))
     .authorization((allow) => [allow.authenticated()]),
 });
 

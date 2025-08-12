@@ -3,17 +3,41 @@ import boto3
 import uuid
 import os
 from aws_lambda_powertools import Logger
-from aws_lambda_powertools.utilities import parameters
 from e2b_code_interpreter import Sandbox
+from tool_secrets import get_secret_value, get_legacy_secret
 
 # Initialize Powertools
 logger = Logger()
 
-try:
-    # Use the new tool-specific secret path
-    E2B_API_KEY = json.loads(parameters.get_secret("/ai-agent/tools/execute-code/prod"))["E2B_API_KEY"]
-except ValueError:
-    raise ValueError("E2B API keys not found in Secrets Manager")
+# Initialize E2B API key from consolidated secret
+E2B_API_KEY = None
+
+def initialize_api_key():
+    global E2B_API_KEY
+    try:
+        # First try to get from consolidated secret
+        logger.info("Retrieving E2B API key from consolidated tool secrets")
+        api_key = get_secret_value('execute-code', 'E2B_API_KEY')
+        
+        if api_key and not api_key.startswith('PLACEHOLDER_'):
+            E2B_API_KEY = api_key
+            logger.info("E2B API key retrieved from consolidated secret successfully")
+        else:
+            # Fallback to legacy secret for backward compatibility
+            logger.info("Falling back to legacy secret")
+            legacy_secrets = get_legacy_secret("/ai-agent/tools/execute-code/prod")
+            E2B_API_KEY = legacy_secrets.get("E2B_API_KEY")
+            
+            if not E2B_API_KEY:
+                raise ValueError("E2B API key not found in either consolidated or legacy secret")
+            logger.info("E2B API key retrieved from legacy secret")
+            
+    except Exception as e:
+        logger.error(f"Failed to initialize E2B API key: {e}")
+        raise ValueError(f"E2B API keys not found in Secrets Manager: {e}")
+
+# Initialize the API key at module load time
+initialize_api_key()
 
 IMAGE_BUCKET_NAME = os.environ.get('IMAGE_BUCKET_NAME')
 if not IMAGE_BUCKET_NAME:

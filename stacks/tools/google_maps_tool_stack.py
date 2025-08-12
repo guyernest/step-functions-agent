@@ -138,7 +138,7 @@ class GoogleMapsToolStack(Stack):
             ]
         )
 
-        # Grant access to Google Maps secrets
+        # Grant access to both legacy and consolidated secrets
         lambda_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
@@ -146,7 +146,8 @@ class GoogleMapsToolStack(Stack):
                     "secretsmanager:GetSecretValue"
                 ],
                 resources=[
-                    self.google_maps_secret.secret_arn
+                    self.google_maps_secret.secret_arn,  # Legacy secret
+                    f"arn:aws:secretsmanager:{self.region}:{self.account}:secret:/ai-agent/tool-secrets/{self.env_name}*"  # Consolidated secret
                 ]
             )
         )
@@ -179,7 +180,8 @@ class GoogleMapsToolStack(Stack):
             tracing=_lambda.Tracing.ACTIVE,
             environment={
                 "ENVIRONMENT": self.env_name,
-                "GOOGLE_MAPS_SECRET_NAME": self.google_maps_secret.secret_name,
+                "GOOGLE_MAPS_SECRET_NAME": self.google_maps_secret.secret_name,  # For backward compatibility
+                "CONSOLIDATED_SECRET_NAME": f"/ai-agent/tool-secrets/{self.env_name}",
                 "LOG_LEVEL": "INFO"
             },
             bundling={
@@ -207,13 +209,16 @@ class GoogleMapsToolStack(Stack):
             for tool_def in tool_definitions
         ]
         
-        # Use BaseToolConstruct for registration
+        # Use BaseToolConstruct for registration with secret requirements
         BaseToolConstruct(
             self,
             "GoogleMapsTools",
             tool_specs=tool_specs,
             lambda_function=self.google_maps_lambda,
-            env_name=self.env_name
+            env_name=self.env_name,
+            secret_requirements={
+                "google-maps": ["GOOGLE_MAPS_API_KEY"]
+            }
         )
 
     def _create_stack_exports(self):

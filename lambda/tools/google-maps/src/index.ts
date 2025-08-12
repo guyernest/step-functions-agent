@@ -1,8 +1,8 @@
 import { Handler } from 'aws-lambda';
-import { getSecret } from '@aws-lambda-powertools/parameters/secrets';
 import { Logger } from '@aws-lambda-powertools/logger';
 import { URL } from 'url';
 import fetch from 'node-fetch'
+import { getToolSecrets, getLegacySecret } from './toolSecrets';
 // import { Tracer } from '@aws-lambda-powertools/tracer';
 
 const logger = new Logger({ serviceName: 'ai-agents' });
@@ -138,18 +138,26 @@ let GOOGLE_MAPS_API_KEY: string;
 
 async function initializeApiKey(): Promise<void> {
     try {
-        const secretName = process.env.GOOGLE_MAPS_SECRET_NAME || "/ai-agent/tools/google-maps/prod";
-        logger.info(`Retrieving secret from: ${secretName}`);
-        const apiKeySecret = await getSecret(secretName);
-        if (!apiKeySecret) {
-            throw new Error(`Failed to retrieve secret from Secrets Manager: ${secretName}`);
+        // First try to get from consolidated secret
+        logger.info('Retrieving secret from consolidated tool secrets');
+        const toolSecrets = await getToolSecrets('google-maps');
+        
+        if (toolSecrets && toolSecrets['GOOGLE_MAPS_API_KEY']) {
+            GOOGLE_MAPS_API_KEY = toolSecrets['GOOGLE_MAPS_API_KEY'];
+            logger.info('API key retrieved from consolidated secret successfully');
+        } else {
+            // Fallback to legacy secret for backward compatibility
+            const secretName = process.env.GOOGLE_MAPS_SECRET_NAME || "/ai-agent/tools/google-maps/prod";
+            logger.info(`Falling back to legacy secret: ${secretName}`);
+            const legacySecrets = await getLegacySecret(secretName);
+            
+            GOOGLE_MAPS_API_KEY = legacySecrets["GOOGLE_MAPS_API_KEY"] || legacySecrets["api_key"];
+            if (!GOOGLE_MAPS_API_KEY) {
+                throw new Error("API key not found in either consolidated or legacy secret");
+            }
+            logger.info('API key retrieved from legacy secret');
         }
-        const secretData = JSON.parse(apiKeySecret.toString());
-        // Try both possible field names for backward compatibility
-        GOOGLE_MAPS_API_KEY = secretData["GOOGLE_MAPS_API_KEY"] || secretData["api_key"];
-        if (!GOOGLE_MAPS_API_KEY) {
-            throw new Error("API key not found in secret. Expected 'GOOGLE_MAPS_API_KEY' or 'api_key' field");
-        }
+        
         logger.info("API key initialized successfully");
     } catch (error) {
         logger.error('Failed to initialize API key', { error });

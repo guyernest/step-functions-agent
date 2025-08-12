@@ -8,6 +8,9 @@ import { getExecutionStatistics } from './backend/function/getExecutionStatistic
 import { getCloudWatchMetrics } from './backend/function/getCloudWatchMetrics/resource';
 import { testToolExecution } from './backend/function/testToolExecution/resource';
 import { updateProviderAPIKey } from './backend/function/updateProviderAPIKey/resource';
+import { listToolSecrets } from './backend/function/listToolSecrets/resource';
+import { getToolSecretValues } from './backend/function/getToolSecretValues/resource';
+import { updateToolSecrets } from './backend/function/updateToolSecrets/resource';
 import { PolicyStatement, Effect, Policy } from 'aws-cdk-lib/aws-iam';
 import { aws_dynamodb, RemovalPolicy } from 'aws-cdk-lib';
 
@@ -24,6 +27,9 @@ const backend = defineBackend({
   getCloudWatchMetrics,
   testToolExecution,
   updateProviderAPIKey,
+  listToolSecrets,
+  getToolSecretValues,
+  updateToolSecrets,
 });
 
 // Set the Cognito User Pool name
@@ -212,3 +218,38 @@ const secretsManagerPolicy = new PolicyStatement({
 });
 
 backend.updateProviderAPIKey.resources.lambda.addToRolePolicy(secretsManagerPolicy);
+
+// Grant permissions to the listToolSecrets Lambda
+const listToolSecretsPolicy = new PolicyStatement({
+  effect: Effect.ALLOW,
+  actions: [
+    'dynamodb:Scan',
+    'dynamodb:GetItem'
+  ],
+  resources: [`arn:aws:dynamodb:*:*:table/ToolSecrets-prod`]
+});
+
+backend.listToolSecrets.resources.lambda.addToRolePolicy(listToolSecretsPolicy);
+
+// Grant permissions to the getToolSecretValues Lambda
+const getToolSecretValuesPolicy = new PolicyStatement({
+  effect: Effect.ALLOW,
+  actions: [
+    'secretsmanager:GetSecretValue'
+  ],
+  resources: ['arn:aws:secretsmanager:*:*:secret:/ai-agent/tool-secrets/prod*']
+});
+
+backend.getToolSecretValues.resources.lambda.addToRolePolicy(getToolSecretValuesPolicy);
+
+// Grant permissions to the updateToolSecrets Lambda
+const updateToolSecretsPolicy = new PolicyStatement({
+  effect: Effect.ALLOW,
+  actions: [
+    'secretsmanager:GetSecretValue',
+    'secretsmanager:UpdateSecret'
+  ],
+  resources: ['arn:aws:secretsmanager:*:*:secret:/ai-agent/tool-secrets/prod*']
+});
+
+backend.updateToolSecrets.resources.lambda.addToRolePolicy(updateToolSecretsPolicy);

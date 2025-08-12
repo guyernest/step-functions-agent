@@ -13,6 +13,7 @@ import ToolTest from './pages/ToolTest'
 import Layout from './components/Layout'
 import Metrics from './pages/Metrics'
 import ModelCosts from './pages/ModelCosts'
+import ToolSecrets from './pages/ToolSecrets'
 
 const queryClient = new QueryClient()
 
@@ -33,6 +34,7 @@ function App() {
                 <Route path="/approvals" element={<ApprovalDashboard />} />
                 <Route path="/metrics" element={<Metrics />} />
                 <Route path="/model-costs" element={<ModelCosts />} />
+                <Route path="/tool-secrets" element={<ToolSecrets />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/test" element={<Test />} />
                 <Route path="/tool-test" element={<ToolTest />} />

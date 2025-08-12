@@ -174,7 +174,7 @@ class E2BToolStack(Stack):
             ],
         )
 
-        # Grant access to execute_code secrets
+        # Grant access to both legacy and consolidated secrets
         self.execute_code_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
@@ -182,7 +182,8 @@ class E2BToolStack(Stack):
                     "secretsmanager:GetSecretValue"
                 ],
                 resources=[
-                    self.execute_code_secret.secret_arn
+                    self.execute_code_secret.secret_arn,  # Legacy secret
+                    f"arn:aws:secretsmanager:{self.region}:{self.account}:secret:/ai-agent/tool-secrets/{self.env_name}*"  # Consolidated secret
                 ]
             )
         )
@@ -233,7 +234,8 @@ class E2BToolStack(Stack):
                 "ENVIRONMENT": self.env_name,
                 "POWERTOOLS_SERVICE_NAME": "execute-code-tool",
                 "POWERTOOLS_LOG_LEVEL": "INFO",
-                "IMAGE_BUCKET_NAME": self.execute_code_bucket.bucket_name
+                "IMAGE_BUCKET_NAME": self.execute_code_bucket.bucket_name,
+                "CONSOLIDATED_SECRET_NAME": f"/ai-agent/tool-secrets/{self.env_name}"
             },
             layers=[
                 _lambda.LayerVersion.from_layer_version_arn(
@@ -258,13 +260,16 @@ class E2BToolStack(Stack):
             for tool_def in tool_definitions
         ]
         
-        # Use BaseToolConstruct for registration
+        # Use BaseToolConstruct for registration with secret requirements
         BaseToolConstruct(
             self,
             "CodeExecutionTools",
             tool_specs=tool_specs,
             lambda_function=self.execute_code_lambda,
-            env_name=self.env_name
+            env_name=self.env_name,
+            secret_requirements={
+                "execute-code": ["E2B_API_KEY"]
+            }
         )
 
         # Store Lambda function reference for monitoring

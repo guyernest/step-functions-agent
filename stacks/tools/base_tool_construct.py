@@ -1,11 +1,12 @@
 from aws_cdk import (
     Fn,
     aws_iam as iam,
+    aws_lambda as _lambda,
     custom_resources as cr
 )
 from constructs import Construct
 from ..shared.naming_conventions import NamingConventions
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import json
 from datetime import datetime, timezone
 
@@ -36,19 +37,37 @@ class BaseToolConstruct(Construct):
         tool_specs: List[Dict[str, Any]],
         lambda_function: Any,
         env_name: str = "prod",
+        secret_requirements: Optional[Dict[str, List[str]]] = None,
         **kwargs
     ) -> None:
+        """
+        Initialize BaseToolConstruct
+        
+        Args:
+            scope: CDK scope
+            construct_id: Construct ID
+            tool_specs: List of tool specifications
+            lambda_function: Lambda function for the tools
+            env_name: Environment name (prod, dev, etc.)
+            secret_requirements: Optional dict mapping tool_name to list of required secret keys
+                                Example: {"google-maps": ["GOOGLE_MAPS_API_KEY"]}
+        """
         super().__init__(scope, construct_id, **kwargs)
         
         self.tool_specs = tool_specs
         self.lambda_function = lambda_function
         self.env_name = env_name
+        self.secret_requirements = secret_requirements or {}
         
         # Import shared resources
         self._import_shared_resources()
         
         # Register all tools in DynamoDB
         self._register_tools_in_registry()
+        
+        # Register secret requirements if provided
+        if self.secret_requirements:
+            self._register_secret_requirements()
 
     def _import_shared_resources(self):
         """Import shared DynamoDB tool registry resources"""
@@ -58,6 +77,19 @@ class BaseToolConstruct(Construct):
         self.tool_registry_table_arn = Fn.import_value(
             NamingConventions.stack_export_name("TableArn", "ToolRegistry", self.env_name)
         )
+        
+        # Try to import tool secrets infrastructure if it exists
+        try:
+            self.secret_structure_manager_arn = Fn.import_value(
+                f"SecretStructureManagerArn-{self.env_name}"
+            )
+            self.tool_secrets_table_name = Fn.import_value(
+                f"ToolSecretsTableName-{self.env_name}"
+            )
+        except:
+            # Infrastructure might not be deployed yet
+            self.secret_structure_manager_arn = None
+            self.tool_secrets_table_name = None
 
     def _register_tools_in_registry(self):
         """Register all tools in the DynamoDB registry using CDK custom resources"""
@@ -165,6 +197,70 @@ class BaseToolConstruct(Construct):
                 )
             ])
         )
+    
+    def _register_secret_requirements(self):
+        """Register tool secret requirements with the secret structure manager"""
+        
+        if not self.secret_structure_manager_arn:
+            print(f"Warning: Secret structure manager not available. Skipping secret registration.")
+            return
+        
+        # Register each tool's secret requirements
+        for tool_name, secret_keys in self.secret_requirements.items():
+            if not secret_keys:
+                continue
+            
+            # Find the tool description from specs
+            description = ""
+            for spec in self.tool_specs:
+                if spec.get("tool_name") == tool_name:
+                    description = f"Secrets for {spec.get('description', tool_name)}"
+                    break
+            
+            # Create custom resource to invoke the secret structure manager
+            cr.AwsCustomResource(
+                self,
+                f"RegisterSecrets{tool_name.replace('-', '')}",
+                on_create=cr.AwsSdkCall(
+                    service="lambda",
+                    action="invoke",
+                    parameters={
+                        "FunctionName": self.secret_structure_manager_arn,
+                        "Payload": json.dumps({
+                            "operation": "register_tool",
+                            "tool_name": tool_name,
+                            "secret_keys": secret_keys,
+                            "description": description
+                        })
+                    },
+                    physical_resource_id=cr.PhysicalResourceId.of(
+                        f"secret-reg-{tool_name}-{self.env_name}"
+                    )
+                ),
+                on_update=cr.AwsSdkCall(
+                    service="lambda",
+                    action="invoke",
+                    parameters={
+                        "FunctionName": self.secret_structure_manager_arn,
+                        "Payload": json.dumps({
+                            "operation": "register_tool",
+                            "tool_name": tool_name,
+                            "secret_keys": secret_keys,
+                            "description": description
+                        })
+                    },
+                    physical_resource_id=cr.PhysicalResourceId.of(
+                        f"secret-reg-{tool_name}-{self.env_name}"
+                    )
+                ),
+                policy=cr.AwsCustomResourcePolicy.from_statements([
+                    iam.PolicyStatement(
+                        effect=iam.Effect.ALLOW,
+                        actions=["lambda:InvokeFunction"],
+                        resources=[self.secret_structure_manager_arn]
+                    )
+                ])
+            )
 
 
 class MultiToolConstruct(Construct):
