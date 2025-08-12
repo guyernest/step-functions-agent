@@ -46,17 +46,75 @@ class OpenAILLM(BaseLLM):
         if last_message["role"] == "user":
             if "content" in last_message:
                 if isinstance(last_message["content"], list):   
-                    remove_last_message = True                     
-                    for part in last_message["content"]:
-                        if "type" in part and part["type"] == "tool_result":
-                            if remove_last_message:
-                                messages.pop()
-                                remove_last_message = False
-                            messages.append({
-                                "role": "tool",
-                                "tool_call_id": part["tool_use_id"],
-                                "content": json.dumps(part["content"])
-                            })  # tool_use
+                    # Check if this is a tool result message
+                    has_tool_results = any(
+                        "type" in part and part["type"] == "tool_result" 
+                        for part in last_message["content"]
+                    )
+                    
+                    if has_tool_results:
+                        # First, ensure the previous assistant message has tool_calls
+                        # Look for the last assistant message before this user message
+                        for i in range(len(messages) - 2, -1, -1):
+                            if messages[i]["role"] == "assistant":
+                                # Check if it has tool_calls, if not reconstruct from tool results
+                                if "tool_calls" not in messages[i]:
+                                    # First check if content has tool_use items
+                                    content = messages[i].get("content", "")
+                                    tool_calls = []
+                                    
+                                    if isinstance(content, list):
+                                        for item in content:
+                                            if isinstance(item, dict) and item.get("type") == "tool_use":
+                                                tool_calls.append({
+                                                    "id": item.get("id", item.get("tool_use_id")),
+                                                    "type": "function",
+                                                    "function": {
+                                                        "name": item.get("name"),
+                                                        "arguments": json.dumps(item.get("input", {}))
+                                                    }
+                                                })
+                                    
+                                    # If no tool_calls found in content, reconstruct from tool results
+                                    if not tool_calls:
+                                        for part in last_message["content"]:
+                                            if "type" in part and part["type"] == "tool_result":
+                                                tool_calls.append({
+                                                    "id": part.get("tool_use_id", part.get("id")),
+                                                    "type": "function", 
+                                                    "function": {
+                                                        "name": part.get("name"),
+                                                        "arguments": "{}"  # We don't have original args, use empty
+                                                    }
+                                                })
+                                    
+                                    if tool_calls:
+                                        messages[i]["tool_calls"] = tool_calls
+                                        # Clean up content
+                                        if isinstance(content, list):
+                                            # Remove tool_use items from content, keep only text
+                                            messages[i]["content"] = [
+                                                item for item in content 
+                                                if item.get("type") != "tool_use"
+                                            ]
+                                            # If content is now empty or only has text, convert to string
+                                            if len(messages[i]["content"]) == 1 and messages[i]["content"][0].get("type") == "text":
+                                                messages[i]["content"] = messages[i]["content"][0].get("text", "")
+                                            elif len(messages[i]["content"]) == 0:
+                                                messages[i]["content"] = ""
+                                        elif content == "":
+                                            messages[i]["content"] = ""
+                                break
+                        
+                        # Now convert the tool results to tool messages
+                        messages.pop()  # Remove the last user message
+                        for part in last_message["content"]:
+                            if "type" in part and part["type"] == "tool_result":
+                                messages.append({
+                                    "role": "tool",
+                                    "tool_call_id": part.get("tool_use_id", part.get("id")),
+                                    "content": json.dumps(part["content"]) if not isinstance(part["content"], str) else part["content"]
+                                })  # tool_use
 
         if system and messages[0]["role"] != "system":
             messages.insert(0, {"role": "system", "content": system})
