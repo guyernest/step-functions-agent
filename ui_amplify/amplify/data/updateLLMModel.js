@@ -1,3 +1,5 @@
+import { util } from '@aws-appsync/utils';
+
 export function request(ctx) {
   var pk = ctx.arguments.pk;
   var updateExpression = 'SET updated_at = :updated_at';
