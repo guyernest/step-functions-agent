@@ -6,7 +6,6 @@ import { getExecutionStatistics } from '../backend/function/getExecutionStatisti
 import { getCloudWatchMetrics } from '../backend/function/getCloudWatchMetrics/resource';
 import { testToolExecution } from '../backend/function/testToolExecution/resource';
 import { updateProviderAPIKey } from '../backend/function/updateProviderAPIKey/resource';
-import { listToolSecrets } from '../backend/function/listToolSecrets/resource';
 import { getToolSecretValues } from '../backend/function/getToolSecretValues/resource';
 import { updateToolSecrets } from '../backend/function/updateToolSecrets/resource';
 
@@ -285,7 +284,12 @@ const schema = a.schema({
     .query()
     .arguments({})
     .returns(a.json())
-    .handler(a.handler.function(listToolSecrets))
+    .handler(
+      a.handler.custom({
+        dataSource: 'ToolSecretsDataSource',
+        entry: './listToolSecrets.js',
+      })
+    )
     .authorization((allow) => [allow.authenticated()]),
     
   getToolSecretValues: a

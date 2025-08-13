@@ -8,7 +8,6 @@ import { getExecutionStatistics } from './backend/function/getExecutionStatistic
 import { getCloudWatchMetrics } from './backend/function/getCloudWatchMetrics/resource';
 import { testToolExecution } from './backend/function/testToolExecution/resource';
 import { updateProviderAPIKey } from './backend/function/updateProviderAPIKey/resource';
-import { listToolSecrets } from './backend/function/listToolSecrets/resource';
 import { getToolSecretValues } from './backend/function/getToolSecretValues/resource';
 import { updateToolSecrets } from './backend/function/updateToolSecrets/resource';
 import { PolicyStatement, Effect, Policy } from 'aws-cdk-lib/aws-iam';
@@ -27,7 +26,6 @@ const backend = defineBackend({
   getCloudWatchMetrics,
   testToolExecution,
   updateProviderAPIKey,
-  listToolSecrets,
   getToolSecretValues,
   updateToolSecrets,
 });
@@ -81,6 +79,13 @@ const toolRegistryTable = aws_dynamodb.Table.fromTableName(
   toolRegistryTableName
 );
 
+// Reference the ToolSecrets table
+const toolSecretsTable = aws_dynamodb.Table.fromTableName(
+  externalDataSourcesStack,
+  'ToolSecretsTable',
+  'ToolSecrets-prod'
+);
+
 // Create the LLMModels table as part of this stack
 const llmModelsTable = new aws_dynamodb.Table(externalDataSourcesStack, 'LLMModelsTable', {
   tableName: 'LLMModels-prod',
@@ -112,6 +117,11 @@ backend.data.addDynamoDbDataSource(
 backend.data.addDynamoDbDataSource(
   'LLMModelsDataSource',
   llmModelsTable
+);
+
+backend.data.addDynamoDbDataSource(
+  'ToolSecretsDataSource',
+  toolSecretsTable
 );
 
 // Grant Step Functions permissions to the startAgentExecution Lambda
@@ -218,18 +228,6 @@ const secretsManagerPolicy = new PolicyStatement({
 });
 
 backend.updateProviderAPIKey.resources.lambda.addToRolePolicy(secretsManagerPolicy);
-
-// Grant permissions to the listToolSecrets Lambda
-const listToolSecretsPolicy = new PolicyStatement({
-  effect: Effect.ALLOW,
-  actions: [
-    'dynamodb:Scan',
-    'dynamodb:GetItem'
-  ],
-  resources: [`arn:aws:dynamodb:*:*:table/ToolSecrets-prod`]
-});
-
-backend.listToolSecrets.resources.lambda.addToRolePolicy(listToolSecretsPolicy);
 
 // Grant permissions to the getToolSecretValues Lambda
 const getToolSecretValuesPolicy = new PolicyStatement({

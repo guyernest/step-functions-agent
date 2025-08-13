@@ -8,7 +8,7 @@ declare const process: {
 };
 
 const secretsManager = new SecretsManagerClient({ region: process.env.AWS_REGION || 'us-west-2' });
-const ENVIRONMENT = process.env.ENVIRONMENT || 'prod';
+const ENVIRONMENT = 'prod'; // Always use prod for now
 
 export const handler = async (event: any) => {
   console.log('Update tool secrets request:', event);
