@@ -7,13 +7,14 @@ import json
 
 class TestAutomationRemoteAgentStack(ModularBaseAgentStack):
     """
-    Test Automation Remote Agent Stack - Demonstrates remote execution workflow
+    Test Automation Remote Agent Stack - Demonstrates remote execution workflow with Microsoft 365 integration
     
-    This stack creates an automation agent that uses remote execution for:
-    - local_agent: Remote execution on local systems via Step Functions Activity
+    This stack creates an automation agent that combines:
+    - local_agent_execute: Remote execution on local systems via Step Functions Activity
+    - MicrosoftGraphAPI: Direct integration with Microsoft 365 services (email, Teams, SharePoint, etc.)
     
-    This demonstrates the remote execution pattern where tools are executed
-    on external systems that poll Step Functions Activities.
+    This demonstrates the hybrid execution pattern where some tools execute remotely
+    on external systems via Activities, while others execute directly as Lambda functions.
     """
 
     def __init__(self, scope: Construct, construct_id: str, env_name: str = "prod", **kwargs) -> None:
@@ -23,8 +24,9 @@ class TestAutomationRemoteAgentStack(ModularBaseAgentStack):
         # Import tool Lambda ARNs and Activity ARNs
         local_automation_lambda_arn = Fn.import_value(f"LocalAutomationLambdaArn-{env_name}")
         local_automation_remote_activity_arn = Fn.import_value(f"LocalAutomationRemoteActivityArn-{env_name}")
+        microsoft_graph_lambda_arn = Fn.import_value(f"MicrosoftGraphLambdaArn-{env_name}")
         
-        # Define tool configurations with remote execution for local automation
+        # Define tool configurations with remote execution for local automation and Microsoft Graph
         tool_configs = [
             {
                 "tool_name": "local_agent_execute",  # Use correct tool name from registry
@@ -32,6 +34,11 @@ class TestAutomationRemoteAgentStack(ModularBaseAgentStack):
                 "requires_activity": True,
                 "activity_type": "remote_execution",  # Remote execution on local systems
                 "activity_arn": local_automation_remote_activity_arn
+            },
+            {
+                "tool_name": "MicrosoftGraphAPI",  # Microsoft Graph API tool
+                "lambda_arn": microsoft_graph_lambda_arn,
+                "requires_activity": False  # Direct Lambda execution, no activity needed
             }
         ]
         
@@ -47,7 +54,7 @@ class TestAutomationRemoteAgentStack(ModularBaseAgentStack):
             llm_arn=claude_lambda_arn,
             tool_configs=tool_configs,
             env_name=env_name,
-            system_prompt="""You are a helpful automation assistant that can execute tasks on remote local systems through secure remote execution.
+            system_prompt="""You are a helpful automation assistant that can execute tasks on remote local systems and interact with Microsoft 365 services.
 
 IMPORTANT REMOTE EXECUTION NOTICE:
 - Your automation scripts are executed on remote systems via Step Functions Activities
@@ -61,11 +68,21 @@ Your capabilities:
    - Uses PyAutoGUI format for UI automation
    - Executes securely on isolated remote systems
 
+2. MicrosoftGraphAPI: Interact with Microsoft 365 services
+   - Access emails, calendar, and contacts
+   - Manage Teams messages and channels
+   - Work with SharePoint documents
+   - Query user and group information
+   - Use endpoints like 'users/guy.ernest@ai-on-cloud.com/messages', 'users/guy.ernest@ai-on-cloud.com/calendar/events', etc.
+   - Supports GET, POST, PUT, PATCH, DELETE methods
+
 Guidelines:
 - Design automation scripts that are robust and handle common failures
 - Break complex tasks into smaller, manageable steps
 - Provide clear instructions and context in your automation scripts
 - Be patient during remote execution - processing may take time
+- When using Microsoft Graph, specify the correct endpoint and method
+- For Microsoft Graph POST/PUT/PATCH requests, include the data payload
 
 Always explain what automation you're planning before execution.""",
             **kwargs
@@ -85,26 +102,30 @@ Always explain what automation you're planning before execution.""",
             "agent_name": "test-automation-remote-agent",
             "version": "v1.0", 
             "status": "active",
-            "system_prompt": """You are an automation assistant with remote execution capabilities for local system automation.
+            "system_prompt": """You are an automation assistant with remote execution capabilities for local system automation and Microsoft 365 integration.
 
 Your responsibilities:
 - Design automation scripts for remote execution on local systems using local_agent_execute
+- Interact with Microsoft 365 services via Microsoft Graph API
 - Handle remote execution timeouts and failures gracefully
 - Provide clear explanations of automation tasks
 - Use PyAutoGUI format for UI automation scripts
 
-Remote execution features:
-- local_agent_execute tasks execute on remote systems via Step Functions Activities
+Key features:
+- local_agent_execute: Remote execution on local systems via Step Functions Activities
+- MicrosoftGraphAPI: Direct access to emails, Teams, SharePoint, calendar, and user data
+  Example endpoints: 'users/guy.ernest@ai-on-cloud.com/messages', 'users/guy.ernest@ai-on-cloud.com/sendMail'
 - 5-minute timeout for remote operations
 - Secure execution in isolated environments
 - Real-time feedback from remote workers
 
 Always design robust automation that handles common edge cases.""",
-            "description": "Test automation agent demonstrating remote execution workflow for local system automation",
+            "description": "Test automation agent with remote execution workflow and Microsoft 365 integration capabilities",
             "llm_provider": "claude",
             "llm_model": "claude-3-5-sonnet-20241022",
             "tools": [
-                {"tool_name": "local_agent_execute", "enabled": True, "version": "latest", "execution_type": "remote"}
+                {"tool_name": "local_agent_execute", "enabled": True, "version": "latest", "execution_type": "remote"},
+                {"tool_name": "MicrosoftGraphAPI", "enabled": True, "version": "latest", "execution_type": "lambda"}
             ],
             "observability": {
                 "log_group": f"/aws/stepfunctions/test-automation-remote-agent-{self.env_name}",

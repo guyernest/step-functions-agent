@@ -51,9 +51,9 @@ export const handler = async (event: any) => {
     
     return {
       success: true,
-      values: maskedValues,
-      // Include raw values for edit mode (only for authenticated users)
-      rawValues: secretValues
+      values: maskedValues
+      // SECURITY: Never return raw values to the UI
+      // Users can update secrets but should not read existing full values
     };
   } catch (error) {
     console.error('Error getting tool secret values:', error);

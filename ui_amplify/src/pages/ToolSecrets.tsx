@@ -58,8 +58,10 @@ const ToolSecrets: React.FC = () => {
       }) as any;
       
       const toolsData = toolsResult.data?.listToolSecrets;
-      if (toolsData?.success && toolsData?.tools) {
-        setToolSecrets(toolsData.tools);
+      // The AppSync resolver returns an array directly as a JSON string
+      if (toolsData) {
+        const tools = typeof toolsData === 'string' ? JSON.parse(toolsData) : toolsData;
+        setToolSecrets(Array.isArray(tools) ? tools : []);
       }
       
       // Load current secret values from GraphQL API
@@ -72,9 +74,20 @@ const ToolSecrets: React.FC = () => {
       }) as any;
       
       const valuesData = valuesResult.data?.getToolSecretValues;
-      if (valuesData?.success && valuesData?.rawValues) {
-        setSecretValues(valuesData.rawValues);
-        setTempValues(valuesData.rawValues);
+      // Parse the response if it's a string
+      const parsedData = typeof valuesData === 'string' ? JSON.parse(valuesData) : valuesData;
+      if (parsedData?.success && parsedData?.values) {
+        // Filter out the placeholder entry
+        const filteredValues = Object.keys(parsedData.values).reduce((acc, key) => {
+          if (key !== 'placeholder') {
+            acc[key] = parsedData.values[key];
+          }
+          return acc;
+        }, {} as any);
+        
+        setSecretValues(filteredValues);
+        // Don't populate tempValues with masked values - start empty for editing
+        setTempValues({});
       }
     } catch (error) {
       console.error('Error loading tool secrets:', error);
@@ -86,14 +99,18 @@ const ToolSecrets: React.FC = () => {
 
   const handleEdit = (toolName: string) => {
     setEditMode({ ...editMode, [toolName]: true });
+    // Initialize empty temp values for this tool when starting edit
+    if (!tempValues[toolName]) {
+      setTempValues({ ...tempValues, [toolName]: {} });
+    }
   };
 
   const handleCancel = (toolName: string) => {
     setEditMode({ ...editMode, [toolName]: false });
-    // Reset temp values to original
+    // Clear temp values on cancel
     setTempValues({
       ...tempValues,
-      [toolName]: secretValues[toolName] || {}
+      [toolName]: {}
     });
   };
 
@@ -102,6 +119,22 @@ const ToolSecrets: React.FC = () => {
     setMessage(null);
     
     try {
+      // Only send non-empty values to update (empty means keep existing)
+      const secretsToUpdate = tempValues[toolName] || {};
+      const filteredSecrets = Object.keys(secretsToUpdate).reduce((acc, key) => {
+        if (secretsToUpdate[key] && secretsToUpdate[key].trim() !== '') {
+          acc[key] = secretsToUpdate[key];
+        }
+        return acc;
+      }, {} as any);
+      
+      // Only proceed if there are values to update
+      if (Object.keys(filteredSecrets).length === 0) {
+        setMessage({ type: 'info', text: 'No changes to save. Enter new values or cancel.' });
+        setSaving(false);
+        return;
+      }
+      
       // Update secrets via GraphQL API
       const result = await client.graphql({
         query: `
@@ -111,20 +144,22 @@ const ToolSecrets: React.FC = () => {
         `,
         variables: {
           toolName,
-          secrets: JSON.stringify(tempValues[toolName] || {})
+          secrets: JSON.stringify(filteredSecrets)
         }
       }) as any;
       
       const updateData = result.data?.updateToolSecrets;
-      if (updateData?.success) {
+      // Parse the response if it's a string
+      const parsedUpdate = typeof updateData === 'string' ? JSON.parse(updateData) : updateData;
+      if (parsedUpdate?.success) {
         setSecretValues({
           ...secretValues,
           [toolName]: tempValues[toolName] || {}
         });
         setEditMode({ ...editMode, [toolName]: false });
-        setMessage({ type: 'success', text: updateData.message || `Successfully updated secrets for ${toolName}` });
+        setMessage({ type: 'success', text: parsedUpdate.message || `Successfully updated secrets for ${toolName}` });
       } else {
-        throw new Error(updateData?.error || 'Failed to update secrets');
+        throw new Error(parsedUpdate?.error || 'Failed to update secrets');
       }
     } catch (error) {
       console.error('Error saving secrets:', error);
@@ -236,10 +271,12 @@ const ToolSecrets: React.FC = () => {
                 <Divider />
 
                 <Flex direction="column" gap="0.75rem">
-                  {tool.secret_keys.map((key) => {
-                    const currentValue = tempValues[tool.tool_name]?.[key] || 
-                                        secretValues[tool.tool_name]?.[key] || '';
-                    const isPlaceholder = currentValue.startsWith('PLACEHOLDER_');
+                  {tool.secret_keys && tool.secret_keys.map((key) => {
+                    const isEditing = editMode[tool.tool_name];
+                    const currentValue = isEditing 
+                      ? (tempValues[tool.tool_name]?.[key] || '') // Empty for new input when editing
+                      : (secretValues[tool.tool_name]?.[key] || ''); // Masked value when viewing
+                    const isPlaceholder = currentValue && currentValue.startsWith('PLACEHOLDER_');
                     const fieldKey = `${tool.tool_name}-${key}`;
                     
                     return (
@@ -260,7 +297,7 @@ const ToolSecrets: React.FC = () => {
                               value={currentValue}
                               onChange={(e) => handleSecretChange(tool.tool_name, key, e.target.value)}
                               type={showPasswords[fieldKey] ? "text" : "password"}
-                              placeholder={`Enter ${key}`}
+                              placeholder={`Enter new ${key} (leave empty to keep current)`}
                               width="100%"
                             />
                             <Button

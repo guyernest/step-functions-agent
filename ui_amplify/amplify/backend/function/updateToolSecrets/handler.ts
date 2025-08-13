@@ -40,8 +40,14 @@ export const handler = async (event: any) => {
     // Parse current values
     const currentValues = JSON.parse(currentResult.SecretString);
     
-    // Update with new values for the specific tool
-    currentValues[toolName] = secrets;
+    // Merge new values with existing ones (only update provided keys)
+    if (!currentValues[toolName]) {
+      currentValues[toolName] = {};
+    }
+    currentValues[toolName] = {
+      ...currentValues[toolName],
+      ...secrets
+    };
     
     // Update the secret
     await secretsManager.send(new UpdateSecretCommand({

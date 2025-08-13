@@ -53,6 +53,8 @@ help:
 	@echo "  clean-venv     - Clean and recreate virtual environment"
 	@echo "  deploy-prep    - Prepare for deployment (clean, setup, build, test)"
 	@echo "  populate-llm-models - Populate LLM Models DynamoDB table with provider data"
+	@echo "  populate-tool-secrets - Populate Tool Secrets DynamoDB table with secret requirements"
+	@echo "  populate-tables - Populate all configuration tables (LLM models and tool secrets)"
 	@echo ""
 	@echo "Language-specific targets:"
 	@echo "  setup-python      - Set up Python environment"
@@ -297,3 +299,12 @@ deploy-prep: clean setup build test
 populate-llm-models:
 	@echo "Populating LLM Models table..."
 	@$(PYTHON) scripts/populate_llm_models.py
+
+# Populate Tool Secrets table
+populate-tool-secrets:
+	@echo "Populating Tool Secrets table with secret requirements..."
+	@$(PYTHON) scripts/populate_tool_secrets.py $(AWS_PROFILE) $(AWS_REGION)
+
+# Populate all configuration tables
+populate-tables: populate-llm-models populate-tool-secrets
+	@echo "All tables populated successfully!"

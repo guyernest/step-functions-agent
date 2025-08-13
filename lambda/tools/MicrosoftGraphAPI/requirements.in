@@ -1,3 +1,5 @@
 aws-lambda-powertools
 aws_xray_sdk
 requests
+boto3==1.36.0  # Pinned to resolve aws_account_id issue
+botocore==1.36.0  # Pinned to resolve aws_account_id issue
