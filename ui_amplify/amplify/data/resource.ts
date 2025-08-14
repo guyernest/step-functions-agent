@@ -8,6 +8,7 @@ import { testToolExecution } from '../backend/function/testToolExecution/resourc
 import { updateProviderAPIKey } from '../backend/function/updateProviderAPIKey/resource';
 import { getToolSecretValues } from '../backend/function/getToolSecretValues/resource';
 import { updateToolSecrets } from '../backend/function/updateToolSecrets/resource';
+import { getStateMachineInfo } from '../backend/function/getStateMachineInfo/resource';
 
 const schema = a.schema({
   // Model for storing custom model costs
@@ -181,6 +182,7 @@ const schema = a.schema({
     .arguments({
       toolName: a.string().required(),
       testInput: a.string().required(),
+      logLevel: a.string(),
     })
     .returns(a.json())
     .handler(a.handler.function(testToolExecution))
@@ -307,6 +309,15 @@ const schema = a.schema({
     })
     .returns(a.json())
     .handler(a.handler.function(updateToolSecrets))
+    .authorization((allow) => [allow.authenticated()]),
+    
+  getStateMachineInfo: a
+    .query()
+    .arguments({
+      agentName: a.string().required()
+    })
+    .returns(a.json())
+    .handler(a.handler.function(getStateMachineInfo))
     .authorization((allow) => [allow.authenticated()]),
 });
 

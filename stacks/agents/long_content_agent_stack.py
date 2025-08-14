@@ -4,12 +4,12 @@ from aws_cdk import (
     aws_lambda as lambda_,
 )
 from constructs import Construct
-from .base_agent_stack import BaseAgentStack
+from .modular_base_agent_stack import ModularBaseAgentStack
 from ..shared.naming_conventions import NamingConventions
 from typing import List, Dict, Any
 
 
-class LongContentAgentStack(BaseAgentStack):
+class LongContentAgentStack(ModularBaseAgentStack):
     """
     Long Content Agent Stack - For agents handling large message contexts
     

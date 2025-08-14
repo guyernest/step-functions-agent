@@ -1,11 +1,9 @@
 from aws_cdk import Stack, Fn
 from constructs import Construct
-from .base_agent_stack import BaseAgentStack
-from ..shared.tool_definitions import AllTools
-from ..shared.base_agent_construct import BaseAgentConstruct
+from .modular_base_agent_stack import ModularBaseAgentStack
 
 
-class ImageAnalysisAgentStack(BaseAgentStack):
+class ImageAnalysisAgentStack(ModularBaseAgentStack):
     """
     Image Analysis Agent Stack - Uses BaseAgentStack for simplified deployment
     
@@ -17,7 +15,14 @@ class ImageAnalysisAgentStack(BaseAgentStack):
     """
 
     def __init__(self, scope: Construct, construct_id: str, env_name: str = "prod", **kwargs) -> None:
-        
+
+        # Set agent-specific properties for registry
+        self.agent_description = "Computer vision assistant with advanced image analysis capabilities"
+        self.llm_provider = "gemini"
+        self.llm_model = "gemini-1.5-flash"
+        self.agent_metadata = {
+            "tags": ['vision', 'ocr', 'image-analysis', 'multimodal']
+        }
         # Import Gemini LLM ARN from shared stack (multimodal capabilities)
         gemini_lambda_arn = Fn.import_value(f"SharedGeminiLambdaArn-{env_name}")
         
@@ -33,13 +38,8 @@ class ImageAnalysisAgentStack(BaseAgentStack):
             }
         ]
         
-        # Validate tool names exist in centralized definitions
-        tool_names = [config["tool_name"] for config in tool_configs]
-        invalid_tools = AllTools.validate_tool_names(tool_names)
-        if invalid_tools:
-            raise ValueError(f"Image Analysis Agent uses invalid tools: {invalid_tools}. Available tools: {AllTools.get_all_tool_names()}")
-        
-        # Call BaseAgentStack constructor
+                
+        # Call ModularBaseAgentStack constructor
         super().__init__(
             scope,
             construct_id,
@@ -53,69 +53,3 @@ class ImageAnalysisAgentStack(BaseAgentStack):
         
         # Store env_name for registration
         self.env_name = env_name
-        
-        # Register this agent in the Agent Registry
-        self._register_agent_in_registry()
-    
-    def _register_agent_in_registry(self):
-        """Register this agent in the Agent Registry using BaseAgentConstruct"""
-        
-        # Define Image Analysis agent specification
-        agent_spec = {
-            "agent_name": "image-analysis-agent",
-            "version": "v1.0",
-            "status": "active",
-            "system_prompt": """You are an expert computer vision assistant with state-of-the-art multimodal AI capabilities.
-
-Your primary responsibilities:
-- Analyze images with detailed descriptions and insights
-- Extract text from images using advanced OCR capabilities
-- Identify objects, people, animals, and scenes in images
-- Answer specific questions about image content
-- Provide detailed visual analysis for accessibility purposes
-- Analyze documents, charts, graphs, and diagrams
-- Detect and describe visual elements, colors, composition
-- Compare and contrast multiple images when provided
-
-Your capabilities include:
-- Object detection and classification
-- Optical Character Recognition (OCR)
-- Scene understanding and description
-- Visual question answering
-- Document analysis and data extraction
-- Image quality assessment
-- Accessibility descriptions for visually impaired users
-
-Always provide accurate, detailed, and helpful analysis. Be specific about what you observe and explain your reasoning when making interpretations about image content.""",
-            "description": "AI-powered image analysis and computer vision agent with multimodal capabilities",
-            "llm_provider": "gemini",
-            "llm_model": "gemini-1.5-pro",
-            "tools": [
-                {"tool_name": "analyze_images", "enabled": True, "version": "latest"}
-            ],
-            "observability": {
-                "log_group": f"/aws/stepfunctions/image-analysis-agent-{self.env_name}",
-                "metrics_namespace": "AIAgents/ImageAnalysis",
-                "trace_enabled": True,
-                "log_level": "INFO"
-            },
-            "parameters": {
-                "max_iterations": 3,
-                "temperature": 0.1,
-                "timeout_seconds": 300,
-                "max_tokens": 4096
-            },
-            "metadata": {
-                "created_by": "system",
-                "tags": ["image", "vision", "multimodal", "ocr", "production"],
-                "deployment_env": self.env_name
-            }
-        }
-        
-        # Use BaseAgentConstruct for registration
-        BaseAgentConstruct(
-            self,
-            "ImageAnalysisAgentRegistration",
-            agent_spec=agent_spec,
-            env_name=self.env_name
-        )

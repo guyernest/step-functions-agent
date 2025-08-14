@@ -4,6 +4,7 @@ from aws_cdk import (
     Fn,
     RemovalPolicy,
     CfnOutput,
+    Tags,
     aws_logs as logs,
     aws_iam as iam,
     aws_stepfunctions as sfn,
@@ -11,11 +12,12 @@ from aws_cdk import (
 from constructs import Construct
 from ..shared.naming_conventions import NamingConventions
 from .step_functions_generator import StepFunctionsGenerator
+from .agent_registry_mixin import AgentRegistryMixin
 from typing import List, Dict, Any
 import json
 
 
-class ModularBaseAgentStack(Stack):
+class ModularBaseAgentStack(Stack, AgentRegistryMixin):
     """
     Modular Base Agent Stack - Truly modular agent deployment without centralized dependencies
     
@@ -88,6 +90,9 @@ class ModularBaseAgentStack(Stack):
         
         # Create Step Functions workflow from template
         self._create_step_functions_from_template()
+        
+        # Register agent in the Agent Registry
+        self.register_agent_in_registry()
 
     def _validate_tool_names(self):
         """Optional tool validation - only used during development/testing"""
@@ -325,6 +330,13 @@ class ModularBaseAgentStack(Stack):
             ),
             tracing_enabled=True
         )
+        
+        # Add specific tags for UI filtering (required for agent discovery)
+        Tags.of(self.state_machine).add("Application", "StepFunctionsAgent")
+        Tags.of(self.state_machine).add("Type", "Agent")
+        Tags.of(self.state_machine).add("AgentName", self.agent_name)
+        Tags.of(self.state_machine).add("Environment", self.env_name)
+        Tags.of(self.state_machine).add("ManagedBy", "StepFunctionsAgentUI")
         
         # Store the state machine name for external reference
         self.state_machine_name = f"{self.agent_name}-{self.env_name}"

@@ -14,6 +14,7 @@ from cdk_monitoring_constructs import (
 )
 
 from typing import List
+import os
 
 class AgentMonitoringStack(Stack):
 
@@ -25,11 +26,15 @@ class AgentMonitoringStack(Stack):
                  **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
+        # Get environment suffix from CDK context or environment variable
+        env_suffix = self.node.try_get_context("env") or os.environ.get("CDK_ENV", "dev")
+        dashboard_name = f"AIAgentMonitoring-{env_suffix}"
+        
         high_level_facade = MonitoringFacade(
             self,
-            "AIAgentMonitoring",
+            dashboard_name,
         )
-        high_level_facade.add_large_header('AI Agent Monitoring Dashboard')
+        high_level_facade.add_large_header(f'AI Agent Monitoring Dashboard - {env_suffix.upper()}')
 
         # Adding the token metrics
         high_level_facade.add_medium_header('Token Metrics')

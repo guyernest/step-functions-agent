@@ -17,6 +17,7 @@ import {
 } from '@aws-amplify/ui-react'
 import { generateClient } from 'aws-amplify/data'
 import type { Schema } from '../../amplify/data/resource'
+// import StateMachineDiagram from './StateMachineDiagram' // Temporarily disabled until JSONata support is added
 
 const client = generateClient<Schema>()
 
@@ -84,6 +85,9 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [tools, setTools] = useState<Tool[]>([])
   const [loadingTools, setLoadingTools] = useState(false)
+  const [stateMachineInfo, setStateMachineInfo] = useState<any>(null)
+  const [loadingStateMachine, setLoadingStateMachine] = useState(false)
+  const [stateMachineError, setStateMachineError] = useState<string | null>(null)
 
   useEffect(() => {
     if (agent?.systemPrompt) {
@@ -96,9 +100,10 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
       setOriginalModel(agent.llmModel)
     }
     
-    // Fetch tool details and models when agent changes
+    // Fetch tool details, models and state machine info when agent changes
     if (agent && isOpen) {
       fetchToolDetails()
+      fetchStateMachineInfo()
       if (agent.llmProvider) {
         // Map the agent's provider name to the LLMModels provider name
         const mappedProvider = PROVIDER_MAPPING[agent.llmProvider] || agent.llmProvider
@@ -128,6 +133,30 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
       setAvailableModels([])
     } finally {
       setLoadingModels(false)
+    }
+  }
+
+  const fetchStateMachineInfo = async () => {
+    if (!agent?.name) return
+    
+    setLoadingStateMachine(true)
+    setStateMachineError(null)
+    try {
+      const response = await client.queries.getStateMachineInfo({
+        agentName: agent.name
+      })
+      
+      if (response.data) {
+        const data = typeof response.data === 'string' 
+          ? JSON.parse(response.data as string)
+          : response.data as any
+        setStateMachineInfo(data)
+      }
+    } catch (error) {
+      console.error('Error fetching state machine info:', error)
+      setStateMachineError('Failed to fetch state machine information')
+    } finally {
+      setLoadingStateMachine(false)
     }
   }
 
@@ -551,6 +580,187 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
                         </Flex>
                       ) : (
                         <Text>No tools configured</Text>
+                      )}
+                    </View>
+                  )
+                },
+                {
+                  label: 'Step Functions',
+                  value: 'step-functions',
+                  content: (
+                    <View marginTop="20px">
+                      {loadingStateMachine ? (
+                        <Flex justifyContent="center" alignItems="center" minHeight="200px">
+                          <Loader size="large" />
+                        </Flex>
+                      ) : stateMachineError ? (
+                        <Alert variation="error">
+                          {stateMachineError}
+                        </Alert>
+                      ) : stateMachineInfo ? (
+                        <Flex direction="column" gap="20px">
+                          {!stateMachineInfo.success ? (
+                            <Alert variation="error">
+                              {stateMachineInfo.error || 'State machine not found'}
+                              {stateMachineInfo.searchedCount && (
+                                <Text fontSize="small" marginTop="5px">
+                                  Searched {stateMachineInfo.searchedCount} state machines
+                                </Text>
+                              )}
+                            </Alert>
+                          ) : (
+                            <>
+                              <Card variation="outlined">
+                                <Flex direction="column" gap="10px">
+                                  <Heading level={5}>State Machine Details</Heading>
+                                  
+                                  <View backgroundColor="gray.10" padding="10px" borderRadius="4px">
+                                    <Flex direction="column" gap="8px">
+                                      <Text fontSize="small">
+                                        <strong>Name:</strong> {stateMachineInfo.stateMachine?.name}
+                                      </Text>
+                                      <Text fontSize="small" fontFamily="monospace">
+                                        <strong>ARN:</strong> {stateMachineInfo.stateMachine?.arn}
+                                      </Text>
+                                      <Text fontSize="small">
+                                        <strong>Status:</strong>{' '}
+                                        <Badge 
+                                          variation={stateMachineInfo.stateMachine?.status === 'ACTIVE' ? 'success' : 'warning'}
+                                          size="small"
+                                        >
+                                          {stateMachineInfo.stateMachine?.status}
+                                        </Badge>
+                                      </Text>
+                                      <Text fontSize="small">
+                                        <strong>Type:</strong> {stateMachineInfo.stateMachine?.type || 'STANDARD'}
+                                      </Text>
+                                      {stateMachineInfo.stateMachine?.creationDate && (
+                                        <Text fontSize="small">
+                                          <strong>Created:</strong>{' '}
+                                          {new Date(stateMachineInfo.stateMachine.creationDate).toLocaleString()}
+                                        </Text>
+                                      )}
+                                    </Flex>
+                                  </View>
+                                </Flex>
+                              </Card>
+
+                              <Card variation="outlined">
+                                <Flex direction="column" gap="10px">
+                                  <Heading level={5}>AWS Console Links</Heading>
+                                  
+                                  <Flex gap="10px">
+                                    <Button
+                                      variation="primary"
+                                      size="small"
+                                      onClick={() => window.open(stateMachineInfo.urls?.console, '_blank')}
+                                    >
+                                      View State Machine
+                                    </Button>
+                                    <Button
+                                      size="small"
+                                      onClick={() => window.open(stateMachineInfo.urls?.executions, '_blank')}
+                                    >
+                                      View Executions
+                                    </Button>
+                                  </Flex>
+                                </Flex>
+                              </Card>
+
+                              {stateMachineInfo.stateMachine?.roleArn && (
+                                <Card variation="outlined">
+                                  <Flex direction="column" gap="10px">
+                                    <Heading level={5}>Configuration</Heading>
+                                    
+                                    <View backgroundColor="gray.10" padding="10px" borderRadius="4px">
+                                      <Text fontSize="small" fontFamily="monospace">
+                                        <strong>Role ARN:</strong> {stateMachineInfo.stateMachine.roleArn}
+                                      </Text>
+                                    </View>
+                                    
+                                    {stateMachineInfo.stateMachine?.loggingConfiguration && (
+                                      <View backgroundColor="gray.10" padding="10px" borderRadius="4px">
+                                        <Text fontSize="small">
+                                          <strong>Logging Level:</strong>{' '}
+                                          {stateMachineInfo.stateMachine.loggingConfiguration.level || 'OFF'}
+                                        </Text>
+                                      </View>
+                                    )}
+                                  </Flex>
+                                </Card>
+                              )}
+
+                              {(stateMachineInfo.stateMachine?.asl || stateMachineInfo.stateMachine?.definition) && (
+                                <>
+                                  {/* State Machine Diagram - Temporarily disabled until JSONata support is added
+                                  <Card variation="outlined">
+                                    <Flex direction="column" gap="10px">
+                                      <Heading level={5}>State Machine Diagram</Heading>
+                                      <StateMachineDiagram
+                                        asl={stateMachineInfo.stateMachine.asl || stateMachineInfo.stateMachine.definition}
+                                        width={800}
+                                        height={500}
+                                      />
+                                    </Flex>
+                                  </Card>
+                                  */}
+                                  
+                                  <Card variation="outlined">
+                                    <Flex direction="column" gap="10px">
+                                      <Heading level={5}>State Machine Definition</Heading>
+                                      <Text fontSize="small" color="gray" marginBottom="10px">
+                                        View the raw ASL (Amazon States Language) definition of the state machine
+                                      </Text>
+                                      <details>
+                                        <summary style={{ cursor: 'pointer', padding: '10px 0' }}>
+                                          <Text fontWeight="bold">View ASL Definition</Text>
+                                        </summary>
+                                        <View 
+                                          backgroundColor="gray.10" 
+                                          padding="15px" 
+                                          borderRadius="4px"
+                                          style={{ maxHeight: '400px', overflow: 'auto' }}
+                                        >
+                                          <pre style={{ fontSize: '12px', fontFamily: 'monospace', margin: 0 }}>
+                                            {JSON.stringify(
+                                              stateMachineInfo.stateMachine.asl || 
+                                              (typeof stateMachineInfo.stateMachine.definition === 'string' 
+                                                ? JSON.parse(stateMachineInfo.stateMachine.definition)
+                                                : stateMachineInfo.stateMachine.definition),
+                                              null, 
+                                              2
+                                            )}
+                                          </pre>
+                                        </View>
+                                      </details>
+                                    </Flex>
+                                  </Card>
+                                </>
+                              )}
+
+                              <Card variation="outlined">
+                                <Flex direction="column" gap="10px">
+                                  <Heading level={5}>Test State Machine</Heading>
+                                  <Text fontSize="small" color="gray">
+                                    You can test this state machine by executing the agent from the Execute page.
+                                  </Text>
+                                  <Button
+                                    variation="primary"
+                                    size="small"
+                                    onClick={() => {
+                                      // Navigate to execute page with agent pre-selected
+                                      window.location.href = `/execute?agent=${encodeURIComponent(agent.name)}`
+                                    }}
+                                  >
+                                    Execute Agent
+                                  </Button>
+                                </Flex>
+                              </Card>
+                            </>
+                          )}
+                        </Flex>
+                      ) : (
+                        <Text>No state machine information available</Text>
                       )}
                     </View>
                   )

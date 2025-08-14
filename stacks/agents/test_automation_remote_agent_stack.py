@@ -1,7 +1,6 @@
 from aws_cdk import Stack, Fn
 from constructs import Construct
 from .modular_base_agent_stack import ModularBaseAgentStack
-from ..shared.base_agent_construct import BaseAgentConstruct
 import json
 
 
@@ -18,7 +17,15 @@ class TestAutomationRemoteAgentStack(ModularBaseAgentStack):
     """
 
     def __init__(self, scope: Construct, construct_id: str, env_name: str = "prod", **kwargs) -> None:
-        # Import Claude LLM ARN from shared stack
+
+        # Set agent-specific properties for registry
+        self.agent_description = "Test automation agent with remote execution workflow and Microsoft 365 integration capabilities"
+        self.llm_provider = "claude"
+        self.llm_model = "claude-3-5-sonnet-20241022"
+        self.agent_metadata = {
+            "tags": ['test-automation', 'remote-execution', 'approval-workflow', 'microsoft-365', 'e2b']
+        }
+                # Import Claude LLM ARN from shared stack
         claude_lambda_arn = Fn.import_value(f"SharedClaudeLambdaArn-{env_name}")
         
         # Import tool Lambda ARNs and Activity ARNs
@@ -88,69 +95,11 @@ Always explain what automation you're planning before execution.""",
             **kwargs
         )
         
-        # Store env_name for registration
-        self.env_name = env_name
-        
-        # Register this agent in the Agent Registry
-        self._register_agent_in_registry()
-    
-    def _register_agent_in_registry(self):
-        """Register this test automation remote agent in the Agent Registry"""
-        
-        # Define automation remote agent specification
-        agent_spec = {
-            "agent_name": "test-automation-remote-agent",
-            "version": "v1.0", 
-            "status": "active",
-            "system_prompt": """You are an automation assistant with remote execution capabilities for local system automation and Microsoft 365 integration.
-
-Your responsibilities:
-- Design automation scripts for remote execution on local systems using local_agent_execute
-- Interact with Microsoft 365 services via Microsoft Graph API
-- Handle remote execution timeouts and failures gracefully
-- Provide clear explanations of automation tasks
-- Use PyAutoGUI format for UI automation scripts
-
-Key features:
-- local_agent_execute: Remote execution on local systems via Step Functions Activities
-- MicrosoftGraphAPI: Direct access to emails, Teams, SharePoint, calendar, and user data
-  Example endpoints: 'users/guy.ernest@ai-on-cloud.com/messages', 'users/guy.ernest@ai-on-cloud.com/sendMail'
-- 5-minute timeout for remote operations
-- Secure execution in isolated environments
-- Real-time feedback from remote workers
-
-Always design robust automation that handles common edge cases.""",
-            "description": "Test automation agent with remote execution workflow and Microsoft 365 integration capabilities",
-            "llm_provider": "claude",
-            "llm_model": "claude-3-5-sonnet-20241022",
-            "tools": [
-                {"tool_name": "local_agent_execute", "enabled": True, "version": "latest", "execution_type": "remote"},
-                {"tool_name": "MicrosoftGraphAPI", "enabled": True, "version": "latest", "execution_type": "lambda"}
-            ],
-            "observability": {
-                "log_group": f"/aws/stepfunctions/test-automation-remote-agent-{self.env_name}",
-                "metrics_namespace": "AIAgents/TestAutomationRemote",
-                "trace_enabled": True,
-                "log_level": "INFO"
-            },
-            "parameters": {
-                "max_iterations": 3,
-                "temperature": 0.2,
-                "timeout_seconds": 600,  # Longer timeout for remote operations
-                "max_tokens": 4096
-            },
-            "metadata": {
-                "created_by": "system",
-                "tags": ["automation", "remote", "rpa", "test", "local-execution"],
-                "deployment_env": self.env_name,
-                "test_scenario": "remote_execution_workflow"
-            }
+        # Set agent-specific properties for registry
+        self.agent_description = "Test automation agent with remote execution workflow and Microsoft 365 integration capabilities"
+        self.llm_provider = "claude"
+        self.llm_model = "claude-3-5-sonnet-20241022"
+        self.agent_metadata = {
+            "tags": ["automation", "remote", "rpa", "test", "local-execution"],
+            "test_scenario": "remote_execution_workflow"
         }
-        
-        # Use BaseAgentConstruct for registration
-        BaseAgentConstruct(
-            self,
-            "TestAutomationRemoteAgentRegistration",
-            agent_spec=agent_spec,
-            env_name=self.env_name
-        )

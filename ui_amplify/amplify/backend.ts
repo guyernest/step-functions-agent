@@ -10,6 +10,7 @@ import { testToolExecution } from './backend/function/testToolExecution/resource
 import { updateProviderAPIKey } from './backend/function/updateProviderAPIKey/resource';
 import { getToolSecretValues } from './backend/function/getToolSecretValues/resource';
 import { updateToolSecrets } from './backend/function/updateToolSecrets/resource';
+import { getStateMachineInfo } from './backend/function/getStateMachineInfo/resource';
 import { PolicyStatement, Effect, Policy } from 'aws-cdk-lib/aws-iam';
 import { aws_dynamodb, RemovalPolicy } from 'aws-cdk-lib';
 
@@ -28,6 +29,7 @@ const backend = defineBackend({
   updateProviderAPIKey,
   getToolSecretValues,
   updateToolSecrets,
+  getStateMachineInfo,
 });
 
 // Set the Cognito User Pool name
@@ -251,3 +253,16 @@ const updateToolSecretsPolicy = new PolicyStatement({
 });
 
 backend.updateToolSecrets.resources.lambda.addToRolePolicy(updateToolSecretsPolicy);
+
+// Grant Step Functions permissions to the getStateMachineInfo Lambda
+const getStateMachineInfoPolicy = new PolicyStatement({
+  effect: Effect.ALLOW,
+  actions: [
+    'states:DescribeStateMachine',
+    'states:ListStateMachines',
+    'states:ListTagsForResource'
+  ],
+  resources: ['*']
+});
+
+backend.getStateMachineInfo.resources.lambda.addToRolePolicy(getStateMachineInfoPolicy);

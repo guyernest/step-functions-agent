@@ -1,14 +1,17 @@
 import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
+import { CloudWatchLogsClient, FilterLogEventsCommand } from '@aws-sdk/client-cloudwatch-logs';
 
 declare const process: { env: { AWS_REGION?: string } };
 
 const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const lambdaClient = new LambdaClient({ region: process.env.AWS_REGION });
+const logsClient = new CloudWatchLogsClient({ region: process.env.AWS_REGION });
 
 interface TestToolInput {
   toolName: string;
   testInput: string;
+  logLevel?: string;  // Add support for log level
 }
 
 export const handler = async (event: any): Promise<any> => {
@@ -18,11 +21,13 @@ export const handler = async (event: any): Promise<any> => {
     // Handle both direct Lambda invocation and GraphQL AppSync context
     let toolName: string;
     let testInput: Record<string, any>;
+    let logLevel: string = 'INFO';  // Default log level
     
     if (event.arguments) {
       // GraphQL AppSync context
       const args = event.arguments as TestToolInput;
       toolName = args.toolName;
+      logLevel = args.logLevel || 'INFO';
       // Parse the JSON string
       try {
         const parsedInput = JSON.parse(args.testInput);
@@ -45,6 +50,7 @@ export const handler = async (event: any): Promise<any> => {
     } else {
       // Direct Lambda invocation
       ({ toolName, testInput } = event as { toolName: string; testInput: Record<string, any> });
+      logLevel = event.logLevel || 'INFO';
     }
     
     if (!toolName) {
@@ -106,11 +112,17 @@ export const handler = async (event: any): Promise<any> => {
     const toolPayload = {
       name: toolName,
       id: `toolu_test_${Date.now()}`, // Generate a test ID similar to Step Functions format
-      input: testInput
+      input: testInput,
+      // Include debug info for tools that support it
+      _debug: {
+        log_level: logLevel
+      },
+      _test_mode: true  // Flag to indicate this is a test invocation
     };
     
     console.log('Invoking tool with payload:', JSON.stringify(toolPayload, null, 2));
     console.log('Tool Lambda ARN:', lambdaArn);
+    console.log('Log level:', logLevel);
     
     const invokeCommand = new InvokeCommand({
       FunctionName: lambdaArn,
@@ -125,6 +137,8 @@ export const handler = async (event: any): Promise<any> => {
     // Parse the response
     let result;
     let isError = false;
+    let requestId: string | undefined;
+    
     if (invokeResponse.Payload) {
       const payloadStr = new TextDecoder().decode(invokeResponse.Payload);
       try {
@@ -134,8 +148,52 @@ export const handler = async (event: any): Promise<any> => {
           isError = true;
           console.error('Tool Lambda returned an error:', result);
         }
+        // Extract request ID from debug info if available
+        if (result._debug && result._debug.request_id) {
+          requestId = result._debug.request_id;
+        }
       } catch (e) {
         result = payloadStr;
+      }
+    }
+
+    // Query CloudWatch logs if we have a request ID and log level is DEBUG
+    let logs: string[] = [];
+    let cloudWatchUrl: string | undefined;
+    
+    if (requestId && logLevel === 'DEBUG') {
+      try {
+        // Extract function name from ARN
+        const functionName = lambdaArn.split(':').pop() || lambdaArn;
+        const logGroupName = `/aws/lambda/${functionName}`;
+        
+        // Wait a moment for logs to be available
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Query logs for this request
+        const logCommand = new FilterLogEventsCommand({
+          logGroupName,
+          filterPattern: `"${requestId}"`,
+          startTime: startTime - 5000, // 5 seconds before
+          endTime: Date.now() + 5000, // 5 seconds after
+          limit: 100
+        });
+        
+        const logResponse = await logsClient.send(logCommand);
+        
+        if (logResponse.events) {
+          logs = logResponse.events
+            .filter(event => event.message)
+            .map(event => event.message!);
+        }
+        
+        // Generate CloudWatch Insights URL
+        const region = process.env.AWS_REGION || 'us-west-2';
+        const encodedQuery = encodeURIComponent(`fields @timestamp, @message | filter @requestId="${requestId}" | sort @timestamp desc`);
+        cloudWatchUrl = `https://console.aws.amazon.com/cloudwatch/home?region=${region}#logsV2:logs-insights$3FqueryDetail$3D~(query~'${encodedQuery}~source~'${encodeURIComponent(logGroupName)})`;
+        
+      } catch (logError) {
+        console.error('Failed to retrieve CloudWatch logs:', logError);
       }
     }
 
@@ -149,8 +207,12 @@ export const handler = async (event: any): Promise<any> => {
         lambdaArn,
         statusCode: invokeResponse.StatusCode,
         functionError: invokeResponse.FunctionError || (isError ? 'Unhandled' : undefined),
-        logResult: invokeResponse.LogResult
+        logResult: invokeResponse.LogResult,
+        requestId,
+        logLevel
       },
+      logs: logs.length > 0 ? logs : undefined,
+      cloudWatchUrl,
       schema: inputSchema,
       error: isError ? (result.errorMessage || 'Tool execution failed') : undefined
     };

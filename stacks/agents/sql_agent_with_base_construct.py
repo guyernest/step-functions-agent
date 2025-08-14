@@ -1,11 +1,10 @@
 from aws_cdk import Stack, Fn
 from constructs import Construct
-from .base_agent_stack import BaseAgentStack
-from ..shared.tool_definitions import AllTools
+from .modular_base_agent_stack import ModularBaseAgentStack
 import json
 
 
-class SQLAgentStack(BaseAgentStack):
+class SQLAgentStack(ModularBaseAgentStack):
     """
     SQL Agent Stack - Uses base agent stack for simplified deployment
     
@@ -17,6 +16,15 @@ class SQLAgentStack(BaseAgentStack):
     """
 
     def __init__(self, scope: Construct, construct_id: str, env_name: str = "prod", **kwargs) -> None:
+
+        # Set agent-specific properties for registry
+        self.agent_description = "SQL assistant with database query and Python code execution capabilities"
+        self.llm_provider = "claude"
+        self.llm_model = "claude-3-5-sonnet-20241022"
+        self.agent_metadata = {
+            "tags": ['sql', 'database', 'data-analysis', 'python', 'queries']
+        }
+        
         # Import Claude LLM ARN from shared stack
         claude_lambda_arn = Fn.import_value(f"SharedClaudeLambdaArn-{env_name}")
         
@@ -45,13 +53,8 @@ class SQLAgentStack(BaseAgentStack):
             }
         ]
         
-        # Validate tool names exist in centralized definitions
-        tool_names = [config["tool_name"] for config in tool_configs]
-        invalid_tools = AllTools.validate_tool_names(tool_names)
-        if invalid_tools:
-            raise ValueError(f"SQL Agent uses invalid tools: {invalid_tools}. Available tools: {AllTools.get_all_tool_names()}")
-        
-        # Call BaseAgentStack constructor
+                
+        # Call ModularBaseAgentStack constructor
         super().__init__(
             scope,
             construct_id,
@@ -63,52 +66,3 @@ class SQLAgentStack(BaseAgentStack):
             **kwargs
         )
         
-        # Store env_name for registration
-        self.env_name = env_name
-        
-        # Agent registration is handled by BaseAgentStack
-    
-    def get_agent_specification(self):
-        """Override to provide SQL agent-specific specification"""
-        
-        # Define SQL agent specification
-        return {
-            "agent_name": "sql-agent",
-            "version": "v1.0",
-            "status": "active",
-            "system_prompt": """You are an expert SQL assistant with deep knowledge of database systems and query optimization.
-                
-Your primary responsibilities:
-- Analyze database schemas and understand table relationships
-- Write efficient, optimized SQL queries
-- Explain query results clearly
-- Suggest performance improvements
-- Handle complex joins and aggregations
-
-Always ensure queries are safe and follow best practices. Use the get_db_schema tool to understand the database structure before writing queries. You can also execute Python code for data analysis, visualization, or calculations using the execute_python tool.""",
-            "description": "SQL query generation and database analysis agent",
-            "llm_provider": "claude",
-            "llm_model": "claude-3-5-sonnet-20241022",
-            "tools": [
-                {"tool_name": "get_db_schema", "enabled": True, "version": "latest"},
-                {"tool_name": "execute_sql_query", "enabled": True, "version": "latest"},
-                {"tool_name": "execute_python", "enabled": True, "version": "latest"}
-            ],
-            "observability": {
-                "log_group": f"/aws/stepfunctions/sql-agent-{self.env_name}",
-                "metrics_namespace": "AIAgents/SQL",
-                "trace_enabled": True,
-                "log_level": "INFO"
-            },
-            "parameters": {
-                "max_iterations": 5,
-                "temperature": 0.3,
-                "timeout_seconds": 300,
-                "max_tokens": 4096
-            },
-            "metadata": {
-                "created_by": "system",
-                "tags": ["sql", "database", "production"],
-                "deployment_env": self.env_name
-            }
-        }

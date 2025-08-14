@@ -17,6 +17,21 @@ class TestSQLApprovalAgentStack(ModularBaseAgentStack):
     """
 
     def __init__(self, scope: Construct, construct_id: str, env_name: str = "prod", **kwargs) -> None:
+        # Set agent-specific properties for registry
+        self.agent_description = "Test SQL agent demonstrating human approval workflow for database operations"
+        self.llm_provider = "claude"
+        self.llm_model = "claude-3-5-sonnet-20241022"
+        self.agent_metadata = {
+            "tags": ["sql", "database", "approval", "test", "security"],
+            "test_scenario": "human_approval_workflow",
+            "parameters": {
+                "max_iterations": 5,
+                "temperature": 0.3,
+                "timeout_seconds": 300,
+                "max_tokens": 4096
+            }
+        }
+        
         # Import Claude LLM ARN from shared stack
         claude_lambda_arn = Fn.import_value(f"SharedClaudeLambdaArn-{env_name}")
         
@@ -74,66 +89,5 @@ Always explain what you're trying to do before requesting approval-required oper
             **kwargs
         )
         
-        # Store env_name for registration
-        self.env_name = env_name
-        
-        # Register this agent in the Agent Registry
-        self._register_agent_in_registry()
-    
-    def _register_agent_in_registry(self):
-        """Register this test SQL approval agent in the Agent Registry"""
-        
-        # Define SQL approval agent specification
-        agent_spec = {
-            "agent_name": "test-sql-approval-agent",
-            "version": "v1.0",
-            "status": "active",
-            "system_prompt": """You are a SQL assistant with human approval workflow for secure database operations.
-
-Your responsibilities:
-- Analyze database schemas safely (no approval needed)
-- Request human approval for SQL queries and code execution
-- Handle approval rejections gracefully by revising your approach
-- Explain your intentions clearly when requesting approvals
-
-Security features:
-- Human approval required for execute_sql_query
-- Human approval required for execute_python  
-- Safe schema exploration with get_db_schema
-
-Always be patient and respectful during the approval process.""",
-            "description": "Test SQL agent demonstrating human approval workflow for database operations",
-            "llm_provider": "claude",
-            "llm_model": "claude-3-5-sonnet-20241022",
-            "tools": [
-                {"tool_name": "get_db_schema", "enabled": True, "version": "latest", "requires_approval": False},
-                {"tool_name": "execute_sql_query", "enabled": True, "version": "latest", "requires_approval": True},
-                {"tool_name": "execute_python", "enabled": True, "version": "latest", "requires_approval": True}
-            ],
-            "observability": {
-                "log_group": f"/aws/stepfunctions/test-sql-approval-agent-{self.env_name}",
-                "metrics_namespace": "AIAgents/TestSQLApproval",
-                "trace_enabled": True,
-                "log_level": "INFO"
-            },
-            "parameters": {
-                "max_iterations": 5,
-                "temperature": 0.3,
-                "timeout_seconds": 300,
-                "max_tokens": 4096
-            },
-            "metadata": {
-                "created_by": "system",
-                "tags": ["sql", "database", "approval", "test", "security"],
-                "deployment_env": self.env_name,
-                "test_scenario": "human_approval_workflow"
-            }
-        }
-        
-        # Use BaseAgentConstruct for registration
-        BaseAgentConstruct(
-            self,
-            "TestSQLApprovalAgentRegistration",
-            agent_spec=agent_spec,
-            env_name=self.env_name
-        )
+        # Store env_name for registration (handled by ModularBaseAgentStack)
+        # The parent class will automatically register this agent

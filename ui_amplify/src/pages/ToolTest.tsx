@@ -37,7 +37,11 @@ interface TestResult {
     lambdaArn?: string;
     statusCode?: number;
     functionError?: string;
+    requestId?: string;
+    logLevel?: string;
   };
+  logs?: string[];
+  cloudWatchUrl?: string;
 }
 
 export default function ToolTest() {
@@ -50,6 +54,7 @@ export default function ToolTest() {
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [inputSchema, setInputSchema] = useState<any>(null);
+  const [logLevel, setLogLevel] = useState<string>('INFO');
 
   useEffect(() => {
     loadTools();
@@ -187,11 +192,13 @@ export default function ToolTest() {
       console.log('Calling testToolExecution with:', {
         toolName: selectedTool,
         testInput: testInputString,
+        logLevel: logLevel,
       });
       
       const response = await client.mutations.testToolExecution({
         toolName: selectedTool,
         testInput: testInputString,
+        logLevel: logLevel,
       });
       
       console.log('Response from testToolExecution:', response);
@@ -347,6 +354,18 @@ export default function ToolTest() {
                 />
               </Flex>
 
+              <SelectField
+                label="Log Level"
+                descriptiveText="Set the logging level for detailed debugging"
+                value={logLevel}
+                onChange={(e) => setLogLevel(e.target.value)}
+              >
+                <option value="ERROR">ERROR - Only errors</option>
+                <option value="WARNING">WARNING - Errors and warnings</option>
+                <option value="INFO">INFO - Standard logging (default)</option>
+                <option value="DEBUG">DEBUG - Detailed debugging with CloudWatch logs</option>
+              </SelectField>
+
               <Button
                 variation="primary"
                 onClick={handleTest}
@@ -436,7 +455,39 @@ export default function ToolTest() {
                           Lambda ARN: <code style={{ fontSize: '11px' }}>{testResult.metadata.lambdaArn}</code>
                         </Text>
                       )}
+                      {testResult.metadata.requestId && (
+                        <Text fontSize="small">
+                          Request ID: <code style={{ fontSize: '11px' }}>{testResult.metadata.requestId}</code>
+                        </Text>
+                      )}
+                      {testResult.metadata.logLevel && (
+                        <Text fontSize="small">
+                          Log Level: <Badge>{testResult.metadata.logLevel}</Badge>
+                        </Text>
+                      )}
                     </Flex>
+                  </View>
+                )}
+
+                {testResult.logs && testResult.logs.length > 0 && (
+                  <View marginTop="1rem">
+                    <Text fontWeight="bold" marginBottom="0.5rem">Execution Logs:</Text>
+                    <View backgroundColor="rgba(0,0,0,0.05)" padding="0.5rem" borderRadius="4px" maxHeight="300px" style={{ overflow: 'auto' }}>
+                      <pre style={{ margin: 0, fontSize: '11px', fontFamily: 'monospace' }}>
+                        {testResult.logs.join('\n')}
+                      </pre>
+                    </View>
+                  </View>
+                )}
+
+                {testResult.cloudWatchUrl && (
+                  <View marginTop="1rem">
+                    <Button
+                      variation="link"
+                      onClick={() => window.open(testResult.cloudWatchUrl, '_blank')}
+                    >
+                      View Detailed Logs in CloudWatch →
+                    </Button>
                   </View>
                 )}
               </Card>
