@@ -40,6 +40,9 @@ class WebResearchToolStack(Stack):
         
         self.env_name = env_name
         
+        # Don't import shared resources here - BaseToolConstruct will do it
+        # self._import_shared_resources()
+        
         # Create tool-specific secrets
         self._create_web_research_secret()
         
@@ -105,12 +108,15 @@ class WebResearchToolStack(Stack):
             ]
         )
         
-        # Grant access to research tool secrets
+        # Grant access to both individual and consolidated secrets
         go_lambda_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 actions=["secretsmanager:GetSecretValue"],
-                resources=[self.web_research_secret.secret_arn]
+                resources=[
+                    self.web_research_secret.secret_arn,
+                    f"arn:aws:secretsmanager:*:*:secret:/ai-agent/tool-secrets/{self.env_name}*"
+                ]
             )
         )
         
@@ -140,7 +146,8 @@ class WebResearchToolStack(Stack):
                 role=go_lambda_role,
                 environment={
                     "ENVIRONMENT": self.env_name,
-                    "WEB_RESEARCH_SECRET_NAME": self.web_research_secret.secret_name
+                    "WEB_RESEARCH_SECRET_NAME": self.web_research_secret.secret_name,
+                    "LOG_LEVEL": "DEBUG"  # Set to DEBUG for detailed logging
                 }
             )
         else:
@@ -158,7 +165,8 @@ class WebResearchToolStack(Stack):
                 role=go_lambda_role,
                 environment={
                     "ENVIRONMENT": self.env_name,
-                    "WEB_RESEARCH_SECRET_NAME": self.web_research_secret.secret_name
+                    "WEB_RESEARCH_SECRET_NAME": self.web_research_secret.secret_name,
+                    "LOG_LEVEL": "DEBUG"  # Set to DEBUG for detailed logging
                 }
             )
         
@@ -178,13 +186,16 @@ class WebResearchToolStack(Stack):
             for tool_def in tool_definitions
         ]
         
-        # Use BaseToolConstruct for registration
+        # Use BaseToolConstruct for registration with secret requirements
         BaseToolConstruct(
             self,
             "WebResearchTools",
             tool_specs=tool_specs,
             lambda_function=self.go_research_lambda,
-            env_name=self.env_name
+            env_name=self.env_name,
+            secret_requirements={
+                "web-research": ["PPLX_API_KEY"]
+            }
         )
 
         # Store Lambda function reference for monitoring
