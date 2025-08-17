@@ -164,6 +164,23 @@ const schema = a.schema({
     )
     .authorization((allow) => [allow.authenticated()]),
   
+  updateAgentProviderAndModel: a
+    .mutation()
+    .arguments({
+      agentName: a.string().required(),
+      version: a.string().required(),
+      provider: a.string().required(),
+      modelId: a.string().required()
+    })
+    .returns(a.json())
+    .handler(
+      a.handler.custom({
+        dataSource: 'AgentRegistryDataSource',
+        entry: './updateAgentProviderAndModel.js',
+      })
+    )
+    .authorization((allow) => [allow.authenticated()]),
+  
   getCloudWatchMetrics: a
     .query()
     .arguments({

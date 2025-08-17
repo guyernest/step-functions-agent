@@ -240,6 +240,29 @@ class SharedLLMStack(Stack):
             handler="lambda_handler",
             **common_config
         )
+
+        # Unified Rust LLM Service
+        self.unified_rust_llm = _lambda.Function(
+            self,
+            "SharedUnifiedRustLLM",
+            function_name=f"shared-unified-rust-llm-{self.env_name}",
+            description="Shared Unified Rust LLM service supporting all providers",
+            code=_lambda.Code.from_asset("lambda/call_llm_rust/target/lambda/bootstrap"),
+            handler="main",
+            runtime=_lambda.Runtime.PROVIDED_AL2023,
+            timeout=Duration.seconds(90),
+            memory_size=512,  # Rust may need slightly more memory for cold starts
+            architecture=_lambda.Architecture.ARM_64,
+            log_group=self.log_group,
+            role=self.llm_execution_role,
+            tracing=_lambda.Tracing.ACTIVE,
+            environment={
+                "ENVIRONMENT": self.env_name,
+                "POWERTOOLS_SERVICE_NAME": "unified-rust-llm",
+                "POWERTOOLS_LOG_LEVEL": "INFO",
+                "RUST_LOG": "info"
+            }
+        )
         
         # Store function names for external reference (e.g., monitoring)
         self.claude_function_name = f"shared-claude-llm-{self.env_name}"
@@ -247,6 +270,7 @@ class SharedLLMStack(Stack):
         self.gemini_function_name = f"shared-gemini-llm-{self.env_name}"
         self.bedrock_function_name = f"shared-bedrock-llm-{self.env_name}"
         self.deepseek_function_name = f"shared-deepseek-llm-{self.env_name}"
+        self.unified_rust_llm_function_name = f"shared-unified-rust-llm-{self.env_name}"
 
     def _create_stack_exports(self):
         """Create CloudFormation outputs for agent stacks to import"""
@@ -290,6 +314,14 @@ class SharedLLMStack(Stack):
             value=self.deepseek_lambda.function_arn,
             export_name=f"SharedDeepSeekLambdaArn-{self.env_name}",
             description="ARN of the shared DeepSeek Lambda function"
+        )
+
+        CfnOutput(
+            self, 
+            "UnifiedRustLLMLambdaArn",
+            value=self.unified_rust_llm.function_arn,
+            export_name=f"SharedUnifiedRustLLMLambdaArn-{self.env_name}",
+            description="ARN of the shared Unified Rust LLM Lambda function"
         )
 
         # Export LLM secret ARN for tools that need LLM access

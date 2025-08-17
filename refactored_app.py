@@ -38,6 +38,10 @@ from stacks.agents.graphql_agent_stack import GraphQLAgentStack
 from stacks.agents.image_analysis_agent_stack import ImageAnalysisAgentStack
 from stacks.agents.test_sql_approval_agent_stack import TestSQLApprovalAgentStack
 from stacks.agents.test_automation_remote_agent_stack import TestAutomationRemoteAgentStack
+from stacks.agents.sql_agent_unified_llm_stack import SQLAgentUnifiedLLMStack
+from stacks.agents.web_research_agent_unified_llm_stack import WebResearchAgentUnifiedLLMStack
+from stacks.agents.google_maps_agent_unified_llm_stack import GoogleMapsAgentUnifiedLLMStack
+from stacks.agents.test_automation_remote_agent_unified_llm_stack import TestAutomationRemoteAgentUnifiedLLMStack
 from step_functions_agent.agent_monitoring_stack import AgentMonitoringStack
 
 
@@ -238,6 +242,42 @@ def main():
         env_name=environment,
         env=env,
         description=f"SQL agent using base construct for {environment} environment"
+    )
+    
+    # SQL Agent with Unified Rust LLM - for side-by-side testing
+    sql_agent_rust = SQLAgentUnifiedLLMStack(
+        app,
+        f"SQLAgentUnifiedLLMStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"SQL agent using unified Rust LLM for {environment} environment"
+    )
+    
+    # Web Research Agent with Unified Rust LLM - high-performance research
+    web_research_agent_rust = WebResearchAgentUnifiedLLMStack(
+        app,
+        f"WebResearchAgentUnifiedLLMStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Web research agent using unified Rust LLM for {environment} environment"
+    )
+    
+    # Google Maps Agent with Unified Rust LLM - location services
+    google_maps_agent_rust = GoogleMapsAgentUnifiedLLMStack(
+        app,
+        f"GoogleMapsAgentUnifiedLLMStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Google Maps agent using unified Rust LLM for {environment} environment"
+    )
+    
+    # Test Automation Remote Agent with Unified Rust LLM - automation and integration
+    test_automation_agent_rust = TestAutomationRemoteAgentUnifiedLLMStack(
+        app,
+        f"TestAutomationRemoteAgentUnifiedLLMStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Test automation agent with remote execution using unified Rust LLM for {environment} environment"
     )
     
     # Google Maps Agent - uses Gemini LLM with Google Maps tools

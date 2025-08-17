@@ -59,3 +59,18 @@ amplify_outputs*
 amplifyconfiguration*
 notebooks/
 claude-instance/
+
+# Log files
+*.log
+deploy_output.log
+
+# Rust build artifacts
+lambda/call_llm_rust/target/
+lambda/call_llm_rust/Cargo.lock
+
+# Go build artifacts  
+lambda/tools/web-research/bootstrap
+lambda/tools/*/bootstrap
+
+# UI build artifacts
+ui_amplify/dist/

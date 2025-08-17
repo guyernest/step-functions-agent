@@ -30,7 +30,7 @@ class GoogleMapsAgentStack(ModularBaseAgentStack):
         # Set agent-specific properties for registry
         self.agent_description = "Location and mapping assistant with Google Maps integration"
         self.llm_provider = "gemini"
-        self.llm_model = "gemini-1.5-flash"
+        self.llm_model = "gemini-2.0-flash-exp"
         self.agent_metadata = {
             "tags": ['maps', 'location', 'geocoding', 'directions', 'google-maps']
         }
@@ -115,7 +115,7 @@ You work best with Google's ecosystem and can provide rich, detailed location-ba
         # Set agent-specific properties for registry
         self.agent_description = "Location and mapping assistant with Google Maps integration"
         self.llm_provider = "gemini"
-        self.llm_model = "gemini-1.5-flash"
+        self.llm_model = "gemini-2.0-flash-exp"
         self.agent_metadata = {
             "tags": ['location', 'maps', 'navigation', 'geocoding', 'places']
         }

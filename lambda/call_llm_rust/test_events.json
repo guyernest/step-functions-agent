@@ -1,0 +1,290 @@
+{
+  "openai_simple_test": {
+    "provider_config": {
+      "provider_id": "openai",
+      "model_id": "gpt-4o-mini",
+      "endpoint": "https://api.openai.com/v1/chat/completions",
+      "auth_header_name": "Authorization",
+      "auth_header_prefix": "Bearer ",
+      "secret_path": "/ai-agent/llm-secrets/prod",
+      "secret_key_name": "OPENAI_API_KEY",
+      "request_transformer": "openai_v1",
+      "response_transformer": "openai_v1",
+      "timeout": 30
+    },
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello! Can you tell me what 2+2 equals?"
+      }
+    ],
+    "temperature": 0.7,
+    "max_tokens": 100,
+    "stream": false
+  },
+
+  "openai_tool_calling_test": {
+    "provider_config": {
+      "provider_id": "openai",
+      "model_id": "gpt-4o-mini",
+      "endpoint": "https://api.openai.com/v1/chat/completions",
+      "auth_header_name": "Authorization",
+      "auth_header_prefix": "Bearer ",
+      "secret_path": "/ai-agent/llm-secrets/prod",
+      "secret_key_name": "OPENAI_API_KEY",
+      "request_transformer": "openai_v1",
+      "response_transformer": "openai_v1",
+      "timeout": 30
+    },
+    "messages": [
+      {
+        "role": "user",
+        "content": "What's the weather like in Tokyo?"
+      }
+    ],
+    "tools": [
+      {
+        "name": "get_weather",
+        "description": "Get the current weather in a given location",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string",
+              "description": "The city and country, e.g. Tokyo, Japan"
+            }
+          },
+          "required": ["location"]
+        }
+      }
+    ],
+    "temperature": 0.7,
+    "max_tokens": 150,
+    "stream": false
+  },
+
+  "anthropic_simple_test": {
+    "provider_config": {
+      "provider_id": "anthropic",
+      "model_id": "claude-3-5-sonnet-20241022",
+      "endpoint": "https://api.anthropic.com/v1/messages",
+      "auth_header_name": "x-api-key",
+      "secret_path": "/ai-agent/llm-secrets/prod",
+      "secret_key_name": "ANTHROPIC_API_KEY",
+      "request_transformer": "anthropic_v1",
+      "response_transformer": "anthropic_v1",
+      "timeout": 30
+    },
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello! Can you explain quantum computing in one sentence?"
+      }
+    ],
+    "temperature": 0.7,
+    "max_tokens": 100,
+    "stream": false
+  },
+
+  "anthropic_tool_calling_test": {
+    "provider_config": {
+      "provider_id": "anthropic",
+      "model_id": "claude-3-5-sonnet-20241022",
+      "endpoint": "https://api.anthropic.com/v1/messages",
+      "auth_header_name": "x-api-key",
+      "secret_path": "/ai-agent/llm-secrets/prod",
+      "secret_key_name": "ANTHROPIC_API_KEY",
+      "request_transformer": "anthropic_v1",
+      "response_transformer": "anthropic_v1",
+      "timeout": 30
+    },
+    "messages": [
+      {
+        "role": "user",
+        "content": "What's the current time in New York?"
+      }
+    ],
+    "tools": [
+      {
+        "name": "get_current_time",
+        "description": "Get the current time in a specific timezone",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "timezone": {
+              "type": "string",
+              "description": "The timezone, e.g. America/New_York"
+            }
+          },
+          "required": ["timezone"]
+        }
+      }
+    ],
+    "temperature": 0.7,
+    "max_tokens": 150,
+    "stream": false
+  },
+
+  "gemini_simple_test": {
+    "provider_config": {
+      "provider_id": "gemini",
+      "model_id": "gemini-1.5-flash",
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+      "auth_header_name": "x-goog-api-key",
+      "secret_path": "/ai-agent/llm-secrets/prod",
+      "secret_key_name": "GEMINI_API_KEY",
+      "request_transformer": "gemini_v1",
+      "response_transformer": "gemini_v1",
+      "timeout": 30
+    },
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello! What is the capital of France?"
+      }
+    ],
+    "temperature": 0.7,
+    "max_tokens": 100,
+    "stream": false
+  },
+
+  "gemini_tool_calling_test": {
+    "provider_config": {
+      "provider_id": "gemini",
+      "model_id": "gemini-1.5-flash",
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+      "auth_header_name": "x-goog-api-key",
+      "secret_path": "/ai-agent/llm-secrets/prod",
+      "secret_key_name": "GEMINI_API_KEY",
+      "request_transformer": "gemini_v1",
+      "response_transformer": "gemini_v1",
+      "timeout": 30
+    },
+    "messages": [
+      {
+        "role": "user",
+        "content": "Can you help me calculate the area of a circle with radius 5?"
+      }
+    ],
+    "tools": [
+      {
+        "name": "calculate_circle_area",
+        "description": "Calculate the area of a circle given its radius",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "radius": {
+              "type": "number",
+              "description": "The radius of the circle"
+            }
+          },
+          "required": ["radius"]
+        }
+      }
+    ],
+    "temperature": 0.7,
+    "max_tokens": 150,
+    "stream": false
+  },
+
+  "conversation_with_tool_result_openai": {
+    "provider_config": {
+      "provider_id": "openai",
+      "model_id": "gpt-4o-mini",
+      "endpoint": "https://api.openai.com/v1/chat/completions",
+      "auth_header_name": "Authorization",
+      "auth_header_prefix": "Bearer ",
+      "secret_path": "/ai-agent/llm-secrets/prod",
+      "secret_key_name": "OPENAI_API_KEY",
+      "request_transformer": "openai_v1",
+      "response_transformer": "openai_v1",
+      "timeout": 30
+    },
+    "messages": [
+      {
+        "role": "user",
+        "content": "What's the weather like in Tokyo?"
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": ""
+          },
+          {
+            "type": "tool_use",
+            "id": "call_abc123",
+            "name": "get_weather",
+            "input": {
+              "location": "Tokyo, Japan"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "call_abc123",
+            "content": "The weather in Tokyo is currently sunny with a temperature of 22°C (72°F). There are clear skies with a light breeze from the east at 5 km/h. Humidity is at 60% and visibility is excellent at 10+ km."
+          }
+        ]
+      }
+    ],
+    "temperature": 0.7,
+    "max_tokens": 200,
+    "stream": false
+  },
+
+  "conversation_with_tool_result_anthropic": {
+    "provider_config": {
+      "provider_id": "anthropic",
+      "model_id": "claude-3-5-sonnet-20241022",
+      "endpoint": "https://api.anthropic.com/v1/messages",
+      "auth_header_name": "x-api-key",
+      "secret_path": "/ai-agent/llm-secrets/prod",
+      "secret_key_name": "ANTHROPIC_API_KEY",
+      "request_transformer": "anthropic_v1",
+      "response_transformer": "anthropic_v1",
+      "timeout": 30
+    },
+    "messages": [
+      {
+        "role": "user",
+        "content": "What's the weather like in Tokyo?"
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "I'll check the weather in Tokyo for you."
+          },
+          {
+            "type": "tool_use",
+            "id": "toolu_01A09q90qw90lkjsdf",
+            "name": "get_weather",
+            "input": {
+              "location": "Tokyo, Japan"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "toolu_01A09q90qw90lkjsdf",
+            "content": "The weather in Tokyo is currently sunny with a temperature of 22°C (72°F). There are clear skies with a light breeze from the east at 5 km/h. Humidity is at 60% and visibility is excellent at 10+ km."
+          }
+        ]
+      }
+    ],
+    "temperature": 0.7,
+    "max_tokens": 200,
+    "stream": false
+  }
+}

@@ -83,8 +83,11 @@ func GetAllSecrets(ctx context.Context) (map[string]map[string]string, error) {
 		}
 		
 		log.Printf("[INFO] Successfully loaded secrets for %d tools", len(secrets))
-		for toolName := range secrets {
-			log.Printf("[DEBUG] Tool in secrets: %s", toolName)
+		for toolName, toolSecrets := range secrets {
+			log.Printf("[DEBUG] Tool in secrets: %s with %d keys", toolName, len(toolSecrets))
+			for key := range toolSecrets {
+				log.Printf("[DEBUG]   - %s/%s", toolName, key)
+			}
 		}
 		
 		cacheMutex.Lock()
@@ -108,12 +111,26 @@ func GetToolSecrets(ctx context.Context, toolName string) (map[string]string, er
 		return nil, err
 	}
 	
+	log.Printf("[DEBUG] Looking for tool '%s' in secrets", toolName)
+	log.Printf("[DEBUG] Available tools in secrets: %v", getKeys(allSecrets))
+	
 	toolSecrets, ok := allSecrets[toolName]
 	if !ok {
+		log.Printf("[WARNING] Tool '%s' not found in consolidated secrets", toolName)
 		return make(map[string]string), nil
 	}
 	
+	log.Printf("[DEBUG] Found %d secrets for tool '%s'", len(toolSecrets), toolName)
 	return toolSecrets, nil
+}
+
+// Helper function to get keys from map
+func getKeys(m map[string]map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // GetSecretValue retrieves a specific secret value for a tool

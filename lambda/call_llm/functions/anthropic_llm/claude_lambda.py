@@ -1,32 +1,4 @@
 # call_llm/handlers/claude_lambda.py
-import sys
-print(f"DEBUG: Lambda startup - Python path: {sys.path[:3]}...")
-
-# Test library imports at module level
-try:
-    import boto3
-    print(f"DEBUG: Module level - boto3 version: {boto3.__version__}")
-except Exception as e:
-    print(f"DEBUG: Module level - boto3 import error: {e}")
-
-try:
-    import botocore
-    print(f"DEBUG: Module level - botocore version: {botocore.__version__}")
-except Exception as e:
-    print(f"DEBUG: Module level - botocore import error: {e}")
-
-try:
-    import pydantic
-    print(f"DEBUG: Module level - pydantic version: {pydantic.__version__}")
-except Exception as e:
-    print(f"DEBUG: Module level - pydantic import error: {e}")
-
-try:
-    import pydantic_core
-    print(f"DEBUG: Module level - pydantic_core version: {pydantic_core.__version__}")
-except Exception as e:
-    print(f"DEBUG: Module level - pydantic_core import error: {e}")
-
 from common.base_llm import logger, tracer
 from claude_handler import ClaudeLLM
 

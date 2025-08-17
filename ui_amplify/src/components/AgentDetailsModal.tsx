@@ -78,7 +78,10 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
   const [originalSystemPrompt, setOriginalSystemPrompt] = useState('')
   const [selectedModel, setSelectedModel] = useState('')
   const [originalModel, setOriginalModel] = useState('')
+  const [selectedProvider, setSelectedProvider] = useState('')
+  const [originalProvider, setOriginalProvider] = useState('')
   const [availableModels, setAvailableModels] = useState<LLMModel[]>([])
+  const [allProviders, setAllProviders] = useState<string[]>([])  
   const [loadingModels, setLoadingModels] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -88,6 +91,12 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
   const [stateMachineInfo, setStateMachineInfo] = useState<any>(null)
   const [loadingStateMachine, setLoadingStateMachine] = useState(false)
   const [stateMachineError, setStateMachineError] = useState<string | null>(null)
+  
+  // Check if this agent supports provider switching (Rust LLM agents)
+  const isUnifiedRustAgent = () => {
+    const metadata = parseJSON(agent?.metadata || '{}')
+    return metadata.llm_type === 'unified-rust'
+  }
 
   useEffect(() => {
     if (agent?.systemPrompt) {
@@ -100,10 +109,22 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
       setOriginalModel(agent.llmModel)
     }
     
+    if (agent?.llmProvider) {
+      const mappedProvider = PROVIDER_MAPPING[agent.llmProvider] || agent.llmProvider
+      setSelectedProvider(mappedProvider)
+      setOriginalProvider(mappedProvider)
+    }
+    
     // Fetch tool details, models and state machine info when agent changes
     if (agent && isOpen) {
       fetchToolDetails()
       fetchStateMachineInfo()
+      
+      // Fetch available providers for Rust LLM agents
+      if (isUnifiedRustAgent()) {
+        fetchAvailableProviders()
+      }
+      
       if (agent.llmProvider) {
         // Map the agent's provider name to the LLMModels provider name
         const mappedProvider = PROVIDER_MAPPING[agent.llmProvider] || agent.llmProvider
@@ -112,6 +133,21 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
     }
   }, [agent, isOpen])
 
+  const fetchAvailableProviders = async () => {
+    try {
+      const response = await client.queries.listLLMModels({})
+      if (response.data) {
+        const models = response.data as LLMModel[]
+        const uniqueProviders = Array.from(new Set(models.map(m => m.provider)))
+        setAllProviders(uniqueProviders.sort())
+      }
+    } catch (error) {
+      console.error('Error fetching providers:', error)
+      // Fallback to known providers
+      setAllProviders(['anthropic', 'openai', 'google'])
+    }
+  }
+  
   const fetchAvailableModels = async (provider: string) => {
     setLoadingModels(true)
     try {
@@ -127,6 +163,12 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
           return a.display_name.localeCompare(b.display_name)
         })
         setAvailableModels(sortedModels)
+        
+        // Auto-select the default model when provider changes
+        const defaultModel = sortedModels.find(m => m.is_default)
+        if (defaultModel && provider !== originalProvider) {
+          setSelectedModel(defaultModel.model_id)
+        }
       }
     } catch (error) {
       console.error('Error fetching available models:', error)
@@ -229,8 +271,31 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
         }
       }
       
-      // Update model if changed
-      if (selectedModel !== originalModel && selectedModel) {
+      // Update provider and model if changed (for Rust LLM agents)
+      if (isUnifiedRustAgent() && (selectedProvider !== originalProvider || selectedModel !== originalModel)) {
+        // For Rust agents, we need to update both provider and model
+        const result = await client.mutations.updateAgentProviderAndModel({
+          agentName: agent.name,
+          version: agent.version || 'v1.0',
+          provider: selectedProvider,
+          modelId: selectedModel
+        })
+        
+        // Parse the JSON string response
+        const responseData = typeof result.data === 'string' 
+          ? JSON.parse(result.data as string)
+          : result.data as any
+          
+        if (responseData?.success) {
+          setOriginalProvider(selectedProvider)
+          setOriginalModel(selectedModel)
+          hasChanges = true
+        } else {
+          allSuccess = false
+          setSaveError(responseData?.error || 'Failed to update provider and model')
+        }
+      } else if (selectedModel !== originalModel && selectedModel) {
+        // For Python agents, only update model
         const result = await client.mutations.updateAgentModel({
           agentName: agent.name,
           version: agent.version || 'v1.0',
@@ -273,8 +338,14 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
   const handleReset = () => {
     setSystemPrompt(originalSystemPrompt)
     setSelectedModel(originalModel)
+    setSelectedProvider(originalProvider)
     setSaveError(null)
     setSaveSuccess(false)
+    
+    // Re-fetch models for original provider if it changed
+    if (selectedProvider !== originalProvider && originalProvider) {
+      fetchAvailableModels(originalProvider)
+    }
   }
 
   const parseJSON = (jsonString: string) => {
@@ -425,11 +496,46 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
                       )}
                       
                       <Heading level={5}>Model Configuration</Heading>
+                      {isUnifiedRustAgent() && (
+                        <Alert variation="info" marginTop="10px" marginBottom="10px">
+                          <Text fontSize="small">
+                            This agent uses the unified Rust LLM service and supports dynamic provider switching.
+                          </Text>
+                        </Alert>
+                      )}
                       <View marginTop="10px" marginBottom="20px">
                         <Flex direction="column" gap="10px">
-                          <Text fontSize="small">
-                            <strong>Provider:</strong> {agent.llmProvider || 'Not configured'}
-                          </Text>
+                          {isUnifiedRustAgent() ? (
+                            // For Rust agents, show provider selector
+                            <SelectField
+                              label="Provider"
+                              value={selectedProvider}
+                              onChange={(e) => {
+                                const newProvider = e.target.value
+                                setSelectedProvider(newProvider)
+                                // Fetch models for the new provider
+                                fetchAvailableModels(newProvider)
+                              }}
+                              descriptiveText="Select the LLM provider"
+                            >
+                              {allProviders.map((provider) => (
+                                <option key={provider} value={provider}>
+                                  {provider.charAt(0).toUpperCase() + provider.slice(1)}
+                                </option>
+                              ))}
+                            </SelectField>
+                          ) : (
+                            // For Python agents, just show the provider
+                            <Text fontSize="small">
+                              <strong>Provider:</strong> {agent.llmProvider || 'Not configured'}
+                              {!isUnifiedRustAgent() && (
+                                <Badge marginLeft="10px" variation="warning" size="small">
+                                  Python LLM (Fixed Provider)
+                                </Badge>
+                              )}
+                            </Text>
+                          )}
+                          
                           {loadingModels ? (
                             <Loader size="small" />
                           ) : availableModels.length > 0 ? (
@@ -451,24 +557,24 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
                             </SelectField>
                           ) : (
                             <Text fontSize="small" color="gray">
-                              No models available for provider: {agent.llmProvider}
+                              No models available for provider: {selectedProvider || agent.llmProvider}
                             </Text>
                           )}
                         </Flex>
                         
-                        {(selectedModel !== originalModel) && (
+                        {((selectedModel !== originalModel) || (isUnifiedRustAgent() && selectedProvider !== originalProvider)) && (
                           <Flex gap="10px" marginTop="15px">
                             <Button
                               variation="primary"
                               onClick={handleSave}
                               isLoading={isSaving}
-                              isDisabled={selectedModel === originalModel}
+                              isDisabled={selectedModel === originalModel && selectedProvider === originalProvider}
                             >
-                              Save Model Change
+                              Save Changes
                             </Button>
                             <Button
                               onClick={handleReset}
-                              isDisabled={selectedModel === originalModel}
+                              isDisabled={selectedModel === originalModel && selectedProvider === originalProvider}
                             >
                               Reset
                             </Button>

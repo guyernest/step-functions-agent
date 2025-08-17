@@ -274,6 +274,10 @@ const Registries: React.FC = () => {
     const toolObjects = agentTools.map(toolName => 
       tools.find(t => t.name === toolName)
     )
+    
+    // Check if this is a Rust LLM agent
+    const metadata = agent.metadata ? JSON.parse(agent.metadata) : {}
+    const isRustLLM = metadata.llm_type === 'unified-rust'
 
     return (
       <Card key={agent.id} variation="elevated" marginBottom="15px">
@@ -308,6 +312,23 @@ const Registries: React.FC = () => {
                     ]}
                   />
                   <Heading level={5}>{agent.name}</Heading>
+                  {isRustLLM && (
+                    <Badge variation="success" size="small">
+                      <Flex alignItems="center" gap="5px">
+                        <Icon
+                          ariaLabel="Dynamic Provider"
+                          viewBox={{ width: 12, height: 12 }}
+                          paths={[
+                            {
+                              d: "M12 2L10 4L12 6L14 4L12 2M7 7L5 9L7 11L9 9L7 7M12 12L10 14L12 16L14 14L12 12M17 7L15 9L17 11L19 9L17 7Z",
+                              fill: "currentColor"
+                            }
+                          ]}
+                        />
+                        Rust LLM
+                      </Flex>
+                    </Badge>
+                  )}
                 </Flex>
                 <Text fontSize="small" color="gray">{agent.description}</Text>
               </View>
