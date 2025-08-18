@@ -15,7 +15,7 @@ except ImportError:
     _lambda_python = None
 
 from constructs import Construct
-from ..shared.tool_definitions import AdvancedTools
+from ..shared.tool_definitions import ToolDefinition, ToolLanguage
 import os
 import json
 
@@ -166,8 +166,35 @@ class MicrosoftGraphToolStack(Stack):
     def _register_tools_using_base_construct(self):
         """Register all Microsoft Graph tools using the BaseToolConstruct pattern"""
         
-        # Get tool definition from centralized definitions
-        graph_tool = AdvancedTools.MICROSOFT_GRAPH_API
+        # Define tool locally instead of importing from shared definitions
+        graph_tool = ToolDefinition(
+            tool_name="MicrosoftGraphAPI",
+            description="Access Microsoft Graph API including emails, Teams messages, SharePoint, and user management",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "endpoint": {
+                        "type": "string",
+                        "description": "Microsoft Graph API endpoint (e.g., 'users', 'me/messages', 'sites')"
+                    },
+                    "method": {
+                        "type": "string",
+                        "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"],
+                        "description": "HTTP method for the API call",
+                        "default": "GET"
+                    },
+                    "data": {
+                        "type": "object",
+                        "description": "Request body data for POST/PUT/PATCH operations"
+                    }
+                },
+                "required": ["endpoint"]
+            },
+            language=ToolLanguage.PYTHON,
+            lambda_handler="lambda_handler",
+            tags=["microsoft", "graph", "email", "teams", "sharepoint", "enterprise"],
+            human_approval_required=True
+        )
         
         # Define Microsoft Graph tool specifications
         microsoft_tools = [

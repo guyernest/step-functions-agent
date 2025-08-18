@@ -15,7 +15,7 @@ except ImportError:
     _lambda_python = None
 
 from constructs import Construct
-from ..shared.tool_definitions import AdvancedTools
+from ..shared.tool_definitions import ToolDefinition, ToolLanguage
 from ..shared.naming_conventions import NamingConventions
 import os
 import json
@@ -253,9 +253,39 @@ class MicrosoftGraphLongContentToolStack(Stack):
             env_name=self.env_name
         )
         
+        # Define tool locally instead of importing from shared definitions
+        graph_tool = ToolDefinition(
+            tool_name="MicrosoftGraphAPI",
+            description="Access Microsoft Graph API including emails, Teams messages, SharePoint, and user management",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "endpoint": {
+                        "type": "string",
+                        "description": "Microsoft Graph API endpoint (e.g., 'users', 'me/messages', 'sites')"
+                    },
+                    "method": {
+                        "type": "string",
+                        "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"],
+                        "description": "HTTP method for the API call",
+                        "default": "GET"
+                    },
+                    "data": {
+                        "type": "object",
+                        "description": "Request body data for POST/PUT/PATCH operations"
+                    }
+                },
+                "required": ["endpoint"]
+            },
+            language=ToolLanguage.PYTHON,
+            lambda_handler="lambda_handler",
+            tags=["microsoft", "graph", "email", "teams", "sharepoint", "enterprise"],
+            human_approval_required=True
+        )
+        
         # Register the tool using the base construct method
         base_construct._register_tool(
-            tool_definition=AdvancedTools.MICROSOFT_GRAPH_API,
+            tool_definition=graph_tool,
             lambda_function=self.microsoft_graph_lambda
         )
         

@@ -9,7 +9,7 @@ from aws_cdk import (
 )
 from constructs import Construct
 from .base_tool_construct import MultiToolConstruct
-from ..shared.tool_definitions import SpecializedTools
+from ..shared.tool_definitions import ToolDefinition, ToolLanguage
 
 
 class LocalAutomationToolStack(Stack):
@@ -152,8 +152,30 @@ class LocalAutomationToolStack(Stack):
     def _register_tools_using_base_construct(self):
         """Register all local automation tools using the BaseToolConstruct pattern"""
         
-        # Get tool definition from centralized definitions
-        local_agent_tool = SpecializedTools.LOCAL_AGENT
+        # Define tool locally instead of importing from shared definitions
+        local_agent_tool = ToolDefinition(
+            tool_name="local_agent_execute",
+            description="Execute automation scripts on remote systems through a secure activity-based execution model",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "script": {
+                        "type": "string",
+                        "description": "The automation script to execute on the remote system (PowerShell, Python, Bash, etc.)"
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Script execution timeout in seconds",
+                        "default": 300
+                    }
+                },
+                "required": ["script"]
+            },
+            language=ToolLanguage.RUST,
+            lambda_handler="main",
+            tags=["local", "command", "execution", "system", "rust"],
+            human_approval_required=True
+        )
         
         # Define local automation tool specifications with remote execution activity
         local_automation_tools = [

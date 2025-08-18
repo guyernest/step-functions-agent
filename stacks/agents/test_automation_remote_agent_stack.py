@@ -157,7 +157,14 @@ Here is an example of a script for MyLegacyApp:
 ``` 
 Once you have generated the script, you must use the `execute_automation_script` tool to run it. 
 Without the execution of the script, the task is not done. 
-Please make sure that you call the execution tool using the script you generated. Remember, the main output of this process should be the executable script itself, which you should send to the tool call to execute. Focus on producing a script ready for immediate use by the automation tool. """,
+Please make sure that you call the execution tool using the script you generated. 
+Remember, the main output of this process should be the executable script itself, which you should send to the tool call to execute. 
+Focus on producing a script ready for immediate use by the automation tool. 
+
+Please don't add any python imports or commands and only send the JSON script to be executed locally. 
+The local tool already has all the python setup ready. 
+Only the JSON script is missing and should be sent to the local agent. 
+""",
             **kwargs
         )
         

@@ -10,7 +10,7 @@ from aws_cdk import (
 )
 from constructs import Construct
 from .base_tool_construct import MultiToolConstruct
-from ..shared.tool_definitions import SpecializedTools
+from ..shared.tool_definitions import ToolDefinition, ToolLanguage
 import os
 import json
 
@@ -132,8 +132,34 @@ class BookRecommendationToolStack(Stack):
     def _register_tools_using_base_construct(self):
         """Register all book recommendation tools using the BaseToolConstruct pattern"""
         
-        # Get tool definition from centralized definitions
-        book_tool = SpecializedTools.BOOK_RECOMMENDATION
+        # Define tool locally instead of importing from shared definitions
+        book_tool = ToolDefinition(
+            tool_name="get_nyt_books",
+            description="Get book recommendations using New York Times Books API with genre and bestseller filtering",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "genre": {
+                        "type": "string",
+                        "description": "Book genre (e.g., 'fiction', 'nonfiction', 'hardcover-fiction')",
+                        "default": "combined-print-and-e-book-fiction"
+                    },
+                    "list_type": {
+                        "type": "string",
+                        "description": "List type (current, history, or overview)",
+                        "default": "current"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of books to return",
+                        "default": 10
+                    }
+                }
+            },
+            language=ToolLanguage.TYPESCRIPT,
+            lambda_handler="handler",
+            tags=["books", "recommendations", "nyt", "bestsellers", "literature"]
+        )
         
         # Define book recommendation tool specifications
         book_tools = [

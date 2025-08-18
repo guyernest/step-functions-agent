@@ -822,26 +822,21 @@ class SpecializedTools:
     
     LOCAL_AGENT = ToolDefinition(
         tool_name="local_agent_execute",
-        description="Execute local system commands and scripts through a secure Rust-based local agent daemon",
+        description="Execute automation scripts on remote systems through a secure activity-based execution model",
         input_schema={
             "type": "object",
             "properties": {
-                "command": {
+                "script": {
                     "type": "string",
-                    "description": "Command to execute on the local system"
-                },
-                "working_directory": {
-                    "type": "string",
-                    "description": "Working directory for command execution",
-                    "default": "/tmp"
+                    "description": "The automation script to execute on the remote system (PowerShell, Python, Bash, etc.)"
                 },
                 "timeout": {
                     "type": "integer",
-                    "description": "Command timeout in seconds",
-                    "default": 30
+                    "description": "Script execution timeout in seconds",
+                    "default": 300
                 }
             },
-            "required": ["command"]
+            "required": ["script"]
         },
         language=ToolLanguage.RUST,
         lambda_handler="main",

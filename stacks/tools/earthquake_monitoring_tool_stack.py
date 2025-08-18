@@ -8,7 +8,7 @@ from aws_cdk import (
 )
 from constructs import Construct
 from .base_tool_construct import MultiToolConstruct
-from ..shared.tool_definitions import SpecializedTools
+from ..shared.tool_definitions import ToolDefinition, ToolLanguage
 
 
 class EarthquakeMonitoringToolStack(Stack):
@@ -78,8 +78,33 @@ class EarthquakeMonitoringToolStack(Stack):
     def _register_tools_using_base_construct(self):
         """Register all earthquake monitoring tools using the BaseToolConstruct pattern"""
         
-        # Get tool definition from centralized definitions
-        earthquake_tool = SpecializedTools.EARTHQUAKE_QUERY
+        # Define tool locally instead of importing from shared definitions
+        earthquake_tool = ToolDefinition(
+            tool_name="query_earthquakes",
+            description="Query earthquake data using USGS API with date range filtering",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "start_date": {
+                        "type": "string",
+                        "description": "Start date in YYYY-MM-DD format"
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "description": "End date in YYYY-MM-DD format"
+                    },
+                    "min_magnitude": {
+                        "type": "number",
+                        "description": "Minimum earthquake magnitude",
+                        "default": 2.5
+                    }
+                },
+                "required": ["start_date", "end_date"]
+            },
+            language=ToolLanguage.TYPESCRIPT,
+            lambda_handler="handler",
+            tags=["earthquake", "seismic", "usgs", "disaster"]
+        )
         
         # Define earthquake monitoring tool specifications
         earthquake_tools = [
