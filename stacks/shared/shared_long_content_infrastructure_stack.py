@@ -5,9 +5,11 @@ from aws_cdk import (
     CfnOutput,
     Fn,
     aws_dynamodb as dynamodb,
+    aws_lambda as _lambda,
 )
 from constructs import Construct
 from ..shared.naming_conventions import NamingConventions
+import os
 
 
 class SharedLongContentInfrastructureStack(Stack):
@@ -31,8 +33,8 @@ class SharedLongContentInfrastructureStack(Stack):
         # Create DynamoDB table for content storage
         self._create_content_storage_table()
         
-        # Import Lambda Runtime API Proxy layers from build stack
-        self._import_proxy_extension_layers()
+        # Create Lambda Runtime API Proxy layers
+        self._create_proxy_extension_layers()
         
         # Export key values for other stacks
         self._create_outputs()
@@ -70,19 +72,49 @@ class SharedLongContentInfrastructureStack(Stack):
         
         print(f"📊 Created DynamoDB table: {self.content_table.table_name}")
     
-    def _import_proxy_extension_layers(self):
-        """Import Lambda Runtime API Proxy layers from extension layer stack"""
+    def _create_proxy_extension_layers(self):
+        """Create Lambda Runtime API Proxy layers"""
         
-        # Import proxy extension layer ARNs from layer stack
-        self.proxy_layer_x86_arn = Fn.import_value(
-            NamingConventions.stack_export_name("ProxyLayerX86", "ExtensionBuild", self.env_name)
-        )
+        # Check if pre-built extension zip files exist
+        extension_dir = "lambda/extensions/long-content"
+        x86_zip_path = os.path.join(extension_dir, "extension-x86.zip")
+        arm_zip_path = os.path.join(extension_dir, "extension-arm.zip")
         
-        self.proxy_layer_arm_arn = Fn.import_value(
-            NamingConventions.stack_export_name("ProxyLayerArm", "ExtensionBuild", self.env_name)
-        )
+        # Create x86_64 layer if zip exists
+        if os.path.exists(x86_zip_path):
+            self.proxy_layer_x86 = _lambda.LayerVersion(
+                self,
+                "ProxyLayerX86",
+                code=_lambda.Code.from_asset(x86_zip_path),
+                compatible_architectures=[_lambda.Architecture.X86_64],
+                description="Lambda Runtime API Proxy extension for x86_64",
+                layer_version_name=f"lambda-runtime-api-proxy-x86-{self.env_name}",
+                removal_policy=RemovalPolicy.DESTROY
+            )
+            self.proxy_layer_x86_arn = self.proxy_layer_x86.layer_version_arn
+            print(f"🔧 Created x86_64 Lambda Runtime API Proxy layer")
+        else:
+            print(f"⚠️  Warning: x86_64 extension zip not found at {x86_zip_path}")
+            self.proxy_layer_x86_arn = ""
         
-        print(f"🔧 Imported Lambda Runtime API Proxy layers for {self.env_name}")
+        # Create ARM64 layer if zip exists  
+        if os.path.exists(arm_zip_path):
+            self.proxy_layer_arm = _lambda.LayerVersion(
+                self,
+                "ProxyLayerArm",
+                code=_lambda.Code.from_asset(arm_zip_path),
+                compatible_architectures=[_lambda.Architecture.ARM_64],
+                description="Lambda Runtime API Proxy extension for ARM64",
+                layer_version_name=f"lambda-runtime-api-proxy-arm-{self.env_name}",
+                removal_policy=RemovalPolicy.DESTROY
+            )
+            self.proxy_layer_arm_arn = self.proxy_layer_arm.layer_version_arn
+            print(f"🔧 Created ARM64 Lambda Runtime API Proxy layer")
+        else:
+            print(f"⚠️  Warning: ARM64 extension zip not found at {arm_zip_path}")
+            self.proxy_layer_arm_arn = ""
+        
+        print(f"✅ Created Lambda Runtime API Proxy layers for {self.env_name}")
     
     def _create_outputs(self):
         """Create CloudFormation outputs for other stacks to use"""
@@ -105,19 +137,21 @@ class SharedLongContentInfrastructureStack(Stack):
             description="DynamoDB table ARN for long content storage"
         )
         
-        # Export proxy layer ARNs (re-export from build stack)
-        CfnOutput(
-            self,
-            "ProxyLayerX86Arn",
-            value=self.proxy_layer_x86_arn,
-            export_name=NamingConventions.stack_export_name("ProxyLayerX86", "LongContent", self.env_name),
-            description="Lambda Runtime API Proxy layer ARN for x86_64"
-        )
+        # Export proxy layer ARNs if they exist
+        if hasattr(self, 'proxy_layer_x86_arn') and self.proxy_layer_x86_arn:
+            CfnOutput(
+                self,
+                "ProxyLayerX86Arn",
+                value=self.proxy_layer_x86_arn,
+                export_name=NamingConventions.stack_export_name("ProxyLayerX86", "LongContent", self.env_name),
+                description="Lambda Runtime API Proxy layer ARN for x86_64"
+            )
         
-        CfnOutput(
-            self,
-            "ProxyLayerArmArn", 
-            value=self.proxy_layer_arm_arn,
-            export_name=NamingConventions.stack_export_name("ProxyLayerArm", "LongContent", self.env_name),
-            description="Lambda Runtime API Proxy layer ARN for ARM64"
-        )
+        if hasattr(self, 'proxy_layer_arm_arn') and self.proxy_layer_arm_arn:
+            CfnOutput(
+                self,
+                "ProxyLayerArmArn", 
+                value=self.proxy_layer_arm_arn,
+                export_name=NamingConventions.stack_export_name("ProxyLayerArm", "LongContent", self.env_name),
+                description="Lambda Runtime API Proxy layer ARN for ARM64"
+            )

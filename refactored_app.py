@@ -44,6 +44,12 @@ from stacks.agents.google_maps_agent_unified_llm_stack import GoogleMapsAgentUni
 from stacks.agents.test_automation_remote_agent_unified_llm_stack import TestAutomationRemoteAgentUnifiedLLMStack
 from step_functions_agent.agent_monitoring_stack import AgentMonitoringStack
 
+# Long content support imports
+from stacks.shared.shared_long_content_infrastructure_stack import SharedLongContentInfrastructureStack
+from stacks.shared.shared_unified_rust_llm_long_content_stack import SharedUnifiedRustLLMWithLongContentStack
+from stacks.tools.microsoft_graph_long_content_tool_stack import MicrosoftGraphLongContentToolStack
+from stacks.agents.test_automation_remote_agent_rust_long_content_stack import TestAutomationRemoteAgentRustLongContentStack
+
 
 def main():
     """
@@ -280,6 +286,47 @@ def main():
         description=f"Test automation agent with remote execution using unified Rust LLM for {environment} environment"
     )
     
+    # ==========================
+    # Long Content Support Stacks
+    # ==========================
+    
+    # Deploy long content infrastructure first (if not already deployed)
+    long_content_infrastructure = SharedLongContentInfrastructureStack(
+        app,
+        f"SharedLongContentInfrastructureStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Shared long content infrastructure for {environment} environment"
+    )
+    
+    # Create Unified Rust LLM with long content support as a construct within shared LLM stack
+    # Note: This needs to be added to the shared LLM stack after long content infrastructure is deployed
+    unified_rust_llm_long_content = SharedUnifiedRustLLMWithLongContentStack(
+        shared_llm_stack,
+        f"UnifiedRustLLMWithLongContent",
+        env_name=environment,
+        max_content_size=10000  # 10KB threshold for long content
+    )
+    
+    # Microsoft Graph tool with long content support
+    microsoft_graph_long_content = MicrosoftGraphLongContentToolStack(
+        app,
+        f"MicrosoftGraphLongContentToolStack-{environment}",
+        env_name=environment,
+        env=env,
+        max_content_size=10000,
+        description=f"Microsoft Graph tool with long content support for {environment} environment"
+    )
+    
+    # Test Automation Remote Agent with Rust LLM and Long Content Support
+    test_automation_remote_agent_rust_long = TestAutomationRemoteAgentRustLongContentStack(
+        app,
+        f"TestAutomationRemoteAgentRustLongContentStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Test automation agent with Rust LLM and long content support for {environment} environment"
+    )
+    
     # Google Maps Agent - uses Gemini LLM with Google Maps tools
     google_maps_agent = GoogleMapsAgentStack(
         app,
@@ -418,6 +465,20 @@ def main():
     test_automation_remote_agent.add_dependency(agent_registry_stack)
     test_automation_remote_agent.add_dependency(local_automation_tools)
     
+    # Long content stacks dependencies
+    # Unified Rust LLM with long content needs long content infrastructure
+    unified_rust_llm_long_content.node.add_dependency(long_content_infrastructure)
+    
+    # Microsoft Graph with long content needs long content infrastructure
+    microsoft_graph_long_content.add_dependency(long_content_infrastructure)
+    
+    # Test automation agent with long content needs all its dependencies
+    test_automation_remote_agent_rust_long.add_dependency(long_content_infrastructure)
+    test_automation_remote_agent_rust_long.add_dependency(shared_llm_stack)  # For the unified Rust LLM construct
+    test_automation_remote_agent_rust_long.add_dependency(microsoft_graph_long_content)
+    test_automation_remote_agent_rust_long.add_dependency(local_automation_tools)
+    test_automation_remote_agent_rust_long.add_dependency(agent_registry_stack)
+    
     # Monitoring stack needs all agents and tools to be deployed first
     agent_monitoring.add_dependency(sql_agent)
     agent_monitoring.add_dependency(google_maps_agent)
@@ -443,7 +504,9 @@ def main():
                   microsoft_graph_tools, web_automation_tools, graphql_interface_tools,
                   image_analysis_tools, sql_agent, google_maps_agent, research_agent, 
                   cloudwatch_agent, graphql_agent, image_analysis_agent, 
-                  test_sql_approval_agent, test_automation_remote_agent, agent_monitoring]:
+                  test_sql_approval_agent, test_automation_remote_agent, agent_monitoring,
+                  long_content_infrastructure, microsoft_graph_long_content, 
+                  test_automation_remote_agent_rust_long]:
         for key, value in tags.items():
             cdk.Tags.of(stack).add(key, value)
     

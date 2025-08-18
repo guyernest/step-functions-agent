@@ -56,7 +56,7 @@ class AgentRegistryMixin:
             "tools": self._get_tools_specification(),
             "observability": self._get_observability_config(),
             "environment": self.env_name,
-            "state_machine_arn": self.state_machine.state_machine_arn,
+            "state_machine_arn": getattr(self.state_machine, 'state_machine_arn', None) or getattr(self.state_machine, 'attr_arn', None),
             "metadata": self._get_agent_metadata()
         }
         
