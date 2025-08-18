@@ -260,7 +260,8 @@ class SharedLLMStack(Stack):
                 "ENVIRONMENT": self.env_name,
                 "POWERTOOLS_SERVICE_NAME": "unified-rust-llm",
                 "POWERTOOLS_LOG_LEVEL": "INFO",
-                "RUST_LOG": "info"
+                "RUST_LOG": "info",
+                "DEPLOYMENT_TIMESTAMP": "2025-08-17-force-update"
             }
         )
         

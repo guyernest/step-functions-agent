@@ -14,73 +14,57 @@ pub struct BedrockTransformer;
 #[async_trait]
 impl MessageTransformer for BedrockTransformer {
     fn transform_request(&self, invocation: &LLMInvocation) -> Result<TransformedRequest, ServiceError> {
-        debug!("Transforming request to Bedrock format");
+        debug!("Transforming request to Bedrock Converse format");
         
-        // Bedrock uses different formats for different models
-        // This implementation handles the common format (Jamba, Nova)
-        
+        // Build the request body according to Bedrock Converse API spec
         let mut body = json!({
-            "messages": self.transform_messages(&invocation.messages)?,
-            "max_tokens": invocation.max_tokens.unwrap_or(4096),
+            "messages": self.transform_messages(&invocation.messages)?
         });
         
-        // Add model ID if not Nova (Nova uses different field name)
-        if !invocation.provider_config.model_id.contains("nova") {
-            body["model"] = json!(invocation.provider_config.model_id);
-        }
+        // Add inferenceConfig with parameters
+        let mut inference_config = json!({
+            "maxTokens": invocation.max_tokens.unwrap_or(4096)
+        });
         
-        // Add optional parameters
         if let Some(temp) = invocation.temperature {
-            body["temperature"] = json!(temp);
+            inference_config["temperature"] = json!(temp);
         }
         if let Some(top_p) = invocation.top_p {
-            body["top_p"] = json!(top_p);
+            inference_config["topP"] = json!(top_p);
         }
         
-        // Add tools if present
+        body["inferenceConfig"] = inference_config;
+        
+        // Add tools if present - all Bedrock models use the same format
         if let Some(tools) = &invocation.tools {
-            // Check if this is Nova model (uses different tool format)
-            if invocation.provider_config.model_id.contains("nova") {
-                let nova_tools: Vec<Value> = tools
-                    .iter()
-                    .map(|tool| {
-                        json!({
-                            "toolSpec": {
-                                "name": tool.name,
-                                "description": tool.description,
-                                "inputSchema": {
-                                    "json": utils::clean_tool_schema(&tool.input_schema)
-                                }
+            let bedrock_tools: Vec<Value> = tools
+                .iter()
+                .map(|tool| {
+                    json!({
+                        "toolSpec": {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "inputSchema": {
+                                "json": utils::clean_tool_schema(&tool.input_schema)
                             }
-                        })
+                        }
                     })
-                    .collect();
-                body["toolConfig"] = json!({
-                    "tools": nova_tools,
-                    "toolChoice": {"auto": {}}
-                });
-            } else {
-                // Standard Bedrock/OpenAI format
-                let bedrock_tools: Vec<Value> = tools
-                    .iter()
-                    .map(|tool| {
-                        json!({
-                            "type": "function",
-                            "function": {
-                                "name": tool.name,
-                                "description": tool.description,
-                                "parameters": utils::clean_tool_schema(&tool.input_schema)
-                            }
-                        })
-                    })
-                    .collect();
-                body["tools"] = json!(bedrock_tools);
-            }
+                })
+                .collect();
+            
+            body["toolConfig"] = json!({
+                "tools": bedrock_tools,
+                "toolChoice": {"auto": {}}
+            });
         }
         
-        // Add system message if present
+        // Add system message if present - as an array per the API spec
         if let Some(system_msg) = self.extract_system_message(&invocation.messages) {
-            body["system"] = json!(system_msg);
+            body["system"] = json!([
+                {
+                    "text": system_msg
+                }
+            ]);
         }
         
         Ok(TransformedRequest {
@@ -92,37 +76,82 @@ impl MessageTransformer for BedrockTransformer {
     fn transform_response(&self, response: Value) -> Result<TransformedResponse, ServiceError> {
         debug!("Transforming Bedrock response to unified format");
         
-        // Bedrock response format is similar to OpenAI
-        let choice = response.get("choices")
-            .and_then(|c| c.get(0))
-            .or_else(|| response.get("output")) // Some Bedrock models use "output" directly
-            .ok_or_else(|| ServiceError::TransformError("No choices/output in response".to_string()))?;
+        // Bedrock Converse API response format
+        let output = response.get("output")
+            .ok_or_else(|| ServiceError::TransformError("No output in Bedrock response".to_string()))?;
         
-        let message = if choice.is_object() && choice.get("message").is_some() {
-            choice.get("message").unwrap()
-        } else {
-            &choice
-        };
+        let message = output.get("message")
+            .ok_or_else(|| ServiceError::TransformError("No message in output".to_string()))?;
         
-        // Extract content
+        // Extract content from Bedrock Converse format
         let mut unified_blocks = Vec::new();
-        if let Some(content) = message.get("content").and_then(|c| c.as_str()) {
-            if !content.is_empty() {
-                unified_blocks.push(ContentBlock::Text {
-                    text: content.to_string(),
-                });
+        let mut function_calls = Vec::new();
+        
+        if let Some(content_array) = message.get("content").and_then(|c| c.as_array()) {
+            for content_item in content_array {
+                if let Some(text_obj) = content_item.get("text") {
+                    if let Some(text) = text_obj.as_str() {
+                        unified_blocks.push(ContentBlock::Text {
+                            text: text.to_string(),
+                        });
+                    }
+                } else if let Some(tool_use) = content_item.get("toolUse") {
+                    // Extract tool use
+                    if let (Some(id), Some(name), Some(input)) = (
+                        tool_use.get("toolUseId").and_then(|i| i.as_str()),
+                        tool_use.get("name").and_then(|n| n.as_str()),
+                        tool_use.get("input")
+                    ) {
+                        unified_blocks.push(ContentBlock::ToolUse {
+                            id: id.to_string(),
+                            name: name.to_string(),
+                            input: input.clone(),
+                        });
+                        
+                        function_calls.push(FunctionCall {
+                            id: id.to_string(),
+                            name: name.to_string(),
+                            input: input.clone(),
+                        });
+                    }
+                }
             }
         }
         
-        // Extract tool calls
-        let (tool_calls, function_calls) = self.extract_tool_calls(message)?;
+        // Build tool_calls for compatibility
+        let tool_calls = if !function_calls.is_empty() {
+            let tool_calls_array: Vec<Value> = function_calls
+                .iter()
+                .map(|fc| json!({
+                    "id": fc.id,
+                    "type": "function",
+                    "function": {
+                        "name": fc.name,
+                        "arguments": fc.input.to_string()
+                    }
+                }))
+                .collect();
+            Some(json!(tool_calls_array))
+        } else {
+            None
+        };
         
-        // Extract usage
-        let usage = self.extract_usage(&response);
+        // Extract usage from Bedrock Converse
+        let usage = response.get("usage")
+            .and_then(|u| {
+                let input_tokens = u.get("inputTokens")?.as_u64()?;
+                let output_tokens = u.get("outputTokens")?.as_u64()?;
+                let total_tokens = u.get("totalTokens")?.as_u64()?;
+                
+                Some(TokenUsage {
+                    input_tokens: input_tokens as u32,
+                    output_tokens: output_tokens as u32,
+                    total_tokens: total_tokens as u32,
+                })
+            });
         
         // Extract stop reason
-        let stop_reason = choice.get("finish_reason")
-            .or_else(|| response.get("stop_reason"))
+        let stop_reason = response.get("stopReason")
             .and_then(|s| s.as_str())
             .map(|s| s.to_string());
         
@@ -132,7 +161,7 @@ impl MessageTransformer for BedrockTransformer {
                 content: unified_blocks,
                 tool_calls,
             },
-            function_calls,
+            function_calls: if function_calls.is_empty() { None } else { Some(function_calls) },
             usage,
             stop_reason,
         })
@@ -193,14 +222,27 @@ impl BedrockTransformer {
                         .collect();
                     
                     if !tool_results.is_empty() {
-                        // Add tool response messages
-                        for (tool_use_id, content) in tool_results {
-                            bedrock_messages.push(json!({
-                                "role": "tool",
-                                "tool_call_id": tool_use_id,
-                                "content": content
-                            }));
-                        }
+                        // Add tool response messages in Bedrock Converse format
+                        let tool_result_contents: Vec<Value> = tool_results
+                            .into_iter()
+                            .map(|(tool_use_id, content)| {
+                                json!({
+                                    "toolResult": {
+                                        "toolUseId": tool_use_id,
+                                        "content": [
+                                            {
+                                                "text": content
+                                            }
+                                        ]
+                                    }
+                                })
+                            })
+                            .collect();
+                        
+                        bedrock_messages.push(json!({
+                            "role": "user",
+                            "content": tool_result_contents
+                        }));
                         i += 1;
                         continue;
                     }
@@ -221,7 +263,12 @@ impl BedrockTransformer {
         
         match &message.content {
             MessageContent::Text { content } => {
-                msg["content"] = json!(content);
+                // Bedrock Converse expects content as an array
+                msg["content"] = json!([
+                    {
+                        "text": content
+                    }
+                ]);
             }
             MessageContent::Blocks { content } => {
                 let text_parts: Vec<String> = content
@@ -235,22 +282,24 @@ impl BedrockTransformer {
                     })
                     .collect();
                 
-                if !text_parts.is_empty() {
-                    msg["content"] = json!(text_parts.join("\n"));
+                // For blocks without tool uses, also use array format
+                if !text_parts.is_empty() && !content.iter().any(|b| matches!(b, ContentBlock::ToolUse { .. })) {
+                    msg["content"] = json!([
+                        {
+                            "text": text_parts.join("\n")
+                        }
+                    ]);
                 }
                 
-                // Handle tool uses
+                // Handle tool uses for Bedrock Converse format
                 let tool_uses: Vec<Value> = content
                     .iter()
                     .filter_map(|block| {
                         if let ContentBlock::ToolUse { id, name, input } = block {
                             Some(json!({
-                                "id": id,
-                                "type": "function",
-                                "function": {
-                                    "name": name,
-                                    "arguments": input.to_string()
-                                }
+                                "toolUseId": id,
+                                "name": name,
+                                "input": input
                             }))
                         } else {
                             None
@@ -259,7 +308,24 @@ impl BedrockTransformer {
                     .collect();
                 
                 if !tool_uses.is_empty() {
-                    msg["tool_calls"] = json!(tool_uses);
+                    // For Bedrock Converse, tool uses go in the content array
+                    let mut content_array = vec![];
+                    
+                    // Add text content if exists
+                    if !text_parts.is_empty() {
+                        content_array.push(json!({
+                            "text": text_parts.join("\n")
+                        }));
+                    }
+                    
+                    // Add tool uses
+                    for tool_use in tool_uses {
+                        content_array.push(json!({
+                            "toolUse": tool_use
+                        }));
+                    }
+                    
+                    msg["content"] = json!(content_array);
                 }
             }
         }
@@ -267,53 +333,4 @@ impl BedrockTransformer {
         Ok(msg)
     }
     
-    fn extract_tool_calls(&self, message: &Value) -> Result<(Option<Value>, Option<Vec<FunctionCall>>), ServiceError> {
-        if let Some(tool_calls) = message.get("tool_calls") {
-            if let Some(calls_array) = tool_calls.as_array() {
-                let function_calls: Vec<FunctionCall> = calls_array
-                    .iter()
-                    .filter_map(|call| {
-                        let id = call.get("id")?.as_str()?;
-                        let function = call.get("function")?;
-                        let name = function.get("name")?.as_str()?;
-                        let args_str = function.get("arguments")?.as_str()?;
-                        
-                        let input = serde_json::from_str(args_str).unwrap_or(json!({}));
-                        
-                        Some(FunctionCall {
-                            id: id.to_string(),
-                            name: name.to_string(),
-                            input,
-                        })
-                    })
-                    .collect();
-                
-                if !function_calls.is_empty() {
-                    return Ok((Some(tool_calls.clone()), Some(function_calls)));
-                }
-            }
-        }
-        
-        Ok((None, None))
-    }
-    
-    fn extract_usage(&self, response: &Value) -> Option<TokenUsage> {
-        let usage = response.get("usage")?;
-        
-        let input_tokens = usage.get("input_tokens")
-            .or_else(|| usage.get("prompt_tokens"))
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as u32;
-        
-        let output_tokens = usage.get("output_tokens")
-            .or_else(|| usage.get("completion_tokens"))
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0) as u32;
-        
-        Some(TokenUsage {
-            input_tokens,
-            output_tokens,
-            total_tokens: input_tokens + output_tokens,
-        })
-    }
 }

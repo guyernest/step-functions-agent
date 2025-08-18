@@ -184,11 +184,13 @@ MODELS_DATA = [
         'is_default': False
     },
     
-    # Amazon Bedrock models
+    # Amazon Bedrock models (using Bearer token authentication)
+    # Note: Provider 'amazon' or 'bedrock' both map to AWS_BEARER_TOKEN_BEDROCK
+    # IMPORTANT: Use inference profile IDs with region prefix (eu., us., etc.)
     {
-        'provider': 'amazon',
-        'model_id': 'amazon.nova-pro-v1:0',
-        'display_name': 'Amazon Nova Pro',
+        'provider': 'bedrock',  # Can also use 'amazon' - both work
+        'model_id': 'eu.amazon.nova-pro-v1:0',  # EU region inference profile
+        'display_name': 'Amazon Nova Pro (EU)',
         'input_price': 0.80,
         'output_price': 3.20,
         'max_tokens': 300000,
@@ -197,9 +199,9 @@ MODELS_DATA = [
         'is_default': True
     },
     {
-        'provider': 'amazon',
-        'model_id': 'amazon.nova-lite-v1:0',
-        'display_name': 'Amazon Nova Lite',
+        'provider': 'bedrock',
+        'model_id': 'eu.amazon.nova-lite-v1:0',  # EU region inference profile
+        'display_name': 'Amazon Nova Lite (EU)',
         'input_price': 0.06,
         'output_price': 0.24,
         'max_tokens': 300000,
@@ -208,14 +210,38 @@ MODELS_DATA = [
         'is_default': False
     },
     {
-        'provider': 'amazon',
-        'model_id': 'amazon.nova-micro-v1:0',
-        'display_name': 'Amazon Nova Micro',
+        'provider': 'bedrock',
+        'model_id': 'eu.amazon.nova-micro-v1:0',  # EU region inference profile
+        'display_name': 'Amazon Nova Micro (EU)',
         'input_price': 0.035,
         'output_price': 0.14,
         'max_tokens': 128000,
         'supports_tools': False,
         'supports_vision': False,
+        'is_default': False
+    },
+    
+    # Bedrock-hosted Anthropic models (using Bearer token authentication)
+    {
+        'provider': 'bedrock',
+        'model_id': 'us.anthropic.claude-3-5-haiku-20241022-v1:0',
+        'display_name': 'Claude 3.5 Haiku (Bedrock)',
+        'input_price': 1.00,
+        'output_price': 5.00,
+        'max_tokens': 200000,
+        'supports_tools': True,
+        'supports_vision': True,
+        'is_default': False
+    },
+    {
+        'provider': 'bedrock',
+        'model_id': 'us.anthropic.claude-3-5-sonnet-20241022-v2:0',
+        'display_name': 'Claude 3.5 Sonnet (Bedrock)',
+        'input_price': 3.00,
+        'output_price': 15.00,
+        'max_tokens': 200000,
+        'supports_tools': True,
+        'supports_vision': True,
         'is_default': False
     },
     

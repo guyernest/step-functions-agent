@@ -226,7 +226,9 @@ const secretsManagerPolicy = new PolicyStatement({
     'secretsmanager:CreateSecret',
     'secretsmanager:UpdateSecret'
   ],
-  resources: ['arn:aws:secretsmanager:*:*:secret:/ai-agent/llm-secrets/prod/*']
+  // The secret is at /ai-agent/llm-secrets/prod (not a prefix)
+  // AWS adds a random suffix to the ARN, so we use wildcard
+  resources: ['arn:aws:secretsmanager:*:*:secret:/ai-agent/llm-secrets/prod*']
 });
 
 backend.updateProviderAPIKey.resources.lambda.addToRolePolicy(secretsManagerPolicy);
