@@ -76,6 +76,8 @@ const ModelCosts: React.FC = () => {
   const [showApiKeyUpdate, setShowApiKeyUpdate] = useState(false)
   const [selectedProvider, setSelectedProvider] = useState<string>('')
   const [apiKey, setApiKey] = useState<string>('')
+  const [addModelStatus, setAddModelStatus] = useState<'idle' | 'adding' | 'success' | 'error'>('idle')
+  const [apiKeyUpdateStatus, setApiKeyUpdateStatus] = useState<'idle' | 'updating' | 'success' | 'error'>('idle')
   const [newModel, setNewModel] = useState<NewModelForm>({
     provider: '',
     model_id: '',
@@ -167,13 +169,23 @@ const ModelCosts: React.FC = () => {
       
       const response = await client.mutations.updateLLMModel(updateData)
       
-      if (response.data && (response.data as any).success) {
-        setEditingModel(null)
-        setSaveStatus('saved')
-        await fetchModelCosts()
-        setTimeout(() => setSaveStatus('idle'), 2000)
+      if (response.data) {
+        const result = typeof response.data === 'string' 
+          ? JSON.parse(response.data as any) 
+          : (typeof (response.data as any).updateLLMModel === 'string' 
+              ? JSON.parse((response.data as any).updateLLMModel) 
+              : (response.data as any).updateLLMModel)
+        
+        if (result?.success) {
+          setEditingModel(null)
+          setSaveStatus('saved')
+          await fetchModelCosts()
+          setTimeout(() => setSaveStatus('idle'), 2000)
+        } else {
+          throw new Error('Update failed')
+        }
       } else {
-        throw new Error('Update failed')
+        throw new Error('No response data')
       }
     } catch (error) {
       console.error('Error saving model:', error)
@@ -188,8 +200,18 @@ const ModelCosts: React.FC = () => {
     try {
       const response = await client.mutations.deleteLLMModel({ pk: modelPk })
       
-      if (response.data && (response.data as any).success) {
-        await fetchModelCosts()
+      if (response.data) {
+        const result = typeof response.data === 'string' 
+          ? JSON.parse(response.data as any) 
+          : (typeof (response.data as any).deleteLLMModel === 'string' 
+              ? JSON.parse((response.data as any).deleteLLMModel) 
+              : (response.data as any).deleteLLMModel)
+        
+        if (result?.success) {
+          await fetchModelCosts()
+        } else {
+          throw new Error('Delete failed')
+        }
       }
     } catch (error) {
       console.error('Error deleting model:', error)
@@ -204,6 +226,7 @@ const ModelCosts: React.FC = () => {
       return
     }
     
+    setAddModelStatus('adding')
     try {
       const response = await client.mutations.addLLMModel({
         provider: newModel.provider,
@@ -217,24 +240,41 @@ const ModelCosts: React.FC = () => {
         is_default: newModel.is_default
       })
       
-      if (response.data && (response.data as any).success) {
-        setShowAddModel(false)
-        setNewModel({
-          provider: '',
-          model_id: '',
-          display_name: '',
-          input_price_per_1k: '',
-          output_price_per_1k: '',
-          max_tokens: '',
-          supports_tools: false,
-          supports_vision: false,
-          is_default: false
-        })
-        await fetchModelCosts()
+      if (response.data) {
+        const result = typeof response.data === 'string' 
+          ? JSON.parse(response.data as any) 
+          : (typeof (response.data as any).addLLMModel === 'string' 
+              ? JSON.parse((response.data as any).addLLMModel) 
+              : (response.data as any).addLLMModel)
+        
+        if (result?.success) {
+          setAddModelStatus('success')
+          setTimeout(() => {
+            setShowAddModel(false)
+            setNewModel({
+              provider: '',
+              model_id: '',
+              display_name: '',
+              input_price_per_1k: '',
+              output_price_per_1k: '',
+              max_tokens: '',
+              supports_tools: false,
+              supports_vision: false,
+              is_default: false
+            })
+            setAddModelStatus('idle')
+          }, 2000)
+          await fetchModelCosts()
+        } else {
+          throw new Error('Failed to add model')
+        }
+      } else {
+        throw new Error('No response data')
       }
     } catch (error) {
       console.error('Error adding model:', error)
-      alert('Failed to add model')
+      setAddModelStatus('error')
+      setTimeout(() => setAddModelStatus('idle'), 3000)
     }
   }
 
@@ -244,21 +284,38 @@ const ModelCosts: React.FC = () => {
       return
     }
     
+    setApiKeyUpdateStatus('updating')
     try {
       const response = await client.mutations.updateProviderAPIKey({
         provider: selectedProvider,
         apiKey: apiKey
       })
       
-      if (response.data && (response.data as any).success) {
-        alert(`API key for ${PROVIDER_DISPLAY_NAMES[selectedProvider] || selectedProvider} updated successfully`)
-        setShowApiKeyUpdate(false)
-        setSelectedProvider('')
-        setApiKey('')
+      if (response.data) {
+        const result = typeof response.data === 'string' 
+          ? JSON.parse(response.data as any) 
+          : (typeof (response.data as any).updateProviderAPIKey === 'string' 
+              ? JSON.parse((response.data as any).updateProviderAPIKey) 
+              : (response.data as any).updateProviderAPIKey)
+        
+        if (result?.success) {
+          setApiKeyUpdateStatus('success')
+          setTimeout(() => {
+            setShowApiKeyUpdate(false)
+            setSelectedProvider('')
+            setApiKey('')
+            setApiKeyUpdateStatus('idle')
+          }, 2000)
+        } else {
+          throw new Error('Failed to update API key')
+        }
+      } else {
+        throw new Error('No response data')
       }
     } catch (error) {
       console.error('Error updating API key:', error)
-      alert('Failed to update API key')
+      setApiKeyUpdateStatus('error')
+      setTimeout(() => setApiKeyUpdateStatus('idle'), 3000)
     }
   }
 
@@ -320,6 +377,16 @@ const ModelCosts: React.FC = () => {
       {showAddModel && (
         <Card variation="elevated" marginBottom="20px">
           <Heading level={4} marginBottom="20px">Add New Model</Heading>
+          {addModelStatus === 'success' && (
+            <Alert variation="success" marginBottom="15px">
+              Model added successfully!
+            </Alert>
+          )}
+          {addModelStatus === 'error' && (
+            <Alert variation="error" marginBottom="15px">
+              Failed to add model. Please try again.
+            </Alert>
+          )}
           <Grid templateColumns="1fr 1fr" gap="20px">
             <SelectField
               label="Provider"
@@ -388,8 +455,21 @@ const ModelCosts: React.FC = () => {
             />
           </Flex>
           <Flex gap="10px" marginTop="20px">
-            <Button onClick={handleAddModel} variation="primary">Add Model</Button>
-            <Button onClick={() => setShowAddModel(false)} variation="link">Cancel</Button>
+            <Button 
+              onClick={handleAddModel} 
+              variation="primary"
+              isLoading={addModelStatus === 'adding'}
+              isDisabled={addModelStatus === 'adding' || addModelStatus === 'success'}
+            >
+              {addModelStatus === 'adding' ? 'Adding...' : 'Add Model'}
+            </Button>
+            <Button 
+              onClick={() => { setShowAddModel(false); setAddModelStatus('idle') }} 
+              variation="link"
+              isDisabled={addModelStatus === 'adding'}
+            >
+              Cancel
+            </Button>
           </Flex>
         </Card>
       )}
@@ -397,6 +477,16 @@ const ModelCosts: React.FC = () => {
       {showApiKeyUpdate && (
         <Card variation="elevated" marginBottom="20px">
           <Heading level={4} marginBottom="20px">Update Provider API Key</Heading>
+          {apiKeyUpdateStatus === 'success' && (
+            <Alert variation="success" marginBottom="15px">
+              API key for {PROVIDER_DISPLAY_NAMES[selectedProvider] || selectedProvider} updated successfully!
+            </Alert>
+          )}
+          {apiKeyUpdateStatus === 'error' && (
+            <Alert variation="error" marginBottom="15px">
+              Failed to update API key. Please try again.
+            </Alert>
+          )}
           <Grid templateColumns="1fr 2fr" gap="20px">
             <SelectField
               label="Provider"
@@ -419,8 +509,19 @@ const ModelCosts: React.FC = () => {
             API keys are securely stored in AWS Secrets Manager at /ai-agent/llm-secrets/prod/{'{provider}'}
           </Alert>
           <Flex gap="10px" marginTop="20px">
-            <Button onClick={handleUpdateApiKey} variation="primary">Update API Key</Button>
-            <Button onClick={() => { setShowApiKeyUpdate(false); setSelectedProvider(''); setApiKey('') }} variation="link">
+            <Button 
+              onClick={handleUpdateApiKey} 
+              variation="primary"
+              isLoading={apiKeyUpdateStatus === 'updating'}
+              isDisabled={apiKeyUpdateStatus === 'updating' || apiKeyUpdateStatus === 'success'}
+            >
+              {apiKeyUpdateStatus === 'updating' ? 'Updating...' : 'Update API Key'}
+            </Button>
+            <Button 
+              onClick={() => { setShowApiKeyUpdate(false); setSelectedProvider(''); setApiKey(''); setApiKeyUpdateStatus('idle') }} 
+              variation="link"
+              isDisabled={apiKeyUpdateStatus === 'updating'}
+            >
               Cancel
             </Button>
           </Flex>

@@ -350,10 +350,11 @@ class UnifiedLLMStepFunctionsGenerator:
         
         for config in tool_configs:
             tool_name = config["tool_name"]
-            lambda_arn = config["lambda_arn"]
-            requires_approval = config.get("requires_activity") and config.get("activity_type") == "human_approval"
+            lambda_arn = config.get("lambda_arn")
+            requires_activity = config.get("requires_activity", False)
+            activity_type = config.get("activity_type")
             
-            if requires_approval and approval_activity_arn:
+            if requires_activity and activity_type == "human_approval" and approval_activity_arn:
                 # Tool requires human approval
                 states[f"Execute {tool_name}"] = {
                     "Type": "Parallel",
@@ -404,7 +405,13 @@ class UnifiedLLMStepFunctionsGenerator:
                                 f"Rejected {tool_name}": {
                                     "Type": "Pass",
                                     "Output": {
-                                        "error": f"Tool execution rejected by user: {tool_name}"
+                                        "type": "tool_result",
+                                        "tool_use_id": "{% $states.input.tool_request.id %}",
+                                        "name": tool_name,
+                                        "content": {
+                                            "status": "rejected",
+                                            "message": f"Tool execution rejected by user: {tool_name}"
+                                        }
                                     },
                                     "End": True
                                 }
@@ -414,6 +421,110 @@ class UnifiedLLMStepFunctionsGenerator:
                     "End": True,
                     "Output": "{% $states.result[0] %}"
                 }
+            elif requires_activity and activity_type == "remote_execution":
+                # Remote execution workflow: Activity → Check Response → Return Result
+                remote_activity_arn = config.get("activity_arn")
+                if remote_activity_arn:
+                    states[f"Execute {tool_name}"] = {
+                        "Type": "Parallel",
+                        "Comment": f"Execute {tool_name} via remote activity",
+                        "Branches": [
+                            {
+                                "StartAt": f"Wait for Remote {tool_name}",
+                                "States": {
+                                    f"Wait for Remote {tool_name}": {
+                                        "Type": "Task",
+                                        "Resource": remote_activity_arn,
+                                        "TimeoutSeconds": 300,  # 5 minute timeout
+                                        "Arguments": {
+                                            "tool_name": tool_name,
+                                            "tool_use_id": "{% $states.input.id %}",
+                                            "tool_input": "{% $states.input.input %}",
+                                            "timestamp": "{% $states.context.Execution.StartTime %}",
+                                            "context": {
+                                                "execution_name": "{% $states.context.Execution.Name %}",
+                                                "state_machine": "{% $states.context.StateMachine.Name %}"
+                                            }
+                                        },
+                                        "Catch": [{
+                                            "ErrorEquals": ["States.Timeout"],
+                                            "Next": f"Remote Timeout {tool_name}"
+                                        }],
+                                        "Next": f"Process Remote Response {tool_name}",
+                                        "Comment": f"Wait for remote system to process {tool_name}"
+                                    },
+                                    f"Process Remote Response {tool_name}": {
+                                        "Type": "Choice",
+                                        "Choices": [{
+                                            "Condition": "{% $states.input.approved %}",
+                                            "Next": f"Remote Approved {tool_name}"
+                                        }],
+                                        "Default": f"Remote Rejected {tool_name}",
+                                        "Comment": f"Check if remote execution was approved"
+                                    },
+                                    f"Remote Approved {tool_name}": {
+                                        "Type": "Pass",
+                                        "End": True,
+                                        "Output": {
+                                            "type": "tool_result",
+                                            "tool_use_id": "{% $states.input.tool_use_id %}",
+                                            "name": tool_name,
+                                            "content": "{% $type($states.input.tool_input) = 'object' ? $string($states.input.tool_input) : $states.input.tool_input %}"
+                                        },
+                                        "Comment": f"Return approved remote execution result"
+                                    },
+                                    f"Remote Rejected {tool_name}": {
+                                        "Type": "Pass",
+                                        "End": True,
+                                        "Output": {
+                                            "type": "tool_result",
+                                            "tool_use_id": "{% $states.input.tool_use_id %}",
+                                            "name": tool_name,
+                                            "content": {
+                                                "status": "rejected",
+                                                "message": "{% $states.input.rejection_reason ? $states.input.rejection_reason : 'Remote execution was rejected' %}"
+                                            }
+                                        },
+                                        "Comment": f"Return rejection from remote system"
+                                    },
+                                    f"Remote Timeout {tool_name}": {
+                                        "Type": "Pass",
+                                        "End": True,
+                                        "Output": {
+                                            "type": "tool_result",
+                                            "tool_use_id": "{% $states.input.id %}",
+                                            "name": tool_name,
+                                            "content": {
+                                                "status": "timeout",
+                                                "message": f"Remote execution of {tool_name} timed out after 5 minutes"
+                                            }
+                                        },
+                                        "Comment": f"Handle timeout for remote execution"
+                                    }
+                                }
+                            }
+                        ],
+                        "End": True,
+                        "Output": "{% $states.result[0] %}"
+                    }
+                else:
+                    print(f"Warning: Remote execution tool '{tool_name}' missing activity_arn, falling back to standard execution")
+                    # Fallback to standard execution
+                    states[f"Execute {tool_name}"] = {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "Comment": f"Execute {tool_name}",
+                        "Arguments": {
+                            "FunctionName": lambda_arn,
+                            "Payload": {
+                                "name": "{% $states.input.name %}",
+                                "id": "{% $states.input.id %}",
+                                "input": "{% $states.input.input %}"
+                            }
+                        },
+                        "End": True,
+                        "Output": "{% $states.result.Payload %}"
+                    }
             else:
                 # Direct tool execution without approval
                 states[f"Execute {tool_name}"] = {

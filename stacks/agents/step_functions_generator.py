@@ -480,16 +480,16 @@ class StepFunctionsGenerator:
 
     @staticmethod
     def _add_remote_execution_workflow(states: Dict, tool_name: str, remote_activity_arn: str):
-        """Add remote execution workflow states (Choice → Remote Activity → Return Result)"""
+        """Add remote execution workflow states (Choice → Remote Activity → Check Response → Return Result)"""
         
         # Add choice condition pointing to remote activity
         states["Which Tool to Use?"]["Choices"].append({
             "Condition": "{% $states.input.name = '" + tool_name + "' %}",
-            "Next": f"Execute Remote {tool_name}"
+            "Next": f"Wait for Remote {tool_name}"
         })
         
-        # Add remote execution state
-        states[f"Execute Remote {tool_name}"] = {
+        # Add remote activity state (waits for remote system response)
+        states[f"Wait for Remote {tool_name}"] = {
             "Type": "Task",
             "Resource": remote_activity_arn,
             "TimeoutSeconds": 300,  # 5 minute timeout for remote execution
@@ -507,9 +507,48 @@ class StepFunctionsGenerator:
                 "ErrorEquals": ["States.Timeout"],
                 "Next": f"Remote Timeout {tool_name}"
             }],
+            "Next": f"Process Remote Response {tool_name}",
+            "Comment": f"Wait for remote system to pick up and process the activity for {tool_name}"
+        }
+        
+        # Add choice state to check approval/rejection from remote response
+        states[f"Process Remote Response {tool_name}"] = {
+            "Type": "Choice",
+            "Choices": [{
+                "Condition": "{% $states.input.approved %}",
+                "Next": f"Remote Approved {tool_name}"
+            }],
+            "Default": f"Remote Rejected {tool_name}",
+            "Comment": f"Check if the remote execution was approved or rejected"
+        }
+        
+        # Add approved state (returns the execution result)
+        states[f"Remote Approved {tool_name}"] = {
+            "Type": "Pass",
             "End": True,
-            "Output": "{% $states.result %}",
-            "Comment": f"Execute {tool_name} on remote system via activity"
+            "Output": {
+                "type": "tool_result",
+                "tool_use_id": "{% $states.input.tool_use_id %}",
+                "name": tool_name,
+                "content": "{% $type($states.input.tool_input) = 'object' ? $string($states.input.tool_input) : $states.input.tool_input %}"
+            },
+            "Comment": f"Return the approved execution result to the LLM"
+        }
+        
+        # Add rejected state (returns rejection message)
+        states[f"Remote Rejected {tool_name}"] = {
+            "Type": "Pass",
+            "End": True,
+            "Output": {
+                "type": "tool_result",
+                "tool_use_id": "{% $states.input.tool_use_id %}",
+                "name": tool_name,
+                "content": {
+                    "status": "rejected",
+                    "message": "{% $states.input.rejection_reason ? $states.input.rejection_reason : 'Remote execution was rejected by the user' %}"
+                }
+            },
+            "Comment": f"Return rejection message to the LLM for alternative action"
         }
         
         # Add timeout handling state
