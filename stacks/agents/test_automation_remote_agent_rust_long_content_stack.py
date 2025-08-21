@@ -3,6 +3,7 @@ from aws_cdk import (
     Duration,
     Fn,
     Aws,
+    Tags,
     aws_stepfunctions as sfn,
     aws_stepfunctions_tasks as tasks,
     aws_iam as iam,
@@ -72,7 +73,10 @@ class TestAutomationRemoteAgentRustLongContentStack(Stack, AgentRegistryMixin):
             f"MicrosoftGraphLongContentLambdaArn-{self.env_name}"
         )
         
-        # Import local agent execution activity ARN
+        # Import local automation Lambda and Activity ARNs
+        self.local_automation_lambda_arn = Fn.import_value(
+            f"LocalAutomationLambdaArn-{self.env_name}"
+        )
         self.local_execution_activity_arn = Fn.import_value(
             f"LocalAutomationRemoteActivityArn-{self.env_name}"
         )
@@ -82,9 +86,9 @@ class TestAutomationRemoteAgentRustLongContentStack(Stack, AgentRegistryMixin):
             f"SharedTableAgentRegistry-{self.env_name}"
         )
         
-        # LLM Models table is optional - not all deployments have it
-        # For now, use a placeholder since it's not used in this environment
-        self.llm_models_table_name = "LLMModels-placeholder"
+        # LLM Models table - created manually via CloudFormation
+        # Using the same pattern as other unified LLM stacks
+        self.llm_models_table_name = f"LLMModels-{self.env_name}"
         
         self.tool_registry_table_name = Fn.import_value(
             f"SharedTableToolRegistry-{self.env_name}"
@@ -98,16 +102,19 @@ class TestAutomationRemoteAgentRustLongContentStack(Stack, AgentRegistryMixin):
         self.agent_name = f"test-automation-remote-agent-rust-long-content"
         self.system_prompt = "You are an enterprise test automation assistant with Office 365 integration."
         
-        # Define tool configurations  
+        # Define tool configurations with proper activity settings
         self.tool_configs = [
             {
                 "tool_name": "local_agent_execute",
-                "lambda_arn": self.local_execution_activity_arn,  # Activity ARN for compatibility
-                "is_activity": True  # Flag to indicate this is an activity
+                "lambda_arn": self.local_automation_lambda_arn,  # Use the imported Lambda ARN
+                "requires_activity": True,
+                "activity_type": "remote_execution",
+                "activity_arn": self.local_execution_activity_arn  # The activity ARN for remote execution
             },
             {
                 "tool_name": "MicrosoftGraphAPI",
-                "lambda_arn": self.microsoft_graph_arn
+                "lambda_arn": self.microsoft_graph_arn,
+                "requires_activity": False  # Direct Lambda execution
             }
         ]
         
@@ -151,8 +158,10 @@ class TestAutomationRemoteAgentRustLongContentStack(Stack, AgentRegistryMixin):
                 resources=[
                     self.unified_rust_llm_arn,
                     self.microsoft_graph_arn,
+                    self.local_automation_lambda_arn,
                     f"{self.unified_rust_llm_arn}:*",
-                    f"{self.microsoft_graph_arn}:*"
+                    f"{self.microsoft_graph_arn}:*",
+                    f"{self.local_automation_lambda_arn}:*"
                 ]
             )
         )
@@ -222,6 +231,14 @@ class TestAutomationRemoteAgentRustLongContentStack(Stack, AgentRegistryMixin):
                 enabled=True
             )
         )
+        
+        # Add tags for UI discoverability
+        Tags.of(self.state_machine).add("Application", "StepFunctionsAgent")
+        Tags.of(self.state_machine).add("Type", "Agent")
+        Tags.of(self.state_machine).add("AgentName", self.agent_name)
+        Tags.of(self.state_machine).add("Environment", self.env_name)
+        Tags.of(self.state_machine).add("ManagedBy", "StepFunctionsAgentUI")
+        Tags.of(self.state_machine).add("LLMType", "UnifiedRust")
         
         # Set additional metadata for the agent registry
         self.agent_description = "Enterprise test automation agent with Office 365 integration and long content support"
