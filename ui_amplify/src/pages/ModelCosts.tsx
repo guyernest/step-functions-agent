@@ -78,6 +78,8 @@ const ModelCosts: React.FC = () => {
   const [apiKey, setApiKey] = useState<string>('')
   const [addModelStatus, setAddModelStatus] = useState<'idle' | 'adding' | 'success' | 'error'>('idle')
   const [apiKeyUpdateStatus, setApiKeyUpdateStatus] = useState<'idle' | 'updating' | 'success' | 'error'>('idle')
+  const [pricingUnit, setPricingUnit] = useState<'1K' | '1M'>('1K')
+  const [editPricingUnit, setEditPricingUnit] = useState<'1K' | '1M'>('1K')
   const [newModel, setNewModel] = useState<NewModelForm>({
     provider: '',
     model_id: '',
@@ -93,6 +95,21 @@ const ModelCosts: React.FC = () => {
   useEffect(() => {
     fetchModelCosts()
   }, [])
+  
+  // Conversion helpers
+  const convertPriceTo1K = (price: number, unit: '1K' | '1M'): number => {
+    if (unit === '1M') {
+      return price * 1000 // Convert from per 1M to per 1K
+    }
+    return price
+  }
+  
+  const convertPriceFrom1K = (price: number, unit: '1K' | '1M'): number => {
+    if (unit === '1M') {
+      return price / 1000 // Convert from per 1K to per 1M
+    }
+    return price
+  }
 
   const fetchModelCosts = async () => {
     setLoading(true)
@@ -141,6 +158,7 @@ const ModelCosts: React.FC = () => {
 
   const handleEdit = (model: LLMModel) => {
     setEditingModel(model.pk)
+    setEditPricingUnit('1K') // Reset to 1K when editing
     setEditValues({
       display_name: model.display_name,
       input_price_per_1k: model.input_price_per_1k,
@@ -159,8 +177,13 @@ const ModelCosts: React.FC = () => {
       const updateData: any = { pk: modelPk }
       
       if (editValues.display_name !== undefined) updateData.display_name = editValues.display_name
-      if (editValues.input_price_per_1k !== undefined) updateData.input_price_per_1k = Number(editValues.input_price_per_1k)
-      if (editValues.output_price_per_1k !== undefined) updateData.output_price_per_1k = Number(editValues.output_price_per_1k)
+      // Convert prices to 1K for storage
+      if (editValues.input_price_per_1k !== undefined) {
+        updateData.input_price_per_1k = convertPriceTo1K(Number(editValues.input_price_per_1k), editPricingUnit)
+      }
+      if (editValues.output_price_per_1k !== undefined) {
+        updateData.output_price_per_1k = convertPriceTo1K(Number(editValues.output_price_per_1k), editPricingUnit)
+      }
       if (editValues.max_tokens !== undefined) updateData.max_tokens = editValues.max_tokens ? Number(editValues.max_tokens) : null
       if (editValues.supports_tools !== undefined) updateData.supports_tools = editValues.supports_tools
       if (editValues.supports_vision !== undefined) updateData.supports_vision = editValues.supports_vision
@@ -232,8 +255,9 @@ const ModelCosts: React.FC = () => {
         provider: newModel.provider,
         model_id: newModel.model_id,
         display_name: newModel.display_name,
-        input_price_per_1k: Number(newModel.input_price_per_1k),
-        output_price_per_1k: Number(newModel.output_price_per_1k),
+        // Convert prices to 1K for storage
+        input_price_per_1k: convertPriceTo1K(Number(newModel.input_price_per_1k), pricingUnit),
+        output_price_per_1k: convertPriceTo1K(Number(newModel.output_price_per_1k), pricingUnit),
         max_tokens: newModel.max_tokens ? Number(newModel.max_tokens) : null,
         supports_tools: newModel.supports_tools,
         supports_vision: newModel.supports_vision,
@@ -387,6 +411,17 @@ const ModelCosts: React.FC = () => {
               Failed to add model. Please try again.
             </Alert>
           )}
+          <View marginBottom="15px">
+            <SelectField
+              label="Pricing Unit"
+              value={pricingUnit}
+              onChange={(e) => setPricingUnit(e.target.value as '1K' | '1M')}
+              descriptiveText="Select whether prices are per 1K tokens or per 1M tokens"
+            >
+              <option value="1K">Per 1K tokens (thousand)</option>
+              <option value="1M">Per 1M tokens (million)</option>
+            </SelectField>
+          </View>
           <Grid templateColumns="1fr 1fr" gap="20px">
             <SelectField
               label="Provider"
@@ -418,20 +453,20 @@ const ModelCosts: React.FC = () => {
               placeholder="e.g., 128000"
             />
             <TextField
-              label="Input Price (per 1K tokens)"
+              label={`Input Price (per ${pricingUnit} tokens)`}
               type="number"
               step="0.001"
               value={newModel.input_price_per_1k}
               onChange={(e) => setNewModel({ ...newModel, input_price_per_1k: e.target.value })}
-              placeholder="e.g., 0.15"
+              placeholder={pricingUnit === '1K' ? "e.g., 0.15" : "e.g., 150"}
             />
             <TextField
-              label="Output Price (per 1K tokens)"
+              label={`Output Price (per ${pricingUnit} tokens)`}
               type="number"
               step="0.001"
               value={newModel.output_price_per_1k}
               onChange={(e) => setNewModel({ ...newModel, output_price_per_1k: e.target.value })}
-              placeholder="e.g., 0.60"
+              placeholder={pricingUnit === '1K' ? "e.g., 0.60" : "e.g., 600"}
             />
           </Grid>
           <Flex gap="20px" marginTop="20px">
@@ -541,8 +576,8 @@ const ModelCosts: React.FC = () => {
                 <TableRow>
                   <TableCell as="th">Model</TableCell>
                   <TableCell as="th">Model ID</TableCell>
-                  <TableCell as="th">Input Price</TableCell>
-                  <TableCell as="th">Output Price</TableCell>
+                  <TableCell as="th">Input Price (per 1K)</TableCell>
+                  <TableCell as="th">Output Price (per 1K)</TableCell>
                   <TableCell as="th">Max Tokens</TableCell>
                   <TableCell as="th">Capabilities</TableCell>
                   <TableCell as="th">Status</TableCell>
@@ -572,14 +607,29 @@ const ModelCosts: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       {editingModel === model.pk ? (
-                        <TextField
-                          label=""
-                          value={editValues.input_price_per_1k?.toString() || ''}
-                          onChange={(e) => setEditValues({ ...editValues, input_price_per_1k: Number(e.target.value) })}
-                          type="number"
-                          step="0.001"
-                          size="small"
-                        />
+                        <Flex direction="column" gap="5px">
+                          <SelectField
+                            label=""
+                            value={editPricingUnit}
+                            onChange={(e) => {
+                              const newUnit = e.target.value as '1K' | '1M'
+                              setEditPricingUnit(newUnit)
+                            }}
+                            size="small"
+                          >
+                            <option value="1K">Per 1K</option>
+                            <option value="1M">Per 1M</option>
+                          </SelectField>
+                          <TextField
+                            label=""
+                            value={convertPriceFrom1K(editValues.input_price_per_1k || 0, editPricingUnit).toString()}
+                            onChange={(e) => setEditValues({ ...editValues, input_price_per_1k: Number(e.target.value) })}
+                            type="number"
+                            step="0.001"
+                            size="small"
+                            placeholder={editPricingUnit === '1K' ? "e.g., 0.15" : "e.g., 150"}
+                          />
+                        </Flex>
                       ) : (
                         <Text>{formatPrice(model.input_price_per_1k)}</Text>
                       )}
@@ -588,11 +638,12 @@ const ModelCosts: React.FC = () => {
                       {editingModel === model.pk ? (
                         <TextField
                           label=""
-                          value={editValues.output_price_per_1k?.toString() || ''}
+                          value={convertPriceFrom1K(editValues.output_price_per_1k || 0, editPricingUnit).toString()}
                           onChange={(e) => setEditValues({ ...editValues, output_price_per_1k: Number(e.target.value) })}
                           type="number"
                           step="0.001"
                           size="small"
+                          placeholder={editPricingUnit === '1K' ? "e.g., 0.60" : "e.g., 600"}
                         />
                       ) : (
                         <Text>{formatPrice(model.output_price_per_1k)}</Text>
