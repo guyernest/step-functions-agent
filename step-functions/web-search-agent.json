@@ -1,0 +1,179 @@
+{
+  "Comment": "Web Search Agent - A wrapper state machine that uses Nova Act browser tool",
+  "StartAt": "ValidateSearchRequest",
+  "States": {
+    "ValidateSearchRequest": {
+      "Type": "Pass",
+      "Parameters": {
+        "url.$": "States.Format('{}', States.Default($.agent_config.portal_url, 'https://www.google.com'))",
+        "query.$": "$.agent_config.search_query",
+        "session_id.$": "$.session_id",
+        "config": {
+          "max_results.$": "States.Default($.agent_config.max_results, 10)",
+          "timeout.$": "States.Default($.agent_config.timeout_seconds, 30)",
+          "capture_screenshot.$": "States.Default($.agent_config.capture_screenshot, false)",
+          "search_selector.$": "States.Default($.agent_config.search_selector, 'input[type=\"search\"]')",
+          "results_selector.$": "States.Default($.agent_config.results_selector, '.search-results')"
+        }
+      },
+      "ResultPath": "$.validated_input",
+      "Next": "CheckAuthentication"
+    },
+    
+    "CheckAuthentication": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.agent_config.requires_auth",
+          "BooleanEquals": true,
+          "Next": "Authenticate"
+        }
+      ],
+      "Default": "ExecuteSearch"
+    },
+    
+    "Authenticate": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${NovaActBrowserFunction}",
+        "Payload": {
+          "action": "authenticate",
+          "url.$": "$.agent_config.auth_url",
+          "credentials.$": "$.agent_config.credentials",
+          "session_id.$": "$.validated_input.session_id"
+        }
+      },
+      "ResultPath": "$.auth_result",
+      "Next": "CheckAuthSuccess"
+    },
+    
+    "CheckAuthSuccess": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.auth_result.Payload.authenticated",
+          "BooleanEquals": true,
+          "Next": "ExecuteSearch"
+        }
+      ],
+      "Default": "AuthenticationFailed"
+    },
+    
+    "ExecuteSearch": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${NovaActBrowserFunction}",
+        "Payload": {
+          "action": "search",
+          "url.$": "$.validated_input.url",
+          "query.$": "$.validated_input.query",
+          "config.$": "$.validated_input.config",
+          "session_id.$": "$.validated_input.session_id"
+        }
+      },
+      "ResultPath": "$.search_results",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleSearchError",
+          "ResultPath": "$.error_info"
+        }
+      ],
+      "Next": "AnalyzeResults"
+    },
+    
+    "AnalyzeResults": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::bedrock:invokeModel",
+      "Parameters": {
+        "ModelId": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "ContentType": "application/json",
+        "Body": {
+          "anthropic_version": "bedrock-2023-05-31",
+          "messages": [
+            {
+              "role": "user",
+              "content.$": "States.Format('Analyze and summarize these search results for the query \"{}\":\\n\\nResults:\\n{}\\n\\nProvide a concise, structured summary of the most relevant findings.', $.validated_input.query, States.JsonToString($.search_results.Payload.results))"
+            }
+          ],
+          "max_tokens": 2048,
+          "temperature": 0.3
+        }
+      },
+      "ResultPath": "$.llm_analysis",
+      "Next": "FormatAgentResponse"
+    },
+    
+    "FormatAgentResponse": {
+      "Type": "Pass",
+      "Parameters": {
+        "agent_messages": [
+          {
+            "role": "assistant",
+            "content.$": "States.Format('I searched {} for \"{}\" and found {} results. Here is my analysis:', $.validated_input.url, $.validated_input.query, $.search_results.Payload.count)"
+          },
+          {
+            "role": "tool",
+            "tool_name": "web_search",
+            "content.$": "$.llm_analysis.Body.content[0].text"
+          }
+        ],
+        "metadata": {
+          "session_id.$": "$.validated_input.session_id",
+          "search_url.$": "$.validated_input.url",
+          "query.$": "$.validated_input.query",
+          "results_count.$": "$.search_results.Payload.count",
+          "s3_results_key.$": "$.search_results.Payload.s3_key",
+          "execution_time.$": "$$.State.EnteredTime",
+          "status": "success"
+        }
+      },
+      "End": true
+    },
+    
+    "AuthenticationFailed": {
+      "Type": "Pass",
+      "Parameters": {
+        "agent_messages": [
+          {
+            "role": "assistant",
+            "content": "I was unable to authenticate with the web portal. The search could not be completed."
+          }
+        ],
+        "metadata": {
+          "status": "authentication_failed",
+          "session_id.$": "$.validated_input.session_id"
+        }
+      },
+      "End": true
+    },
+    
+    "HandleSearchError": {
+      "Type": "Pass",
+      "Parameters": {
+        "agent_messages": [
+          {
+            "role": "assistant",
+            "content.$": "States.Format('I encountered an error while searching: {}', $.error_info.Cause)"
+          }
+        ],
+        "metadata": {
+          "status": "error",
+          "error_message.$": "$.error_info.Cause",
+          "session_id.$": "$.validated_input.session_id"
+        }
+      },
+      "End": true
+    }
+  }
+}

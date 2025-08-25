@@ -1,0 +1,164 @@
+# Web Search Agent Configuration for Agent Core
+agent_name: web-search-agent
+description: Agent that searches web portals and extracts information using Nova Act browser automation
+
+# Foundation model configuration
+foundation_model: anthropic.claude-3-5-sonnet-20241022-v2:0
+
+# Agent instruction/system prompt
+instruction: |
+  You are a web search specialist agent that helps users find and extract information from web portals.
+  
+  Your capabilities include:
+  1. Searching various web portals and search engines
+  2. Extracting structured data from web pages
+  3. Handling authentication for protected portals
+  4. Taking screenshots and capturing evidence
+  5. Analyzing and summarizing search results
+  
+  When performing searches:
+  - Be thorough but efficient
+  - Extract the most relevant information
+  - Provide clear summaries of findings
+  - Include source URLs and citations
+  - Handle errors gracefully
+
+# Session configuration
+idle_timeout: 600  # 10 minutes
+
+# Action groups for the agent
+action_groups:
+  - name: nova-act-browser
+    description: Browser automation actions using Nova Act
+    lambda_arn: ${NOVA_ACT_BROWSER_LAMBDA_ARN}  # Will be replaced with actual ARN
+    api_schema:
+      openapi: "3.0.3"
+      info:
+        title: Nova Act Browser API
+        version: "1.0.0"
+        description: Browser automation API for web portal searches
+      paths:
+        /search:
+          post:
+            summary: Search a web portal
+            description: Perform a search on a web portal and return results
+            operationId: searchPortal
+            requestBody:
+              required: true
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                        description: The portal URL to search
+                      query:
+                        type: string
+                        description: The search query
+                      max_results:
+                        type: integer
+                        description: Maximum number of results to return
+                        default: 10
+                    required:
+                      - url
+                      - query
+            responses:
+              "200":
+                description: Successful search
+                content:
+                  application/json:
+                    schema:
+                      type: object
+                      properties:
+                        results:
+                          type: array
+                          items:
+                            type: object
+                        count:
+                          type: integer
+        /extract:
+          post:
+            summary: Extract data from a web page
+            description: Extract structured data from a web page using CSS selectors
+            operationId: extractData
+            requestBody:
+              required: true
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                        description: The page URL
+                      selectors:
+                        type: array
+                        items:
+                          type: string
+                        description: CSS selectors for extraction
+                    required:
+                      - url
+                      - selectors
+            responses:
+              "200":
+                description: Successful extraction
+                content:
+                  application/json:
+                    schema:
+                      type: object
+        /authenticate:
+          post:
+            summary: Authenticate with a portal
+            description: Perform authentication with a web portal
+            operationId: authenticatePortal
+            requestBody:
+              required: true
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                        description: The login URL
+                      username:
+                        type: string
+                        description: Username for authentication
+                      password:
+                        type: string
+                        description: Password for authentication
+                    required:
+                      - url
+                      - username
+                      - password
+            responses:
+              "200":
+                description: Authentication successful
+                content:
+                  application/json:
+                    schema:
+                      type: object
+                      properties:
+                        authenticated:
+                          type: boolean
+                        sessionId:
+                          type: string
+
+# Optional: Knowledge bases to associate
+# knowledge_bases:
+#   - id: kb-12345
+#     description: Web search best practices
+#     state: ENABLED
+
+# Optional: Guardrails
+# guardrail_id: gr-12345
+# guardrail_version: DRAFT
+
+# Prompt override configuration (optional)
+# Commented out for now - using default prompts
+# prompt_override:
+#   promptConfigurations:
+#     - promptType: ORCHESTRATION
+#       promptCreationMode: DEFAULT
+#       promptState: ENABLED

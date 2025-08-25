@@ -1,0 +1,86 @@
+default_agent: shopping_agent
+agents:
+  web_search_agent:
+    name: web_search_agent
+    entrypoint: /Users/guy/projects/step-functions-agent/agent_core/web_search_agent.py
+    platform: linux/arm64
+    container_runtime: docker
+    aws:
+      execution_role: arn:aws:iam::672915487120:role/AgentCoreRuntime-web-search-agent
+      execution_role_auto_create: false
+      account: '672915487120'
+      region: us-west-2
+      ecr_repository: 672915487120.dkr.ecr.us-west-2.amazonaws.com/bedrock-agentcore-web_search_agent
+      ecr_auto_create: false
+      network_configuration:
+        network_mode: PUBLIC
+      protocol_configuration:
+        server_protocol: HTTP
+      observability:
+        enabled: true
+    bedrock_agentcore:
+      agent_id: web_search_agent-3dH6uJ84DT
+      agent_arn: arn:aws:bedrock-agentcore:us-west-2:672915487120:runtime/web_search_agent-3dH6uJ84DT
+      agent_session_id: null
+    codebuild:
+      project_name: bedrock-agentcore-web_search_agent-builder
+      execution_role: arn:aws:iam::672915487120:role/AmazonBedrockAgentCoreSDKCodeBuild-us-west-2-d2bd8d7daa
+      source_bucket: bedrock-agentcore-codebuild-sources-672915487120-us-west-2
+    authorizer_configuration: null
+    oauth_configuration: null
+  simple_web_search_agent:
+    name: simple_web_search_agent
+    entrypoint: /Users/guy/projects/step-functions-agent/agent_core/simple_web_search_agent.py
+    platform: linux/arm64
+    container_runtime: docker
+    aws:
+      execution_role: arn:aws:iam::672915487120:role/AgentCoreRuntime-web-search-agent
+      execution_role_auto_create: false
+      account: '672915487120'
+      region: us-west-2
+      ecr_repository: 672915487120.dkr.ecr.us-west-2.amazonaws.com/bedrock-agentcore-simple_web_search_agent
+      ecr_auto_create: false
+      network_configuration:
+        network_mode: PUBLIC
+      protocol_configuration:
+        server_protocol: HTTP
+      observability:
+        enabled: true
+    bedrock_agentcore:
+      agent_id: simple_web_search_agent-47OD4p3G4v
+      agent_arn: arn:aws:bedrock-agentcore:us-west-2:672915487120:runtime/simple_web_search_agent-47OD4p3G4v
+      agent_session_id: null
+    codebuild:
+      project_name: bedrock-agentcore-simple_web_search_agent-builder
+      execution_role: arn:aws:iam::672915487120:role/AmazonBedrockAgentCoreSDKCodeBuild-us-west-2-32a3ac257a
+      source_bucket: bedrock-agentcore-codebuild-sources-672915487120-us-west-2
+    authorizer_configuration: null
+    oauth_configuration: null
+  shopping_agent:
+    name: shopping_agent
+    entrypoint: /Users/guy/projects/step-functions-agent/agent_core/shopping_agent.py
+    platform: linux/arm64
+    container_runtime: docker
+    aws:
+      execution_role: arn:aws:iam::672915487120:role/AgentCoreRuntime-web-search-agent
+      execution_role_auto_create: false
+      account: '672915487120'
+      region: us-west-2
+      ecr_repository: 672915487120.dkr.ecr.us-west-2.amazonaws.com/bedrock-agentcore-shopping_agent
+      ecr_auto_create: false
+      network_configuration:
+        network_mode: PUBLIC
+      protocol_configuration:
+        server_protocol: HTTP
+      observability:
+        enabled: true
+    bedrock_agentcore:
+      agent_id: shopping_agent-aw6O6r7uk5
+      agent_arn: arn:aws:bedrock-agentcore:us-west-2:672915487120:runtime/shopping_agent-aw6O6r7uk5
+      agent_session_id: null
+    codebuild:
+      project_name: bedrock-agentcore-shopping_agent-builder
+      execution_role: arn:aws:iam::672915487120:role/AmazonBedrockAgentCoreSDKCodeBuild-us-west-2-471289a137
+      source_bucket: bedrock-agentcore-codebuild-sources-672915487120-us-west-2
+    authorizer_configuration: null
+    oauth_configuration: null

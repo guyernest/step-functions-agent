@@ -1,0 +1,4 @@
+boto3>=1.26.0
+# nova-act  # Uncomment when Nova Act package is available
+asyncio
+typing-extensions>=4.0.0

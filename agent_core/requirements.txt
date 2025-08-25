@@ -1,0 +1,7 @@
+bedrock-agentcore
+bedrock-agentcore-starter-toolkit
+strands-agents
+strands-agents-tools
+nova-act
+boto3>=1.35.0
+asyncio

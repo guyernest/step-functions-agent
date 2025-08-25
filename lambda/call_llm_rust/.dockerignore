@@ -1,0 +1,32 @@
+# Exclude build artifacts
+target/
+Cargo.lock
+*.orig
+*.swp
+*.bak
+
+# Exclude development files
+tests/
+test_events.json
+TEST_EVENTS_README.md
+TESTING.md
+run_tests.sh
+verify_build.sh
+build.sh
+Makefile
+README.md
+
+# Exclude source code (only need bootstrap binary)
+src/
+
+# Exclude version control
+.git/
+.gitignore
+
+# Exclude environment files
+.env
+.env.*
+
+# Keep only bootstrap and collector.yaml
+!bootstrap
+!collector.yaml

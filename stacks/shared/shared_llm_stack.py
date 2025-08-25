@@ -113,11 +113,11 @@ class SharedLLMStack(Stack):
         )
 
     def _create_log_group(self):
-        """Create shared log group for all LLM functions"""
-        self.log_group = logs.LogGroup(
-            self, 
-            "SharedLLMLogGroup",
-            log_group_name=f"/aws/lambda/shared-llm-refactored-{self.env_name}",
+        """Create centralized AgentCore log group for all Step Functions agents and LLM functions"""
+        self.agent_log_group = logs.LogGroup(
+            self,
+            "AgentCoreLogGroup",
+            log_group_name="/aws/bedrock-agentcore/runtimes/sf-agents",
             retention=logs.RetentionDays.ONE_WEEK,
             removal_policy=RemovalPolicy.DESTROY
         )
@@ -170,7 +170,7 @@ class SharedLLMStack(Stack):
             "memory_size": 256,
             "layers": [self.llm_layer],
             "architecture": _lambda.Architecture.ARM_64,
-            "log_group": self.log_group,
+            "log_group": self.agent_log_group,
             "role": self.llm_execution_role,
             "tracing": _lambda.Tracing.ACTIVE,
             "environment": {
@@ -241,28 +241,75 @@ class SharedLLMStack(Stack):
             **common_config
         )
 
+        # ADOT Collector Layer for observability (ARM64)
+        # Using AWS Distro for OpenTelemetry (ADOT) Collector layer
+        # ARN from https://aws-otel.github.io/docs/getting-started/lambda
+        # Note: This layer has limited exporters (awsxray, awsemf, otlp, otlphttp, prometheusremotewrite)
+        adot_collector_layer_arn = f"arn:aws:lambda:{self.region}:901920570463:layer:aws-otel-collector-arm64-ver-0-102-1:1"
+        adot_collector_layer = _lambda.LayerVersion.from_layer_version_arn(
+            self, "AdotCollectorLayer", adot_collector_layer_arn
+        )
+
         # Unified Rust LLM Service
         self.unified_rust_llm = _lambda.Function(
             self,
             "SharedUnifiedRustLLM",
             function_name=f"shared-unified-rust-llm-{self.env_name}",
             description="Shared Unified Rust LLM service supporting all providers",
-            code=_lambda.Code.from_asset("lambda/call_llm_rust/target/lambda/bootstrap"),
+            code=_lambda.Code.from_asset("lambda/call_llm_rust/deployment"),
             handler="main",
             runtime=_lambda.Runtime.PROVIDED_AL2023,
             timeout=Duration.seconds(90),
             memory_size=512,  # Rust may need slightly more memory for cold starts
             architecture=_lambda.Architecture.ARM_64,
-            log_group=self.log_group,
+            log_group=self.agent_log_group,
             role=self.llm_execution_role,
             tracing=_lambda.Tracing.ACTIVE,
+            layers=[adot_collector_layer],  # Add ADOT collector layer
             environment={
                 "ENVIRONMENT": self.env_name,
                 "POWERTOOLS_SERVICE_NAME": "unified-rust-llm",
                 "POWERTOOLS_LOG_LEVEL": "INFO",
                 "RUST_LOG": "info",
-                "DEPLOYMENT_TIMESTAMP": "2025-08-17-force-update"
+                "DEPLOYMENT_TIMESTAMP": "2025-08-17-force-update",
+                # ADOT Collector configuration
+                "OPENTELEMETRY_COLLECTOR_CONFIG_URI": "/var/task/collector.yaml",
+                # AgentCore Observability configuration (per AWS documentation)
+                "AGENT_OBSERVABILITY_ENABLED": "true",
+                "OTEL_TRACES_EXPORTER": "otlp",
+                "OTEL_METRICS_EXPORTER": "otlp",
+                "OTEL_LOGS_EXPORTER": "otlp",
+                "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+                "OTEL_RESOURCE_ATTRIBUTES": "service.name=sf-agents,aws.log.group.names=/aws/bedrock-agentcore/runtimes/sf-agents",
+                "OTEL_EXPORTER_OTLP_LOGS_HEADERS": "x-aws-log-group=/aws/bedrock-agentcore/runtimes/sf-agents,x-aws-log-stream=runtime-logs,x-aws-metric-namespace=bedrock-agentcore"
             }
+        )
+        
+        # Grant X-Ray permissions for the unified Rust LLM
+        self.llm_execution_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "xray:PutTraceSegments",
+                    "xray:PutTelemetryRecords"
+                ],
+                resources=["*"]
+            )
+        )
+        
+        # Grant CloudWatch Logs permissions for the agent log group
+        self.llm_execution_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                ],
+                resources=[
+                    self.agent_log_group.log_group_arn,
+                    f"{self.agent_log_group.log_group_arn}:*"
+                ]
+            )
         )
         
         # Store function names for external reference (e.g., monitoring)
@@ -347,15 +394,15 @@ class SharedLLMStack(Stack):
         CfnOutput(
             self, 
             "LLMLogGroupName",
-            value=self.log_group.log_group_name,
+            value=self.agent_log_group.log_group_name,
             export_name=f"SharedLLMLogGroupName-{self.env_name}",
-            description="Name of the shared LLM log group"
+            description="Name of the centralized agent log group"
         )
         
         CfnOutput(
             self, 
             "LLMLogGroupArn",
-            value=self.log_group.log_group_arn,
+            value=self.agent_log_group.log_group_arn,
             export_name=f"SharedLLMLogGroupArn-{self.env_name}",
-            description="ARN of the shared LLM log group for agent stacks"
+            description="ARN of the centralized agent log group for all agents and LLM functions"
         )

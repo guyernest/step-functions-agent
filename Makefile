@@ -12,7 +12,7 @@ GO := go
 CDK := npx cdk
 
 # AWS Configuration
-AWS_PROFILE ?= CGI-PoC
+AWS_PROFILE ?= default
 AWS_REGION ?= us-west-2
 ENV_NAME ?= prod
 
@@ -115,6 +115,14 @@ help:
 	@echo "  make deploy-tools      - Deploy all tool stacks"
 	@echo "  make deploy-agents     - Deploy all agent stacks"
 	@echo ""
+	@echo "🤖 Agent Core Commands:"
+	@echo "  make deploy-agent-core CONFIG=<file> - Deploy agent to Agent Core service"
+	@echo "  make deploy-agent-wrapper AGENT=<name> - Deploy Step Functions wrapper"
+	@echo "  make deploy-agent-full CONFIG=<file> - Full deployment (Core + wrapper)"
+	@echo "  make list-agent-core   - List all Agent Core agents"
+	@echo "  make test-agent-core AGENT=<name> - Test an Agent Core agent"
+	@echo "  make delete-agent-core AGENT_ID=<id> - Delete an Agent Core agent"
+	@echo ""
 	@echo "📱 UI Commands:"
 	@echo "  make ui-build          - Build Amplify UI"
 	@echo "  make ui-dev            - Start UI development server"
@@ -139,23 +147,58 @@ help:
 # ============================================
 .PHONY: build-llm-rust
 build-llm-rust:
-	@echo "🦀 Building Unified LLM Service (Rust)..."
+	@echo "🦀 Building Unified LLM Service (Rust) with ADOT Observability..."
 	@if ! $(CARGO) lambda --version &> /dev/null; then \
 		echo "📦 Installing cargo-lambda..."; \
 		$(CARGO) install cargo-lambda; \
 	fi
 	@cd $(CALL_LLM_RUST_DIR) && \
 		echo "🧹 Cleaning previous builds..." && \
-		rm -rf target/lambda && \
+		rm -rf target/lambda deployment && \
 		echo "🔨 Building for Lambda (ARM64)..." && \
 		$(CARGO_LAMBDA) build --release --arm64 && \
-		echo "✅ Build complete!"
+		echo "📋 Preparing clean deployment package..." && \
+		mkdir -p deployment && \
+		if [ -f target/lambda/bootstrap/bootstrap ]; then \
+			cp target/lambda/bootstrap/bootstrap deployment/bootstrap; \
+		elif [ -f target/lambda/bootstrap ]; then \
+			cp target/lambda/bootstrap deployment/bootstrap; \
+		fi && \
+		cp collector.yaml deployment/ && \
+		echo "📦 Deployment package size: $$(du -sh deployment | cut -f1)" && \
+		echo "✅ Build complete! Clean deployment package at: lambda/call_llm_rust/deployment/"
 
 .PHONY: test-llm-rust
 test-llm-rust:
 	@echo "🧪 Testing Unified LLM Service (Rust)..."
 	@cd $(CALL_LLM_RUST_DIR) && \
 		RUST_LOG=debug $(CARGO) test --lib -- --nocapture
+
+.PHONY: verify-llm-rust
+verify-llm-rust:
+	@echo "🔍 Verifying Rust Lambda build with ADOT observability..."
+	@cd $(CALL_LLM_RUST_DIR) && \
+		if [ -d deployment ]; then \
+			if [ -f deployment/bootstrap ]; then \
+				echo "✅ deployment/bootstrap found (size: $$(ls -lh deployment/bootstrap | awk '{print $$5}'))"; \
+			else \
+				echo "❌ deployment/bootstrap NOT found"; \
+				exit 1; \
+			fi && \
+			if [ -f deployment/collector.yaml ]; then \
+				echo "✅ deployment/collector.yaml found for ADOT"; \
+			else \
+				echo "❌ deployment/collector.yaml NOT found"; \
+				exit 1; \
+			fi && \
+			echo "📦 CDK deployment package:" && \
+			ls -la deployment/ | sed 's/^/   /' && \
+			echo "📏 Total size: $$(du -sh deployment | cut -f1)" && \
+			echo "🚀 Ready for deployment: cdk deploy SharedLLMStack-prod"; \
+		else \
+			echo "❌ deployment directory NOT found - run: make build-llm-rust"; \
+			exit 1; \
+		fi
 	
 .PHONY: test-llm-rust-integration
 test-llm-rust-integration:
@@ -587,3 +630,293 @@ format:
 		fi \
 	done
 	@echo "✅ Code formatted!"
+
+# ============================================
+# Agent Core Commands (NEW Service - Bedrock Agent Core)
+# ============================================
+AGENTCORE_DIR := agent_core
+AGENTCORE_NAME ?= web-search-agent
+
+# Legacy Agent Commands (OLD Service - Bedrock Agents)
+# ============================================
+AGENT_CORE_DIR := scripts/agent_core
+AGENT_CORE_CONFIGS := $(AGENT_CORE_DIR)/configs
+AGENT_NAME ?= web-search-agent
+
+.PHONY: deploy-agent-core
+deploy-agent-core:
+	@if [ -z "$(CONFIG)" ]; then \
+		echo "❌ Please specify CONFIG=<config-file>"; \
+		echo "Example: make deploy-agent-core CONFIG=web_search_agent.yaml"; \
+		exit 1; \
+	fi
+	@echo "🚀 Deploying Agent Core agent from $(CONFIG)..."
+	@echo "📍 Using AWS Profile: $(AWS_PROFILE), Region: $(AWS_REGION)"
+	@NOVA_ACT_ARN=$$(aws cloudformation describe-stacks \
+		--stack-name "NovaActBrowserToolStack-$(ENV_NAME)" \
+		--region "$(AWS_REGION)" \
+		$${AWS_PROFILE:+--profile "$$AWS_PROFILE"} \
+		--query "Stacks[0].Outputs[?OutputKey=='NovaActBrowserFunctionArn'].OutputValue" \
+		--output text 2>/dev/null); \
+	if [ -z "$$NOVA_ACT_ARN" ]; then \
+		echo "❌ Nova Act Browser stack not found. Deploy it first:"; \
+		echo "  make deploy-stack STACK=NovaActBrowserToolStack-$(ENV_NAME)"; \
+		exit 1; \
+	fi; \
+	echo "✅ Found Nova Act Browser Lambda: $$NOVA_ACT_ARN"; \
+	sed "s|\$${NOVA_ACT_BROWSER_LAMBDA_ARN}|$$NOVA_ACT_ARN|g" \
+		"$(AGENT_CORE_CONFIGS)/$(CONFIG)" > "/tmp/agent-config-temp.yaml"; \
+	if $(PYTHON) $(AGENT_CORE_DIR)/deploy_agent.py \
+		"/tmp/agent-config-temp.yaml" \
+		--region $(AWS_REGION) \
+		$${AWS_PROFILE:+--profile "$$AWS_PROFILE"}; then \
+		rm -f "/tmp/agent-config-temp.yaml"; \
+		echo "✅ Agent Core deployment complete!"; \
+	else \
+		rm -f "/tmp/agent-config-temp.yaml"; \
+		echo "❌ Agent Core deployment failed!"; \
+		exit 1; \
+	fi
+
+.PHONY: deploy-agent-wrapper
+deploy-agent-wrapper:
+	@if [ -z "$(AGENT)" ]; then \
+		echo "❌ Please specify AGENT=<agent-name>"; \
+		echo "Example: make deploy-agent-wrapper AGENT=web-search-agent"; \
+		exit 1; \
+	fi
+	@echo "🚀 Deploying Step Functions wrapper for $(AGENT)..."
+	@if [ ! -f "agent-core-output-$(AGENT).json" ]; then \
+		echo "❌ Agent Core output file not found: agent-core-output-$(AGENT).json"; \
+		echo "Run 'make deploy-agent-core CONFIG=<config>' first"; \
+		exit 1; \
+	fi; \
+	echo "#!/usr/bin/env python3" > /tmp/agent-wrapper-app.py; \
+	echo "import os" >> /tmp/agent-wrapper-app.py; \
+	echo "import aws_cdk as cdk" >> /tmp/agent-wrapper-app.py; \
+	echo "from stacks.agents.agent_core_wrapper_stack import AgentCoreWrapperStack" >> /tmp/agent-wrapper-app.py; \
+	echo "" >> /tmp/agent-wrapper-app.py; \
+	echo "app = cdk.App()" >> /tmp/agent-wrapper-app.py; \
+	echo "env = cdk.Environment(" >> /tmp/agent-wrapper-app.py; \
+	echo "    account=os.environ.get('CDK_DEFAULT_ACCOUNT')," >> /tmp/agent-wrapper-app.py; \
+	echo "    region='$(AWS_REGION)'" >> /tmp/agent-wrapper-app.py; \
+	echo ")" >> /tmp/agent-wrapper-app.py; \
+	echo "" >> /tmp/agent-wrapper-app.py; \
+	echo "wrapper_stack = AgentCoreWrapperStack.from_deployment_output(" >> /tmp/agent-wrapper-app.py; \
+	echo "    app," >> /tmp/agent-wrapper-app.py; \
+	echo "    'AgentCoreWrapper-$(AGENT)-$(ENV_NAME)'," >> /tmp/agent-wrapper-app.py; \
+	echo "    output_file='agent-core-output-$(AGENT).json'," >> /tmp/agent-wrapper-app.py; \
+	echo "    env_name='$(ENV_NAME)'," >> /tmp/agent-wrapper-app.py; \
+	echo "    env=env" >> /tmp/agent-wrapper-app.py; \
+	echo ")" >> /tmp/agent-wrapper-app.py; \
+	echo "app.synth()" >> /tmp/agent-wrapper-app.py; \
+	CDK_APP="python3 /tmp/agent-wrapper-app.py" $(CDK) deploy \
+		"AgentCoreWrapper-$(AGENT)-$(ENV_NAME)" \
+		--require-approval never \
+		--profile $(AWS_PROFILE); \
+	rm -f /tmp/agent-wrapper-app.py; \
+	echo "✅ Wrapper deployment complete!"
+
+.PHONY: deploy-agent-full
+deploy-agent-full:
+	@if [ -z "$(CONFIG)" ]; then \
+		echo "❌ Please specify CONFIG=<config-file>"; \
+		echo "Example: make deploy-agent-full CONFIG=web_search_agent.yaml"; \
+		exit 1; \
+	fi
+	@# Extract agent name from config
+	@AGENT_NAME=$$(python3 -c "import yaml; f=open('$(AGENT_CORE_CONFIGS)/$(CONFIG)', 'r'); print(yaml.safe_load(f).get('agent_name', 'unknown')); f.close()") && \
+	echo "🚀 Full deployment for agent: $$AGENT_NAME" && \
+	$(MAKE) deploy-agent-core CONFIG=$(CONFIG) && \
+	$(MAKE) deploy-agent-wrapper AGENT=$$AGENT_NAME && \
+	WRAPPER_ARN=$$(aws cloudformation describe-stacks \
+		--stack-name "AgentCoreWrapper-$$AGENT_NAME-$(ENV_NAME)" \
+		--region "$(AWS_REGION)" \
+		--profile "$(AWS_PROFILE)" \
+		--query "Stacks[0].Outputs[?contains(OutputKey, 'StateMachineArn')].OutputValue" \
+		--output text) && \
+	echo "" && \
+	echo "✅ Full deployment complete!" && \
+	echo "" && \
+	echo "Integration details:" && \
+	echo "  Agent: $$AGENT_NAME" && \
+	echo "  Wrapper State Machine: $$WRAPPER_ARN" && \
+	echo "" && \
+	echo "Add to hybrid supervisor agent_configs:" && \
+	echo "  \"$$AGENT_NAME\": {" && \
+	echo "    \"arn\": \"$$WRAPPER_ARN\"," && \
+	echo "    \"description\": \"Agent Core $$AGENT_NAME\"" && \
+	echo "  }"
+
+.PHONY: list-agent-core
+list-agent-core:
+	@echo "📋 Listing Agent Core agents..."
+	@echo "📍 Using AWS Profile: $(AWS_PROFILE), Region: $(AWS_REGION)"
+	@aws bedrock-agent list-agents \
+		--region $(AWS_REGION) \
+		$${AWS_PROFILE:+--profile "$$AWS_PROFILE"} \
+		--output table
+
+.PHONY: delete-agent-core
+delete-agent-core:
+	@if [ -z "$(AGENT_ID)" ] && [ -z "$(AGENT_NAME)" ]; then \
+		echo "❌ Please specify AGENT_ID=<agent-id> or AGENT_NAME=<agent-name>"; \
+		echo "Run 'make list-agent-core' to see available agents"; \
+		exit 1; \
+	fi
+	@echo "🗑️  Deleting Agent Core agent..."
+	@echo "📍 Using AWS Profile: $(AWS_PROFILE), Region: $(AWS_REGION)"
+	@if [ -n "$(AGENT_ID)" ]; then \
+		$(PYTHON) $(AGENT_CORE_DIR)/clean_agent.py \
+			--agent-id $(AGENT_ID) \
+			--region $(AWS_REGION) \
+			$${AWS_PROFILE:+--profile "$$AWS_PROFILE"}; \
+	else \
+		$(PYTHON) $(AGENT_CORE_DIR)/clean_agent.py \
+			--agent-name $(AGENT_NAME) \
+			--region $(AWS_REGION) \
+			$${AWS_PROFILE:+--profile "$$AWS_PROFILE"}; \
+	fi
+
+.PHONY: clean-agent-core
+clean-agent-core:
+	@if [ -z "$(CONFIG)" ]; then \
+		echo "❌ Please specify CONFIG=<config-file>"; \
+		echo "Example: make clean-agent-core CONFIG=web_search_agent.yaml"; \
+		exit 1; \
+	fi
+	@AGENT_NAME=$$(python3 -c "import yaml; f=open('$(AGENT_CORE_CONFIGS)/$(CONFIG)', 'r'); print(yaml.safe_load(f).get('agent_name', 'unknown')); f.close()") && \
+	echo "🧹 Cleaning up agent: $$AGENT_NAME" && \
+	$(MAKE) delete-agent-core AGENT_NAME=$$AGENT_NAME
+
+.PHONY: test-agent-core
+test-agent-core:
+	@if [ -z "$(AGENT)" ]; then \
+		echo "❌ Please specify AGENT=<agent-name>"; \
+		echo "Example: make test-agent-core AGENT=web-search-agent"; \
+		exit 1; \
+	fi
+	@echo "🧪 Testing Agent Core agent: $(AGENT)..."
+	@# Get wrapper state machine ARN
+	@WRAPPER_ARN=$$(aws cloudformation describe-stacks \
+		--stack-name "AgentCoreWrapper-$(AGENT)-$(ENV_NAME)" \
+		--region "$(AWS_REGION)" \
+		--profile "$(AWS_PROFILE)" \
+		--query "Stacks[0].Outputs[?contains(OutputKey, 'StateMachineArn')].OutputValue" \
+		--output text 2>/dev/null) && \
+	if [ -z "$$WRAPPER_ARN" ]; then \
+		echo "❌ Wrapper state machine not found for $(AGENT)"; \
+		exit 1; \
+	fi && \
+	# Start execution
+	aws stepfunctions start-execution \
+		--state-machine-arn "$$WRAPPER_ARN" \
+		--input '{"session_id": "test-'$$(date +%s)'", "agent_config": {"input_text": "Hello, can you help me search for information?"}}' \
+		--region $(AWS_REGION) \
+		--profile $(AWS_PROFILE) \
+		--output json | jq .
+
+# ============================================
+# NEW Bedrock Agent Core Commands (2024)
+# ============================================
+
+.PHONY: agentcore-deploy
+agentcore-deploy:
+	@echo "🚀 Deploying Web Search Agent to Bedrock Agent Core..."
+	@echo "📍 Using AWS Region: $(AWS_REGION)"
+	@cd $(AGENTCORE_DIR) && \
+	$(PYTHON) deploy_agentcore.py \
+		--agent-name $(AGENTCORE_NAME) \
+		--region $(AWS_REGION)
+
+.PHONY: agentcore-test
+agentcore-test:
+	@if [ ! -f "$(AGENTCORE_DIR)/agentcore-deployment-$(AGENTCORE_NAME).json" ]; then \
+		echo "❌ Deployment info not found. Deploy first with: make agentcore-deploy"; \
+		exit 1; \
+	fi
+	@echo "🧪 Testing Agent Core agent: $(AGENTCORE_NAME)..."
+	@cd $(AGENTCORE_DIR) && \
+	AGENT_ARN=$$(cat agentcore-deployment-$(AGENTCORE_NAME).json | jq -r '.agent_arn') && \
+	$(PYTHON) deploy_agentcore.py \
+		--agent-name $(AGENTCORE_NAME) \
+		--region $(AWS_REGION) \
+		--test
+
+.PHONY: agentcore-status
+agentcore-status:
+	@if [ ! -f "$(AGENTCORE_DIR)/agentcore-deployment-$(AGENTCORE_NAME).json" ]; then \
+		echo "❌ No deployment found for $(AGENTCORE_NAME)"; \
+		exit 1; \
+	fi
+	@echo "📊 Agent Core Status for: $(AGENTCORE_NAME)"
+	@cat $(AGENTCORE_DIR)/agentcore-deployment-$(AGENTCORE_NAME).json | jq .
+
+.PHONY: agentcore-invoke
+agentcore-invoke:
+	@if [ ! -f "$(AGENTCORE_DIR)/agentcore-deployment-$(AGENTCORE_NAME).json" ]; then \
+		echo "❌ Deployment info not found. Deploy first with: make agentcore-deploy"; \
+		exit 1; \
+	fi
+	@echo "🔄 Invoking Agent Core agent: $(AGENTCORE_NAME)"
+	@AGENT_ARN=$$(cat $(AGENTCORE_DIR)/agentcore-deployment-$(AGENTCORE_NAME).json | jq -r '.agent_arn') && \
+	aws bedrock-agentcore invoke-agent-runtime \
+		--agent-runtime-arn "$$AGENT_ARN" \
+		--qualifier "DEFAULT" \
+		--payload '{"prompt": "$(PROMPT)", "test": true}' \
+		--region $(AWS_REGION) \
+		--output json | jq .
+
+.PHONY: agentcore-logs
+agentcore-logs:
+	@echo "📜 Viewing Agent Core logs for: $(AGENTCORE_NAME)"
+	@aws logs tail /aws/bedrock-agentcore/$(AGENTCORE_NAME) \
+		--region $(AWS_REGION) \
+		--follow
+
+.PHONY: agentcore-clean
+agentcore-clean:
+	@echo "🧹 Cleaning up Agent Core deployment: $(AGENTCORE_NAME)"
+	@if [ -f "$(AGENTCORE_DIR)/agentcore-deployment-$(AGENTCORE_NAME).json" ]; then \
+		AGENT_ID=$$(cat $(AGENTCORE_DIR)/agentcore-deployment-$(AGENTCORE_NAME).json | jq -r '.agent_id'); \
+		ECR_URI=$$(cat $(AGENTCORE_DIR)/agentcore-deployment-$(AGENTCORE_NAME).json | jq -r '.ecr_uri'); \
+		ROLE_NAME="AgentCoreRuntime-$(AGENTCORE_NAME)"; \
+		echo "Deleting Agent Core runtime..."; \
+		aws bedrock-agentcore-control delete-agent-runtime \
+			--agent-runtime-id "$$AGENT_ID" \
+			--region $(AWS_REGION) 2>/dev/null || true; \
+		echo "Deleting ECR repository..."; \
+		aws ecr delete-repository \
+			--repository-name "$$(echo $$ECR_URI | cut -d'/' -f2)" \
+			--force \
+			--region $(AWS_REGION) 2>/dev/null || true; \
+		echo "Deleting IAM role..."; \
+		aws iam delete-role-policy \
+			--role-name "$$ROLE_NAME" \
+			--policy-name "AgentCoreExecutionPolicy" 2>/dev/null || true; \
+		aws iam delete-role \
+			--role-name "$$ROLE_NAME" 2>/dev/null || true; \
+		rm -f $(AGENTCORE_DIR)/agentcore-deployment-$(AGENTCORE_NAME).json; \
+		echo "✅ Cleanup complete"; \
+	else \
+		echo "No deployment found to clean"; \
+	fi
+
+.PHONY: agentcore-help
+agentcore-help:
+	@echo "╔════════════════════════════════════════════════════════════════════╗"
+	@echo "║           Bedrock Agent Core Commands (NEW Service)               ║"
+	@echo "╚════════════════════════════════════════════════════════════════════╝"
+	@echo ""
+	@echo "  agentcore-deploy    - Deploy agent to Bedrock Agent Core"
+	@echo "  agentcore-test      - Test deployed agent"
+	@echo "  agentcore-status    - Show deployment status"
+	@echo "  agentcore-invoke    - Invoke agent with a prompt"
+	@echo "                        Usage: make agentcore-invoke PROMPT='your question'"
+	@echo "  agentcore-logs      - View agent logs"
+	@echo "  agentcore-clean     - Clean up agent deployment"
+	@echo ""
+	@echo "Environment Variables:"
+	@echo "  AGENTCORE_NAME      - Agent name (default: web-search-agent)"
+	@echo "  AWS_REGION          - AWS region (default: us-west-2)"
+	@echo ""

@@ -30,6 +30,7 @@ from stacks.tools.microsoft_graph_tool_stack import MicrosoftGraphToolStack
 from stacks.tools.web_automation_tool_stack import WebAutomationToolStack
 from stacks.tools.graphql_interface_tool_stack import GraphQLInterfaceToolStack
 from stacks.tools.image_analysis_tool_stack import ImageAnalysisToolStack
+from stacks.tools.nova_act_browser_tool_stack import NovaActBrowserToolStack
 from stacks.agents.sql_agent_with_base_construct import SQLAgentStack
 from stacks.agents.google_maps_agent_stack import GoogleMapsAgentStack
 from stacks.agents.research_agent_stack import ResearchAgentStack
@@ -238,6 +239,16 @@ def main():
         description=f"Image analysis and AI vision tools for {environment} environment"
     )
     
+    # Nova Act Browser Tools - browser automation for web portal searches
+    nova_act_browser_tools = NovaActBrowserToolStack(
+        app,
+        f"NovaActBrowserToolStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Nova Act browser automation tools for {environment} environment"
+    )
+    nova_act_browser_tools.add_dependency(shared_infrastructure_stack)
+    
     # Deploy agent stacks that reference shared resources
     # These are lightweight and focus only on Step Functions workflows
     
@@ -426,7 +437,8 @@ def main():
             microsoft_graph_tools.microsoft_graph_lambda.function_name,
             web_automation_tools.web_scraper_lambda.function_name,
             graphql_interface_tools.graphql_interface_lambda.function_name,
-            image_analysis_tools.image_analysis_lambda.function_name
+            image_analysis_tools.image_analysis_lambda.function_name,
+            nova_act_browser_tools.nova_act_browser_lambda.function_name
         ],
         log_group_name=sql_agent.log_group.log_group_name,
         env=env,
@@ -502,7 +514,7 @@ def main():
                   web_research_tools, cloudwatch_tools, clustering_tools, stock_analysis_tools,
                   earthquake_monitoring_tools, book_recommendation_tools, local_automation_tools,
                   microsoft_graph_tools, web_automation_tools, graphql_interface_tools,
-                  image_analysis_tools, sql_agent, google_maps_agent, research_agent, 
+                  image_analysis_tools, nova_act_browser_tools, sql_agent, google_maps_agent, research_agent, 
                   cloudwatch_agent, graphql_agent, image_analysis_agent, 
                   test_sql_approval_agent, test_automation_remote_agent, agent_monitoring,
                   long_content_infrastructure, microsoft_graph_long_content, 
