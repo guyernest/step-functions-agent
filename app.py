@@ -31,6 +31,7 @@ from stacks.tools.web_automation_tool_stack import WebAutomationToolStack
 from stacks.tools.graphql_interface_tool_stack import GraphQLInterfaceToolStack
 from stacks.tools.image_analysis_tool_stack import ImageAnalysisToolStack
 from stacks.tools.nova_act_browser_tool_stack import NovaActBrowserToolStack
+from stacks.tools.agentcore_browser_tool_stack import AgentCoreBrowserToolStack
 from stacks.agents.sql_agent_with_base_construct import SQLAgentStack
 from stacks.agents.google_maps_agent_stack import GoogleMapsAgentStack
 from stacks.agents.research_agent_stack import ResearchAgentStack
@@ -41,9 +42,10 @@ from stacks.agents.test_sql_approval_agent_stack import TestSQLApprovalAgentStac
 from stacks.agents.test_automation_remote_agent_stack import TestAutomationRemoteAgentStack
 from stacks.agents.sql_agent_unified_llm_stack import SQLAgentUnifiedLLMStack
 from stacks.agents.web_research_agent_unified_llm_stack import WebResearchAgentUnifiedLLMStack
+from stacks.agents.web_search_agent_unified_llm_stack import WebSearchAgentUnifiedLLMStack
 from stacks.agents.google_maps_agent_unified_llm_stack import GoogleMapsAgentUnifiedLLMStack
 from stacks.agents.test_automation_remote_agent_unified_llm_stack import TestAutomationRemoteAgentUnifiedLLMStack
-from legacy.step_functions_agent.agent_monitoring_stack import AgentMonitoringStack
+# from legacy.step_functions_agent.agent_monitoring_stack import AgentMonitoringStack  # Commented out due to missing dependency
 
 # Long content support imports
 from stacks.shared.shared_long_content_infrastructure_stack import SharedLongContentInfrastructureStack
@@ -249,6 +251,16 @@ def main():
     )
     nova_act_browser_tools.add_dependency(shared_infrastructure_stack)
     
+    # Agent Core Browser Tools - browser automation with Agent Core runtime
+    agentcore_browser_tools = AgentCoreBrowserToolStack(
+        app,
+        f"AgentCoreBrowserToolStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Agent Core browser automation tool for {environment} environment"
+    )
+    agentcore_browser_tools.add_dependency(shared_infrastructure_stack)
+    
     # Deploy agent stacks that reference shared resources
     # These are lightweight and focus only on Step Functions workflows
     
@@ -278,6 +290,16 @@ def main():
         env=env,
         description=f"Web research agent using unified Rust LLM for {environment} environment"
     )
+    
+    # Web Search Agent with Unified Rust LLM - Agent Core browser automation
+    web_search_agent_rust = WebSearchAgentUnifiedLLMStack(
+        app,
+        f"WebSearchAgentUnifiedLLMStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Web search agent using Agent Core browser automation for {environment} environment"
+    )
+    web_search_agent_rust.add_dependency(agentcore_browser_tools)  # Depends on Agent Core browser tool
     
     # Google Maps Agent with Unified Rust LLM - location services
     google_maps_agent_rust = GoogleMapsAgentUnifiedLLMStack(
@@ -403,47 +425,50 @@ def main():
     
     # Deploy monitoring stack for comprehensive observability
     # This monitors all agents, LLM functions, and tool functions
-    agent_monitoring = AgentMonitoringStack(
-        app,
-        f"AgentMonitoringStack-{environment}",
-        agents=[
-            sql_agent.state_machine_name,
-            google_maps_agent.state_machine_name,
-            research_agent.state_machine_name,
-            cloudwatch_agent.state_machine_name,
-            graphql_agent.state_machine_name,
-            image_analysis_agent.state_machine_name,
-            test_sql_approval_agent.state_machine_name,
-            test_automation_remote_agent.state_machine_name
-        ],
-        llm_functions=[
-            shared_llm_stack.claude_function_name,
-            shared_llm_stack.openai_function_name,
-            shared_llm_stack.gemini_function_name,
-            shared_llm_stack.bedrock_function_name
-        ],
-        tool_functions=[
-            db_interface_tool.function_name,
-            e2b_tool.execute_code_lambda.function_name,
-            google_maps_tool.google_maps_lambda.function_name,
-            financial_tools.financial_lambda_function.function_name,
-            web_research_tools.go_research_lambda.function_name,
-            cloudwatch_tools.cloudwatch_lambda_function.function_name,
-            clustering_tools.hdbscan_clustering_lambda.function_name,
-            stock_analysis_tools.stock_analysis_lambda.function_name,
-            earthquake_monitoring_tools.earthquake_query_lambda.function_name,
-            book_recommendation_tools.book_recommendation_lambda.function_name,
-            local_automation_tools.local_automation_lambda.function_name,
-            microsoft_graph_tools.microsoft_graph_lambda.function_name,
-            web_automation_tools.web_scraper_lambda.function_name,
-            graphql_interface_tools.graphql_interface_lambda.function_name,
-            image_analysis_tools.image_analysis_lambda.function_name,
-            nova_act_browser_tools.nova_act_browser_lambda.function_name
-        ],
-        log_group_name=sql_agent.log_group.log_group_name,
-        env=env,
-        description=f"Comprehensive monitoring dashboard for AI agents in {environment} environment"
-    )
+    # COMMENTED OUT due to missing dependency: cdk_monitoring_constructs
+    # agent_monitoring = AgentMonitoringStack(
+    #     app,
+    #     f"AgentMonitoringStack-{environment}",
+    #     agents=[
+    #         sql_agent.state_machine_name,
+    #         google_maps_agent.state_machine_name,
+    #         research_agent.state_machine_name,
+    #         cloudwatch_agent.state_machine_name,
+    #         graphql_agent.state_machine_name,
+    #         image_analysis_agent.state_machine_name,
+    #         test_sql_approval_agent.state_machine_name,
+    #         test_automation_remote_agent.state_machine_name,
+    #         web_search_agent_rust.state_machine_name
+    #     ],
+    #     llm_functions=[
+    #         shared_llm_stack.claude_function_name,
+    #         shared_llm_stack.openai_function_name,
+    #         shared_llm_stack.gemini_function_name,
+    #         shared_llm_stack.bedrock_function_name
+    #     ],
+    #     tool_functions=[
+    #         db_interface_tool.function_name,
+    #         e2b_tool.execute_code_lambda.function_name,
+    #         google_maps_tool.google_maps_lambda.function_name,
+    #         financial_tools.financial_lambda_function.function_name,
+    #         web_research_tools.go_research_lambda.function_name,
+    #         cloudwatch_tools.cloudwatch_lambda_function.function_name,
+    #         clustering_tools.hdbscan_clustering_lambda.function_name,
+    #         stock_analysis_tools.stock_analysis_lambda.function_name,
+    #         earthquake_monitoring_tools.earthquake_query_lambda.function_name,
+    #         book_recommendation_tools.book_recommendation_lambda.function_name,
+    #         local_automation_tools.local_automation_lambda.function_name,
+    #         microsoft_graph_tools.microsoft_graph_lambda.function_name,
+    #         web_automation_tools.web_scraper_lambda.function_name,
+    #         graphql_interface_tools.graphql_interface_lambda.function_name,
+    #         image_analysis_tools.image_analysis_lambda.function_name,
+    #         nova_act_browser_tools.nova_act_browser_lambda.function_name,
+    #         agentcore_browser_tools.agentcore_browser_lambda.function_name
+    #     ],
+    #     log_group_name=sql_agent.log_group.log_group_name,
+    #     env=env,
+    #     description=f"Comprehensive monitoring dashboard for AI agents in {environment} environment"
+    # )
     
     # Add explicit dependencies to ensure proper deployment order
     
@@ -454,6 +479,7 @@ def main():
     cloudwatch_agent.add_dependency(agent_registry_stack)
     graphql_agent.add_dependency(agent_registry_stack)
     image_analysis_agent.add_dependency(agent_registry_stack)
+    web_search_agent_rust.add_dependency(agent_registry_stack)
     
     # Research agent needs financial and web research tools
     research_agent.add_dependency(financial_tools)
@@ -492,15 +518,16 @@ def main():
     test_automation_remote_agent_rust_long.add_dependency(agent_registry_stack)
     
     # Monitoring stack needs all agents and tools to be deployed first
-    agent_monitoring.add_dependency(sql_agent)
-    agent_monitoring.add_dependency(google_maps_agent)
-    agent_monitoring.add_dependency(research_agent)
-    agent_monitoring.add_dependency(cloudwatch_agent)
-    agent_monitoring.add_dependency(graphql_agent)
-    agent_monitoring.add_dependency(image_analysis_agent)
-    agent_monitoring.add_dependency(test_sql_approval_agent)
-    agent_monitoring.add_dependency(test_automation_remote_agent)
-    agent_monitoring.add_dependency(shared_llm_stack)
+    # COMMENTED OUT due to monitoring stack being disabled
+    # agent_monitoring.add_dependency(sql_agent)
+    # agent_monitoring.add_dependency(google_maps_agent)
+    # agent_monitoring.add_dependency(research_agent)
+    # agent_monitoring.add_dependency(cloudwatch_agent)
+    # agent_monitoring.add_dependency(graphql_agent)
+    # agent_monitoring.add_dependency(image_analysis_agent)
+    # agent_monitoring.add_dependency(test_sql_approval_agent)
+    # agent_monitoring.add_dependency(test_automation_remote_agent)
+    # agent_monitoring.add_dependency(shared_llm_stack)
     
     # Add tags to all stacks
     tags = {
@@ -514,9 +541,9 @@ def main():
                   web_research_tools, cloudwatch_tools, clustering_tools, stock_analysis_tools,
                   earthquake_monitoring_tools, book_recommendation_tools, local_automation_tools,
                   microsoft_graph_tools, web_automation_tools, graphql_interface_tools,
-                  image_analysis_tools, nova_act_browser_tools, sql_agent, google_maps_agent, research_agent, 
+                  image_analysis_tools, nova_act_browser_tools, agentcore_browser_tools, sql_agent, google_maps_agent, research_agent, 
                   cloudwatch_agent, graphql_agent, image_analysis_agent, 
-                  test_sql_approval_agent, test_automation_remote_agent, agent_monitoring,
+                  test_sql_approval_agent, test_automation_remote_agent, web_search_agent_rust,
                   long_content_infrastructure, microsoft_graph_long_content, 
                   test_automation_remote_agent_rust_long]:
         for key, value in tags.items():

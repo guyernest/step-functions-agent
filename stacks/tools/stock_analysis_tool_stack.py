@@ -8,7 +8,6 @@ from aws_cdk import (
 )
 from constructs import Construct
 from .base_tool_construct import MultiToolConstruct
-from ..shared.tool_definitions import JavaTools
 import os
 
 
@@ -94,27 +93,39 @@ class StockAnalysisToolStack(Stack):
     def _register_tools_using_base_construct(self):
         """Register all stock analysis tools using the BaseToolConstruct pattern"""
         
-        # Get tool definitions from centralized definitions
-        moving_average_tool = JavaTools.STOCK_ANALYZER
-        volatility_tool = JavaTools.VOLATILITY_ANALYZER
-        
-        # Define stock analysis tool specifications
+        # Define stock analysis tool specifications with self-contained definitions
         stock_analysis_tools = [
             {
-                "tool_name": moving_average_tool.tool_name,
-                "description": moving_average_tool.description,
-                "input_schema": moving_average_tool.input_schema,
-                "language": moving_average_tool.language.value,
-                "tags": moving_average_tool.tags,
-                "author": moving_average_tool.author
+                "tool_name": "stock_analyzer",
+                "description": "Analyze stock time series data with moving averages and trend analysis",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "symbol": {"type": "string", "description": "Stock symbol to analyze"},
+                        "period": {"type": "integer", "description": "Period for moving average calculation"},
+                        "data_source": {"type": "string", "description": "S3 path to stock data"}
+                    },
+                    "required": ["symbol", "period"]
+                },
+                "language": "java",
+                "tags": ["finance", "analysis", "java"],
+                "author": "system"
             },
             {
-                "tool_name": volatility_tool.tool_name,
-                "description": volatility_tool.description,
-                "input_schema": volatility_tool.input_schema,
-                "language": volatility_tool.language.value,
-                "tags": volatility_tool.tags,
-                "author": volatility_tool.author
+                "tool_name": "volatility_analyzer",
+                "description": "Calculate historical volatility and statistical measures for stock data",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "symbol": {"type": "string", "description": "Stock symbol to analyze"},
+                        "window": {"type": "integer", "description": "Rolling window for volatility calculation"},
+                        "data_source": {"type": "string", "description": "S3 path to stock data"}
+                    },
+                    "required": ["symbol", "window"]
+                },
+                "language": "java",
+                "tags": ["finance", "volatility", "java"],
+                "author": "system"
             }
         ]
         

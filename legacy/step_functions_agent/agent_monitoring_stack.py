@@ -187,9 +187,13 @@ class AgentMonitoringStack(Stack):
             ) for name in agents
         ]
 
-        for step_function in agent_step_functions_list:
+        for idx, step_function in enumerate(agent_step_functions_list):
+            # Extract agent name from state machine name for human-readable display
+            agent_name = agents[idx]
             high_level_facade.monitor_step_function(
                 state_machine=step_function,
+                human_readable_name=agent_name,
+                alarm_friendly_name=agent_name.replace("-", "_")
             )
 
         high_level_facade.add_medium_header('AI Agent Lambda Functions Monitoring')

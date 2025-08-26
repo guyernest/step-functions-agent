@@ -9,7 +9,6 @@ from aws_cdk import (
 )
 from constructs import Construct
 from .base_tool_construct import MultiToolConstruct
-from ..shared.tool_definitions import AdvancedTools
 import os
 
 
@@ -187,40 +186,59 @@ class WebAutomationToolStack(Stack):
     def _register_tools_using_base_construct(self):
         """Register all web automation tools using the BaseToolConstruct pattern"""
         
-        # Get tool definitions from centralized definitions
-        web_scraper_tool = AdvancedTools.WEB_SCRAPER
-        memory_get_tool = AdvancedTools.WEB_SCRAPER_MEMORY
-        memory_save_tool = AdvancedTools.SAVE_EXTRACTION_SCRIPT
-        
-        # Define web scraper tool specifications
+        # Define web scraper tool specifications with self-contained definitions
         web_scraper_tools = [
             {
-                "tool_name": web_scraper_tool.tool_name,
-                "description": web_scraper_tool.description,
-                "input_schema": web_scraper_tool.input_schema,
-                "language": web_scraper_tool.language.value,
-                "tags": web_scraper_tool.tags,
-                "author": web_scraper_tool.author
+                "tool_name": "web_scraper",
+                "description": "Advanced web scraping with headless browser automation and intelligent content extraction",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string", "description": "URL to scrape"},
+                        "selectors": {"type": "object", "description": "CSS selectors for specific elements to extract"},
+                        "wait_for": {"type": "string", "description": "CSS selector to wait for before scraping"},
+                        "screenshot": {"type": "boolean", "description": "Take screenshot of page", "default": False}
+                    },
+                    "required": ["url"]
+                },
+                "language": "typescript",
+                "tags": ["web", "scraping", "playwright", "automation"],
+                "author": "system"
             }
         ]
         
-        # Define memory tool specifications
+        # Define memory tool specifications with self-contained definitions
         memory_tools = [
             {
-                "tool_name": memory_get_tool.tool_name,
-                "description": memory_get_tool.description,
-                "input_schema": memory_get_tool.input_schema,
-                "language": memory_get_tool.language.value,
-                "tags": memory_get_tool.tags,
-                "author": memory_get_tool.author
+                "tool_name": "webscraper_memory",
+                "description": "Retrieve stored extraction scripts and site schemas for adaptive web scraping",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "site_url": {"type": "string", "description": "Website URL to get memory for"},
+                        "record_type": {"type": "string", "description": "Type of record to retrieve", "enum": ["schema", "script"]}
+                    },
+                    "required": ["site_url", "record_type"]
+                },
+                "language": "rust",
+                "tags": ["web", "memory", "schema", "rust"],
+                "author": "system"
             },
             {
-                "tool_name": memory_save_tool.tool_name,
-                "description": memory_save_tool.description,
-                "input_schema": memory_save_tool.input_schema,
-                "language": memory_save_tool.language.value,
-                "tags": memory_save_tool.tags,
-                "author": memory_save_tool.author
+                "tool_name": "save_extraction_script",
+                "description": "Store extraction scripts and site schemas for future use",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "site_url": {"type": "string", "description": "Website URL"},
+                        "record_type": {"type": "string", "description": "Type of record to save", "enum": ["schema", "script"]},
+                        "content": {"type": "object", "description": "Content to store (schema or script)"}
+                    },
+                    "required": ["site_url", "record_type", "content"]
+                },
+                "language": "rust",
+                "tags": ["web", "memory", "storage", "rust"],
+                "author": "system"
             }
         ]
         

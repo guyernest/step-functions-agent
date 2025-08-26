@@ -9,7 +9,6 @@ from aws_cdk import (
 )
 from constructs import Construct
 from .base_tool_construct import BaseToolConstruct
-from ..shared.tool_definitions import CloudWatchTools
 
 
 class CloudWatchToolStack(Stack):
@@ -71,14 +70,44 @@ class CloudWatchToolStack(Stack):
             role=cloudwatch_lambda_role,
         )
 
-        # Register all CloudWatch tools using BaseToolConstruct
-        tool_definitions = CloudWatchTools.get_all_tools()
+        # Register all CloudWatch tools using BaseToolConstruct with self-contained definitions
         tool_specs = [
-            tool_def.to_registry_item(
-                lambda_arn=cloudwatch_lambda.function_arn,
-                lambda_function_name=cloudwatch_lambda.function_name
-            )
-            for tool_def in tool_definitions
+            {
+                "tool_name": "query_cloudwatch_logs",
+                "description": "Execute CloudWatch Logs Insights queries to analyze log data",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "log_groups": {"type": "array", "items": {"type": "string"}, "description": "List of log group names to query"},
+                        "query": {"type": "string", "description": "CloudWatch Logs Insights query"},
+                        "start_time": {"type": "string", "description": "Start time (ISO format or relative like '1h ago')"},
+                        "end_time": {"type": "string", "description": "End time (ISO format or relative like 'now')"}
+                    },
+                    "required": ["log_groups", "query"]
+                },
+                "language": "python",
+                "tags": ["cloudwatch", "logs", "monitoring"],
+                "author": "system",
+                "lambda_arn": cloudwatch_lambda.function_arn,
+                "lambda_function_name": cloudwatch_lambda.function_name
+            },
+            {
+                "tool_name": "get_service_graph",
+                "description": "Get X-Ray service graph to visualize application architecture and dependencies",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "start_time": {"type": "string", "description": "Start time for service graph"},
+                        "end_time": {"type": "string", "description": "End time for service graph"}
+                    },
+                    "required": ["start_time", "end_time"]
+                },
+                "language": "python",
+                "tags": ["xray", "service-graph", "monitoring"],
+                "author": "system",
+                "lambda_arn": cloudwatch_lambda.function_arn,
+                "lambda_function_name": cloudwatch_lambda.function_name
+            }
         ]
         
         BaseToolConstruct(

@@ -13,7 +13,6 @@ from aws_cdk import (
 )
 from constructs import Construct
 from .base_tool_construct import BaseToolConstruct
-from ..shared.tool_definitions import DatabaseTools
 from ..shared.naming_conventions import NamingConventions
 import json
 
@@ -116,16 +115,45 @@ class DBInterfaceToolStack(Stack):
         self.db_interface_lambda.apply_removal_policy(RemovalPolicy.DESTROY)
 
     def _register_tools_using_base_construct(self):
-        """Register database tools using BaseToolConstruct with centralized definitions"""
+        """Register database tools using BaseToolConstruct with self-contained definitions"""
         
-        # Get tool specifications from centralized definitions
-        tool_definitions = DatabaseTools.get_all_tools()
+        # Define tool specifications with self-contained definitions
         tool_specs = [
-            tool_def.to_registry_item(
-                lambda_arn=self.db_interface_lambda.function_arn,
-                lambda_function_name=self.db_interface_lambda.function_name
-            )
-            for tool_def in tool_definitions
+            {
+                "tool_name": "get_db_schema",
+                "description": "Get the database schema including table structures and column information",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                },
+                "language": "python",
+                "tags": ["database", "schema", "sql"],
+                "author": "system",
+                "human_approval_required": False,
+                "lambda_arn": self.db_interface_lambda.function_arn,
+                "lambda_function_name": self.db_interface_lambda.function_name
+            },
+            {
+                "tool_name": "execute_sql_query",
+                "description": "Execute SQL queries against the database and return results",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The SQL query to execute"
+                        }
+                    },
+                    "required": ["query"]
+                },
+                "language": "python",
+                "tags": ["database", "sql", "query"],
+                "author": "system",
+                "human_approval_required": False,
+                "lambda_arn": self.db_interface_lambda.function_arn,
+                "lambda_function_name": self.db_interface_lambda.function_name
+            }
         ]
         
         # Use BaseToolConstruct for registration

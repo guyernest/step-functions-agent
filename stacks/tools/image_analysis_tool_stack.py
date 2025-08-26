@@ -16,7 +16,6 @@ except ImportError:
 
 from constructs import Construct
 from .base_tool_construct import MultiToolConstruct
-from ..shared.tool_definitions import AdvancedTools
 import os
 import json
 
@@ -166,18 +165,23 @@ class ImageAnalysisToolStack(Stack):
     def _register_tools_using_base_construct(self):
         """Register all image analysis tools using the BaseToolConstruct pattern"""
         
-        # Get tool definition from centralized definitions
-        image_analysis_tool = AdvancedTools.IMAGE_ANALYSIS
-        
-        # Define image analysis tool specifications
+        # Define image analysis tool specifications with self-contained definitions
         image_tools = [
             {
-                "tool_name": image_analysis_tool.tool_name,
-                "description": image_analysis_tool.description,
-                "input_schema": image_analysis_tool.input_schema,
-                "language": image_analysis_tool.language.value,
-                "tags": image_analysis_tool.tags,
-                "author": image_analysis_tool.author
+                "tool_name": "image_analysis",
+                "description": "Analyze images using AI with natural language queries and multimodal understanding",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "image_url": {"type": "string", "description": "URL or S3 path to image"},
+                        "query": {"type": "string", "description": "Natural language query about the image"},
+                        "max_tokens": {"type": "integer", "description": "Maximum tokens for response", "default": 1000}
+                    },
+                    "required": ["image_url", "query"]
+                },
+                "language": "python",
+                "tags": ["ai", "vision", "gemini"],
+                "author": "system"
             }
         ]
         

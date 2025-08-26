@@ -16,7 +16,6 @@ except ImportError:
 
 from constructs import Construct
 from .base_tool_construct import BaseToolConstruct
-from ..shared.tool_definitions import ResearchTools
 from ..shared.naming_conventions import NamingConventions
 import os
 import json
@@ -174,16 +173,28 @@ class WebResearchToolStack(Stack):
         self.go_research_lambda.apply_removal_policy(RemovalPolicy.DESTROY)
 
     def _register_tools_using_base_construct(self):
-        """Register web research tools using BaseToolConstruct with centralized definitions"""
+        """Register web research tools using BaseToolConstruct with self-contained definitions"""
         
-        # Get tool specifications from centralized definitions
-        tool_definitions = ResearchTools.get_all_tools()
+        # Define tool specifications with self-contained definitions
         tool_specs = [
-            tool_def.to_registry_item(
-                lambda_arn=self.go_research_lambda.function_arn,
-                lambda_function_name=self.go_research_lambda.function_name
-            )
-            for tool_def in tool_definitions
+            {
+                "tool_name": "web_research",
+                "description": "Research companies and topics using AI-powered web search with Perplexity API",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Research query or company name"},
+                        "focus": {"type": "string", "description": "Research focus area (e.g., financials, products, news)"},
+                        "max_tokens": {"type": "integer", "description": "Maximum response tokens", "default": 2000}
+                    },
+                    "required": ["query"]
+                },
+                "language": "go",
+                "tags": ["research", "perplexity", "web", "ai"],
+                "author": "system",
+                "lambda_arn": self.go_research_lambda.function_arn,
+                "lambda_function_name": self.go_research_lambda.function_name
+            }
         ]
         
         # Use BaseToolConstruct for registration with secret requirements

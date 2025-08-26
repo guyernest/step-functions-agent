@@ -915,8 +915,40 @@ agentcore-help:
 	@echo "                        Usage: make agentcore-invoke PROMPT='your question'"
 	@echo "  agentcore-logs      - View agent logs"
 	@echo "  agentcore-clean     - Clean up agent deployment"
+	@echo "  agentcore-wrapper   - Deploy Step Functions wrapper for Agent Core"
+	@echo "  agentcore-full      - Deploy agent and wrapper together"
 	@echo ""
 	@echo "Environment Variables:"
 	@echo "  AGENTCORE_NAME      - Agent name (default: web-search-agent)"
 	@echo "  AWS_REGION          - AWS region (default: us-west-2)"
 	@echo ""
+
+.PHONY: agentcore-wrapper
+agentcore-wrapper:
+	@echo "🚀 Deploying Step Functions wrapper for Agent Core..."
+	@if [ ! -f "$(AGENTCORE_DIR)/agentcore-deployment-$(AGENTCORE_NAME).json" ]; then \
+		echo "❌ Agent not deployed. Deploy first with: make agentcore-deploy"; \
+		exit 1; \
+	fi
+	@AGENT_ARN=$$(cat $(AGENTCORE_DIR)/agentcore-deployment-$(AGENTCORE_NAME).json | jq -r '.agent_arn') && \
+	$(CDK) deploy AgentCoreWrapperSimpleStack-$(ENV_NAME) \
+		--context agent_runtime_arn="$$AGENT_ARN" \
+		--require-approval never
+	@echo "✅ Agent Core wrapper deployed!"
+
+.PHONY: agentcore-full
+agentcore-full: agentcore-deploy agentcore-wrapper
+	@echo "✅ Full Agent Core deployment complete!"
+	@echo "State Machine ARN:"
+	@aws cloudformation describe-stacks \
+		--stack-name AgentCoreWrapperSimpleStack-$(ENV_NAME) \
+		--query "Stacks[0].Outputs[?OutputKey=='StateMachineArn'].OutputValue" \
+		--output text \
+		--region $(AWS_REGION)
+
+.PHONY: deploy-agentcore-tool
+deploy-agentcore-tool:
+	@echo "🚀 Deploying Agent Core Browser Tool Stack..."
+	$(CDK) deploy AgentCoreBrowserToolStack-$(ENV_NAME) \
+		--require-approval never
+	@echo "✅ Agent Core Browser Tool deployed!"

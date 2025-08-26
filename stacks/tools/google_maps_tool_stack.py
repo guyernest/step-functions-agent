@@ -14,7 +14,6 @@ from aws_cdk import (
 )
 from constructs import Construct
 from ..shared.naming_conventions import NamingConventions
-from ..shared.tool_definitions import GoogleMapsTools
 from .base_tool_construct import BaseToolConstruct
 import os
 import json
@@ -197,16 +196,97 @@ class GoogleMapsToolStack(Stack):
         self.google_maps_lambda.apply_removal_policy(RemovalPolicy.DESTROY)
 
     def _register_tools_using_base_construct(self):
-        """Register all Google Maps tools using BaseToolConstruct with centralized definitions"""
+        """Register all Google Maps tools using BaseToolConstruct with self-contained definitions"""
         
-        # Get tool specifications from centralized definitions
-        tool_definitions = GoogleMapsTools.get_all_tools()
+        # Define tool specifications with self-contained definitions
         tool_specs = [
-            tool_def.to_registry_item(
-                lambda_arn=self.google_maps_lambda.function_arn,
-                lambda_function_name=self.google_maps_lambda.function_name
-            )
-            for tool_def in tool_definitions
+            {
+                "tool_name": "geocode",
+                "description": "Convert addresses to coordinates using Google Maps Geocoding API",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "address": {"type": "string", "description": "Address to geocode"}
+                    },
+                    "required": ["address"]
+                },
+                "language": "typescript",
+                "tags": ["maps", "geocoding", "google"],
+                "author": "system",
+                "lambda_arn": self.google_maps_lambda.function_arn,
+                "lambda_function_name": self.google_maps_lambda.function_name
+            },
+            {
+                "tool_name": "reverse_geocode",
+                "description": "Convert coordinates to addresses using Google Maps Reverse Geocoding API",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "latitude": {"type": "number", "description": "Latitude coordinate"},
+                        "longitude": {"type": "number", "description": "Longitude coordinate"}
+                    },
+                    "required": ["latitude", "longitude"]
+                },
+                "language": "typescript",
+                "tags": ["maps", "reverse-geocoding", "google"],
+                "author": "system",
+                "lambda_arn": self.google_maps_lambda.function_arn,
+                "lambda_function_name": self.google_maps_lambda.function_name
+            },
+            {
+                "tool_name": "places_search",
+                "description": "Search for places using Google Maps Places API",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Search query"},
+                        "location": {"type": "string", "description": "Location bias (optional)"},
+                        "radius": {"type": "number", "description": "Search radius in meters"}
+                    },
+                    "required": ["query"]
+                },
+                "language": "typescript",
+                "tags": ["maps", "places", "search", "google"],
+                "author": "system",
+                "lambda_arn": self.google_maps_lambda.function_arn,
+                "lambda_function_name": self.google_maps_lambda.function_name
+            },
+            {
+                "tool_name": "directions",
+                "description": "Get directions between locations using Google Maps Directions API",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "origin": {"type": "string", "description": "Starting location"},
+                        "destination": {"type": "string", "description": "Destination location"},
+                        "mode": {"type": "string", "description": "Travel mode", "enum": ["driving", "walking", "bicycling", "transit"], "default": "driving"}
+                    },
+                    "required": ["origin", "destination"]
+                },
+                "language": "typescript",
+                "tags": ["maps", "directions", "routing", "google"],
+                "author": "system",
+                "lambda_arn": self.google_maps_lambda.function_arn,
+                "lambda_function_name": self.google_maps_lambda.function_name
+            },
+            {
+                "tool_name": "distance_matrix",
+                "description": "Calculate travel distances and times between multiple origins and destinations",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "origins": {"type": "array", "items": {"type": "string"}, "description": "List of origin locations"},
+                        "destinations": {"type": "array", "items": {"type": "string"}, "description": "List of destination locations"},
+                        "mode": {"type": "string", "description": "Travel mode", "enum": ["driving", "walking", "bicycling", "transit"], "default": "driving"}
+                    },
+                    "required": ["origins", "destinations"]
+                },
+                "language": "typescript",
+                "tags": ["maps", "distance", "matrix", "google"],
+                "author": "system",
+                "lambda_arn": self.google_maps_lambda.function_arn,
+                "lambda_function_name": self.google_maps_lambda.function_name
+            }
         ]
         
         # Use BaseToolConstruct for registration with secret requirements

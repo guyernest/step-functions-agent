@@ -13,7 +13,6 @@ from aws_cdk import (
 )
 from constructs import Construct
 from .base_tool_construct import BaseToolConstruct
-from ..shared.tool_definitions import CodeExecutionTools
 from ..shared.naming_conventions import NamingConventions
 import json
 import os
@@ -248,16 +247,27 @@ class E2BToolStack(Stack):
         self.execute_code_lambda.apply_removal_policy(RemovalPolicy.DESTROY)
 
     def _register_tools_using_base_construct(self):
-        """Register code execution tools using BaseToolConstruct with centralized definitions"""
+        """Register code execution tools using BaseToolConstruct with self-contained definitions"""
         
-        # Get tool specifications from centralized definitions
-        tool_definitions = CodeExecutionTools.get_all_tools()
+        # Define tool specifications with self-contained definitions
         tool_specs = [
-            tool_def.to_registry_item(
-                lambda_arn=self.execute_code_lambda.function_arn,
-                lambda_function_name=self.execute_code_lambda.function_name
-            )
-            for tool_def in tool_definitions
+            {
+                "tool_name": "execute_python",
+                "description": "Execute Python code in a secure E2B sandbox environment",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "code": {"type": "string", "description": "Python code to execute"},
+                        "timeout": {"type": "integer", "description": "Execution timeout in seconds", "default": 30}
+                    },
+                    "required": ["code"]
+                },
+                "language": "python",
+                "tags": ["code", "execution", "e2b", "sandbox"],
+                "author": "system",
+                "lambda_arn": self.execute_code_lambda.function_arn,
+                "lambda_function_name": self.execute_code_lambda.function_name
+            }
         ]
         
         # Use BaseToolConstruct for registration with secret requirements

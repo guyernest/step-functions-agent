@@ -8,7 +8,6 @@ from aws_cdk import (
 )
 from constructs import Construct
 from .base_tool_construct import BaseToolConstruct
-from ..shared.tool_definitions import FinancialTools
 
 
 class FinancialToolStack(Stack):
@@ -77,14 +76,42 @@ class FinancialToolStack(Stack):
             role=financial_lambda_role,
         )
 
-        # Register all financial tools using BaseToolConstruct
-        tool_definitions = FinancialTools.get_all_tools()
+        # Register all financial tools using BaseToolConstruct with self-contained definitions
         tool_specs = [
-            tool_def.to_registry_item(
-                lambda_arn=financial_lambda.function_arn,
-                lambda_function_name=financial_lambda.function_name
-            )
-            for tool_def in tool_definitions
+            {
+                "tool_name": "get_stock_data",
+                "description": "Get stock price data and financial information using Yahoo Finance",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "symbol": {"type": "string", "description": "Stock ticker symbol"},
+                        "period": {"type": "string", "description": "Data period (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max)"},
+                        "interval": {"type": "string", "description": "Data interval (1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo)"}
+                    },
+                    "required": ["symbol"]
+                },
+                "language": "python",
+                "tags": ["finance", "stocks", "yfinance"],
+                "author": "system",
+                "lambda_arn": financial_lambda.function_arn,
+                "lambda_function_name": financial_lambda.function_name
+            },
+            {
+                "tool_name": "get_company_info",
+                "description": "Get detailed company information and fundamentals",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "symbol": {"type": "string", "description": "Stock ticker symbol"}
+                    },
+                    "required": ["symbol"]
+                },
+                "language": "python",
+                "tags": ["finance", "company", "fundamentals"],
+                "author": "system",
+                "lambda_arn": financial_lambda.function_arn,
+                "lambda_function_name": financial_lambda.function_name
+            }
         ]
         
         BaseToolConstruct(

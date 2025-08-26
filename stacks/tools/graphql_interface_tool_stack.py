@@ -16,7 +16,6 @@ except ImportError:
 
 from constructs import Construct
 from .base_tool_construct import MultiToolConstruct
-from ..shared.tool_definitions import AdvancedTools
 import os
 import json
 
@@ -168,27 +167,38 @@ class GraphQLInterfaceToolStack(Stack):
     def _register_tools_using_base_construct(self):
         """Register all GraphQL interface tools using the BaseToolConstruct pattern"""
         
-        # Get tool definitions from centralized definitions
-        graphql_execute_tool = AdvancedTools.GRAPHQL_INTERFACE
-        graphql_prompt_tool = AdvancedTools.GENERATE_GRAPHQL_PROMPT
-        
-        # Define GraphQL interface tool specifications
+        # Define GraphQL interface tool specifications with self-contained definitions
         graphql_tools = [
             {
-                "tool_name": graphql_execute_tool.tool_name,
-                "description": graphql_execute_tool.description,
-                "input_schema": graphql_execute_tool.input_schema,
-                "language": graphql_execute_tool.language.value,
-                "tags": graphql_execute_tool.tags,
-                "author": graphql_execute_tool.author
+                "tool_name": "graphql_interface",
+                "description": "Execute GraphQL queries against any endpoint with dynamic schema support",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "GraphQL query to execute"},
+                        "variables": {"type": "object", "description": "Query variables"},
+                        "endpoint": {"type": "string", "description": "GraphQL endpoint URL (optional, uses configured default)"}
+                    },
+                    "required": ["query"]
+                },
+                "language": "python",
+                "tags": ["graphql", "api", "query"],
+                "author": "system"
             },
             {
-                "tool_name": graphql_prompt_tool.tool_name,
-                "description": graphql_prompt_tool.description,
-                "input_schema": graphql_prompt_tool.input_schema,
-                "language": graphql_prompt_tool.language.value,
-                "tags": graphql_prompt_tool.tags,
-                "author": graphql_prompt_tool.author
+                "tool_name": "generate_graphql_prompt",
+                "description": "Generate AI prompts for GraphQL query creation based on schema analysis",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "schema": {"type": "string", "description": "GraphQL schema definition"},
+                        "query_intent": {"type": "string", "description": "Description of what you want to query"}
+                    },
+                    "required": ["schema", "query_intent"]
+                },
+                "language": "python",
+                "tags": ["graphql", "ai", "prompt", "schema"],
+                "author": "system"
             }
         ]
         

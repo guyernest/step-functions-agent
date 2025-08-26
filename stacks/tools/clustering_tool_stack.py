@@ -10,7 +10,6 @@ from aws_cdk import (
 )
 from constructs import Construct
 from .base_tool_construct import MultiToolConstruct
-from ..shared.tool_definitions import RustTools
 import os
 import json
 
@@ -192,31 +191,44 @@ class ClusteringToolStack(Stack):
     def _register_tools_using_base_construct(self):
         """Register all clustering tools using the BaseToolConstruct pattern"""
         
-        # Get tool definitions from centralized definitions
-        clustering_tool = RustTools.HDBSCAN_CLUSTERING
-        semantic_search_tool = RustTools.SEMANTIC_SEARCH
-        
-        # Define clustering tool specifications
+        # Define clustering tool specifications with self-contained definitions
         clustering_tools = [
             {
-                "tool_name": clustering_tool.tool_name,
-                "description": clustering_tool.description,
-                "input_schema": clustering_tool.input_schema,
-                "language": clustering_tool.language.value,
-                "tags": clustering_tool.tags,
-                "author": clustering_tool.author
+                "tool_name": "hdbscan_clustering",
+                "description": "Perform high-performance HDBSCAN clustering on data using Rust implementation",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "data_source": {"type": "string", "description": "S3 path to data file"},
+                        "min_cluster_size": {"type": "integer", "description": "Minimum cluster size", "default": 5},
+                        "min_samples": {"type": "integer", "description": "Minimum samples parameter", "default": 1},
+                        "metric": {"type": "string", "description": "Distance metric", "default": "euclidean"}
+                    },
+                    "required": ["data_source"]
+                },
+                "language": "rust",
+                "tags": ["clustering", "hdbscan", "rust"],
+                "author": "system"
             }
         ]
         
-        # Define semantic search tool specifications
+        # Define semantic search tool specifications with self-contained definitions
         semantic_search_tools = [
             {
-                "tool_name": semantic_search_tool.tool_name,
-                "description": semantic_search_tool.description,
-                "input_schema": semantic_search_tool.input_schema,
-                "language": semantic_search_tool.language.value,
-                "tags": semantic_search_tool.tags,
-                "author": semantic_search_tool.author
+                "tool_name": "semantic_search",
+                "description": "Perform semantic search using Qdrant vector database and Cohere embeddings",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Search query"},
+                        "collection_name": {"type": "string", "description": "Qdrant collection name"},
+                        "limit": {"type": "integer", "description": "Number of results to return", "default": 10}
+                    },
+                    "required": ["query", "collection_name"]
+                },
+                "language": "rust",
+                "tags": ["search", "semantic", "qdrant", "cohere"],
+                "author": "system"
             }
         ]
         

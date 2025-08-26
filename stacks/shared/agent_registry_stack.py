@@ -8,7 +8,6 @@ from aws_cdk import (
 )
 from constructs import Construct
 from ..shared.naming_conventions import NamingConventions
-from ..shared.tool_definitions import GoogleMapsTools, DatabaseTools, CodeExecutionTools, FinancialTools, ResearchTools
 import json
 
 
@@ -34,7 +33,7 @@ class AgentRegistryStack(Stack):
         # Create initial agent configurations (DEPRECATED - agents now register themselves)
         # Individual agent stacks now register themselves using BaseAgentConstruct
         # This ensures agent definitions are maintained alongside their implementations
-        self._create_initial_agents()
+        # self._create_initial_agents()  # Commented out due to removed tool classes
         
         # Create stack exports
         self._create_stack_exports()

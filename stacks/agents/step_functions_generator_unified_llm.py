@@ -7,7 +7,6 @@ passing provider configurations dynamically based on the selected model.
 
 import json
 from typing import List, Dict, Any
-from ..shared.tool_definitions import AllTools
 
 
 class UnifiedLLMStepFunctionsGenerator:
@@ -45,8 +44,8 @@ class UnifiedLLMStepFunctionsGenerator:
             JSON string of the Step Functions definition
         """
         
-        # Get tool definitions from centralized registry
-        all_tool_definitions = AllTools.get_all_tool_definitions()
+        # Tool definitions will be resolved dynamically from DynamoDB at runtime
+        # This generator creates static definitions based on tool configs
         tool_definitions = []
         tool_names = []
         
@@ -54,15 +53,13 @@ class UnifiedLLMStepFunctionsGenerator:
             tool_name = config["tool_name"]
             tool_names.append(tool_name)
             
-            if tool_name in all_tool_definitions:
-                tool_def = all_tool_definitions[tool_name]
-                tool_definitions.append({
-                    "name": tool_def.tool_name,
-                    "description": tool_def.description,
-                    "input_schema": tool_def.input_schema
-                })
-            else:
-                print(f"Warning: Tool definition not found for '{tool_name}'")
+            # Create basic tool definition from config
+            # Full schema will be resolved from DynamoDB at runtime
+            tool_definitions.append({
+                "name": tool_name,
+                "description": f"Tool: {tool_name}",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            })
         
         # Generate tool routing choices
         tool_choices = UnifiedLLMStepFunctionsGenerator._generate_tool_choices(

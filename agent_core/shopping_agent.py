@@ -187,17 +187,19 @@ def _run_browser_task(request: str):
                 }
                 
     except Exception as e:
-        logging.error(f"Browser task error: {e}")
+        # Convert exception to string immediately to avoid serialization issues
+        error_msg = str(e)
+        logging.error(f"Browser task error: {error_msg}")
         if 'task_id' in locals():
             app.complete_async_task(task_id)
         return {
             'status': False,
-            'error': str(e),
+            'error': error_msg,
             'location': 'please check logs',
             'results': {
                 'session_id': 'error',
                 'prompt': request,
-                'response': f"Error occurred: {str(e)}"
+                'response': f"Error occurred: {error_msg}"
             }
         }
 
@@ -343,13 +345,31 @@ def handler(payload, context):
     """Main entrypoint for the shopping assistant"""
     logging.info(f"Handler invoked with payload: {json.dumps(payload) if payload else 'None'}")
     
-    if "test" in payload:
-        # Directly test browser task
-        test_request = payload.get("test")
-        if isinstance(test_request, bool):
-            test_request = "Search for Echo Dot prices on Amazon"
-        result = _run_browser_task(request=test_request)
-        return result
+    try:
+        if "test" in payload:
+            # Directly test browser task
+            test_request = payload.get("test")
+            if isinstance(test_request, bool):
+                test_request = "Search for Echo Dot prices on Amazon"
+            # Validate the request
+            if not test_request or not isinstance(test_request, str):
+                return {
+                    "status": False,
+                    "error": "Invalid test request - must be a non-empty string",
+                    "results": {"response": "Please provide a valid search query"}
+                }
+            result = _run_browser_task(request=test_request)
+            return result
+    except Exception as e:
+        # Catch any exceptions and return a proper error response
+        error_msg = str(e)
+        logging.error(f"Handler error: {error_msg}")
+        return {
+            "status": False,
+            "error": error_msg,
+            "results": {"response": f"Error processing request: {error_msg}"}
+        }
+    
     elif "prompt" in payload:
         # Run the full agent graph
         result = graph(payload.get("prompt"))

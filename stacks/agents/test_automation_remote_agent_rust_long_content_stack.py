@@ -14,7 +14,6 @@ from aws_cdk import (
 )
 from constructs import Construct
 from typing import Dict, Any, List
-from ..shared.tool_definitions import AdvancedTools
 from .step_functions_generator_unified_llm import UnifiedLLMStepFunctionsGenerator
 from .agent_registry_mixin import AgentRegistryMixin
 import json
