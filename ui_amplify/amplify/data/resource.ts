@@ -371,44 +371,44 @@ const schema = a.schema({
     .handler(a.handler.function(getStateMachineInfo))
     .authorization((allow) => [allow.authenticated()]),
 
-  // API Key Management Operations (UI only - no API key access)
-  generateAPIKey: a
-    .mutation()
-    .arguments({
-      clientName: a.string().required(),
-      clientId: a.string().required(),
-      expiresInDays: a.integer(),
-      permissions: a.string().array()
-    })
-    .returns(a.json()) // Returns the actual API key - only shown once
-    .handler(a.handler.function(generateAPIKey))
-    .authorization((allow) => [allow.authenticated()]),
+  // API Key Management Operations - commented out until functions are implemented
+  // generateAPIKey: a
+  //   .mutation()
+  //   .arguments({
+  //     clientName: a.string().required(),
+  //     clientId: a.string().required(),
+  //     expiresInDays: a.integer(),
+  //     permissions: a.string().array()
+  //   })
+  //   .returns(a.json()) // Returns the actual API key - only shown once
+  //   .handler(a.handler.function(generateAPIKey))
+  //   .authorization((allow) => [allow.authenticated()]),
 
-  listAPIKeys: a
-    .query()
-    .arguments({})
-    .returns(a.ref('ApiKey').array())
-    .handler(a.handler.function(listAPIKeys))
-    .authorization((allow) => [allow.authenticated()]),
+  // listAPIKeys: a
+  //   .query()
+  //   .arguments({})
+  //   .returns(a.ref('ApiKey').array())
+  //   .handler(a.handler.function(listAPIKeys))
+  //   .authorization((allow) => [allow.authenticated()]),
 
-  revokeAPIKey: a
-    .mutation()
-    .arguments({
-      keyId: a.string().required()
-    })
-    .returns(a.json())
-    .handler(a.handler.function(revokeAPIKey))
-    .authorization((allow) => [allow.authenticated()]),
+  // revokeAPIKey: a
+  //   .mutation()
+  //   .arguments({
+  //     keyId: a.string().required()
+  //   })
+  //   .returns(a.json())
+  //   .handler(a.handler.function(revokeAPIKey))
+  //   .authorization((allow) => [allow.authenticated()]),
 
-  rotateAPIKey: a
-    .mutation()
-    .arguments({
-      keyId: a.string().required(),
-      expiresInDays: a.integer()
-    })
-    .returns(a.json()) // Returns new API key
-    .handler(a.handler.function(rotateAPIKey))
-    .authorization((allow) => [allow.authenticated()]),
+  // rotateAPIKey: a
+  //   .mutation()
+  //   .arguments({
+  //     keyId: a.string().required(),
+  //     expiresInDays: a.integer()
+  //   })
+  //   .returns(a.json()) // Returns new API key
+  //   .handler(a.handler.function(rotateAPIKey))
+  //   .authorization((allow) => [allow.authenticated()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;
