@@ -11,10 +11,11 @@ import { updateProviderAPIKey } from './backend/function/updateProviderAPIKey/re
 import { getToolSecretValues } from './backend/function/getToolSecretValues/resource';
 import { updateToolSecrets } from './backend/function/updateToolSecrets/resource';
 import { getStateMachineInfo } from './backend/function/getStateMachineInfo/resource';
-import { generateAPIKey } from './backend/function/generateAPIKey/resource';
-import { revokeAPIKey } from './backend/function/revokeAPIKey/resource';
-import { rotateAPIKey } from './backend/function/rotateAPIKey/resource';
-import { listAPIKeys } from './backend/function/listAPIKeys/resource';
+// API Key management functions - to be implemented if needed
+// import { generateAPIKey } from './backend/function/generateAPIKey/resource';
+// import { revokeAPIKey } from './backend/function/revokeAPIKey/resource';
+// import { rotateAPIKey } from './backend/function/rotateAPIKey/resource';
+// import { listAPIKeys } from './backend/function/listAPIKeys/resource';
 import { createMcpServerResources } from './mcp-server/resource';
 import { PolicyStatement, Effect, Policy } from 'aws-cdk-lib/aws-iam';
 import { aws_dynamodb, RemovalPolicy } from 'aws-cdk-lib';
