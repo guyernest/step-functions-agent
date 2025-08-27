@@ -36,10 +36,11 @@ const backend = defineBackend({
   getToolSecretValues,
   updateToolSecrets,
   getStateMachineInfo,
-  generateAPIKey,
-  revokeAPIKey,
-  rotateAPIKey,
-  listAPIKeys,
+  // API key management functions - to be implemented
+  // generateAPIKey,
+  // revokeAPIKey,
+  // rotateAPIKey,
+  // listAPIKeys,
 });
 
 // Set the Cognito User Pool name
