@@ -293,20 +293,21 @@ const apiKeyTablePolicy = new PolicyStatement({
   resources: ['*'] // Will be restricted to specific API key table
 });
 
-backend.generateAPIKey.resources.lambda.addToRolePolicy(apiKeyTablePolicy);
-backend.revokeAPIKey.resources.lambda.addToRolePolicy(apiKeyTablePolicy);
-backend.rotateAPIKey.resources.lambda.addToRolePolicy(apiKeyTablePolicy);
-backend.listAPIKeys.resources.lambda.addToRolePolicy(apiKeyTablePolicy);
+// API key function permissions - commented out until functions are implemented
+// backend.generateAPIKey.resources.lambda.addToRolePolicy(apiKeyTablePolicy);
+// backend.revokeAPIKey.resources.lambda.addToRolePolicy(apiKeyTablePolicy);
+// backend.rotateAPIKey.resources.lambda.addToRolePolicy(apiKeyTablePolicy);
+// backend.listAPIKeys.resources.lambda.addToRolePolicy(apiKeyTablePolicy);
 
 // Create MCP server resources for n8n integration
 const mcpResources = createMcpServerResources(backend);
 
 // Add environment variables for API key management functions to access the table
-const apiKeyTableName = `step-functions-agents-prod-api-keys`; // Use prod to match other stacks
-backend.generateAPIKey.addEnvironment('API_KEY_TABLE_NAME', apiKeyTableName);
-backend.revokeAPIKey.addEnvironment('API_KEY_TABLE_NAME', apiKeyTableName);
-backend.rotateAPIKey.addEnvironment('API_KEY_TABLE_NAME', apiKeyTableName);
-backend.listAPIKeys.addEnvironment('API_KEY_TABLE_NAME', apiKeyTableName);
+// const apiKeyTableName = `step-functions-agents-prod-api-keys`; // Use prod to match other stacks
+// backend.generateAPIKey.addEnvironment('API_KEY_TABLE_NAME', apiKeyTableName);
+// backend.revokeAPIKey.addEnvironment('API_KEY_TABLE_NAME', apiKeyTableName);
+// backend.rotateAPIKey.addEnvironment('API_KEY_TABLE_NAME', apiKeyTableName);
+// backend.listAPIKeys.addEnvironment('API_KEY_TABLE_NAME', apiKeyTableName);
 
 // Export MCP resources for external access if needed
 export { mcpResources };
