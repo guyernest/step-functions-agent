@@ -23,6 +23,10 @@ help:
 	@echo "  make format        - Format code"
 	@echo "  make clean         - Clean build artifacts"
 	@echo ""
+	@echo "Testing commands:"
+	@echo "  make test-mcp-server MCP_URL=<url>         - Test MCP server basic endpoints"
+	@echo "  make test-mcp-graphql MCP_URL=<url> API_KEY=<key> - Test MCP with GraphQL auth"
+	@echo ""
 
 # Install dependencies
 install:
@@ -97,6 +101,41 @@ clean:
 	rm -rf node_modules/.cache
 	@cd $(MCP_SERVER_DIR) && make clean
 	@echo "Clean complete!"
+
+# Test MCP server endpoints
+test-mcp-server:
+	@echo "Testing MCP server endpoints..."
+	@if [ -z "$(MCP_URL)" ]; then \
+		echo "❌ Please set MCP_URL environment variable"; \
+		echo "Example: make test-mcp-server MCP_URL=https://your-api.execute-api.region.amazonaws.com/mcp"; \
+		exit 1; \
+	fi
+	@echo "Testing initialize..."
+	@curl -X POST $(MCP_URL) \
+		-H "Content-Type: application/json" \
+		-d '{"jsonrpc":"2.0","method":"initialize","params":{},"id":1}' | jq '.'
+	@echo "\nTesting tools/list..."
+	@curl -X POST $(MCP_URL) \
+		-H "Content-Type: application/json" \
+		-d '{"jsonrpc":"2.0","method":"tools/list","params":{},"id":2}' | jq '.'
+
+# Test MCP server with GraphQL API key
+test-mcp-graphql:
+	@echo "Testing MCP server with GraphQL authentication..."
+	@if [ -z "$(MCP_URL)" ]; then \
+		echo "❌ Please set MCP_URL environment variable"; \
+		exit 1; \
+	fi
+	@if [ -z "$(API_KEY)" ]; then \
+		echo "❌ Please set API_KEY environment variable (your AppSync API key)"; \
+		echo "You can find this in the AWS AppSync console"; \
+		exit 1; \
+	fi
+	@echo "Testing list_available_agents with API key..."
+	@curl -X POST $(MCP_URL) \
+		-H "Content-Type: application/json" \
+		-H "x-api-key: $(API_KEY)" \
+		-d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"list_available_agents","arguments":{}},"id":3}' | jq '.'
 
 # Local development helpers
 dev-mcp:

@@ -1,4 +1,3 @@
-mod auth;
 mod agents;
 
 use anyhow::Result;
@@ -6,10 +5,8 @@ use lambda_http::{run, service_fn, Body, Error, Request, Response};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use tracing::{error, info, warn};
 
-use auth::ApiKeyAuth;
 use agents::StepFunctionsAgentsClient;
 
 // MCP protocol types
@@ -47,42 +44,29 @@ const INTERNAL_ERROR: i32 = -32603;
 // MCP server implementation
 #[derive(Clone)]
 struct McpServer {
-    auth_client: Arc<ApiKeyAuth>,
     agents_client: Arc<StepFunctionsAgentsClient>,
-    client_id: Arc<Mutex<Option<String>>>,
-    client_name: Arc<Mutex<Option<String>>>,
+    // API key will be passed per request
 }
 
 impl McpServer {
     async fn new() -> Self {
         let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest()).load().await;
         
-        let auth_client = Arc::new(ApiKeyAuth::new(&aws_config).await);
         let agents_client = Arc::new(StepFunctionsAgentsClient::new(&aws_config).await);
 
         Self {
-            auth_client,
             agents_client,
-            client_id: Arc::new(Mutex::new(None)),
-            client_name: Arc::new(Mutex::new(None)),
         }
     }
 
-    async fn set_client_info(&self, client_id: String, client_name: String) {
-        let mut id = self.client_id.lock().await;
-        let mut name = self.client_name.lock().await;
-        *id = Some(client_id);
-        *name = Some(client_name);
-        info!("Client info updated for MCP server");
-    }
 
-    async fn handle_request(&self, request: JsonRpcRequest) -> JsonRpcResponse {
+    async fn handle_request(&self, request: JsonRpcRequest, api_key: Option<String>) -> JsonRpcResponse {
         let request_id = request.id.clone();
         
         match request.method.as_str() {
             "initialize" => self.handle_initialize(request.params, request_id).await,
-            "tools/list" => self.handle_list_tools(request_id).await,
-            "tools/call" => self.handle_tool_call(request.params, request_id).await,
+            "tools/list" => self.handle_list_tools(request_id, api_key.clone()).await,
+            "tools/call" => self.handle_tool_call(request.params, request_id, api_key).await,
             _ => JsonRpcResponse {
                 jsonrpc: "2.0".to_string(),
                 result: None,
@@ -116,7 +100,7 @@ impl McpServer {
         }
     }
 
-    async fn handle_list_tools(&self, request_id: Option<Value>) -> JsonRpcResponse {
+    async fn handle_list_tools(&self, request_id: Option<Value>, _api_key: Option<String>) -> JsonRpcResponse {
         info!("Listing available MCP tools");
         
         let tools = vec![
@@ -176,7 +160,7 @@ impl McpServer {
         }
     }
 
-    async fn handle_tool_call(&self, params: Option<Value>, request_id: Option<Value>) -> JsonRpcResponse {
+    async fn handle_tool_call(&self, params: Option<Value>, request_id: Option<Value>, api_key: Option<String>) -> JsonRpcResponse {
         let params = match params {
             Some(p) => p,
             None => {
@@ -212,9 +196,9 @@ impl McpServer {
         let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
 
         match tool_name {
-            "start_agent" => self.handle_start_agent(arguments, request_id).await,
+            "start_agent" => self.handle_start_agent(arguments, request_id, api_key).await,
             "get_execution_status" => self.handle_get_execution_status(arguments, request_id).await,
-            "list_available_agents" => self.handle_list_available_agents(arguments, request_id).await,
+            "list_available_agents" => self.handle_list_available_agents(arguments, request_id, api_key).await,
             _ => JsonRpcResponse {
                 jsonrpc: "2.0".to_string(),
                 result: None,
@@ -228,7 +212,7 @@ impl McpServer {
         }
     }
 
-    async fn handle_start_agent(&self, arguments: Value, request_id: Option<Value>) -> JsonRpcResponse {
+    async fn handle_start_agent(&self, arguments: Value, request_id: Option<Value>, _api_key: Option<String>) -> JsonRpcResponse {
         let agent_name = match arguments.get("agent_name").and_then(|n| n.as_str()) {
             Some(name) => name,
             None => {
@@ -262,7 +246,7 @@ impl McpServer {
         };
 
         let execution_name = arguments.get("execution_name").and_then(|n| n.as_str()).map(|s| s.to_string());
-        let client_id = self.client_id.lock().await.clone();
+        let client_id = None; // No longer tracking client from auth
 
         let request = agents::StartExecutionRequest {
             agent_name: agent_name.to_string(),
@@ -514,8 +498,8 @@ impl McpServer {
         }
     }
 
-    async fn handle_list_available_agents(&self, _arguments: Value, request_id: Option<Value>) -> JsonRpcResponse {
-        match self.agents_client.list_available_agents().await {
+    async fn handle_list_available_agents(&self, _arguments: Value, request_id: Option<Value>, api_key: Option<String>) -> JsonRpcResponse {
+        match self.agents_client.list_available_agents(api_key).await {
             Ok(agents) => {
                 if agents.is_empty() {
                     let result_text = "📭 No agents found in the registry.";
@@ -591,29 +575,19 @@ impl McpServer {
 }
 
 async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
-    // Extract API key from headers
+    // Extract API key from headers - will be passed to GraphQL
     let api_key = event.headers()
         .get("x-api-key")
-        .and_then(|v| v.to_str().ok());
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
+    if api_key.is_some() {
+        info!("API key provided in request - will be passed to GraphQL");
+    } else {
+        warn!("No API key provided - GraphQL calls may fail");
+    }
 
     let server = McpServer::new().await;
-
-    // Authenticate if API key is provided
-    if let Some(key) = api_key {
-        match server.auth_client.validate_api_key(key).await {
-            Ok(auth) => {
-                info!("Authenticated client: {}", auth.client_name);
-                server.set_client_info(auth.client_id, auth.client_name).await;
-            }
-            Err(e) => {
-                warn!("API key validation failed: {}", e);
-                return Ok(Response::builder()
-                    .status(401)
-                    .header("content-type", "application/json")
-                    .body(Body::from(r#"{"error":"Unauthorized"}"#))?);
-            }
-        }
-    }
 
     // Parse request body
     let body = match event.body() {
@@ -644,7 +618,7 @@ async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
         }
     };
 
-    let response = server.handle_request(request).await;
+    let response = server.handle_request(request, api_key).await;
     let response_json = serde_json::to_string(&response)?;
 
     Ok(Response::builder()

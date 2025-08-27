@@ -178,9 +178,7 @@ export function createMcpServerResources(backend: Backend<{ auth: any; data: any
     userPool,
     userPoolClient,
     graphqlApi,
-    graphqlApiKey: apiKey,
     mcpServerLogGroup,
-    apiKeyTable,
     lambdaRole,
     httpApi,
   };
@@ -212,9 +210,6 @@ export function createMcpServerResources(backend: Backend<{ auth: any; data: any
         mcpServer: `${PROJECT_NAME}-mcp-server`,
       },
 
-      dynamoDbTables: {
-        apiKeys: apiKeyTable.tableName,
-      },
 
       logGroups: {
         mcpServer: mcpServerLogGroup.logGroupName,
@@ -229,7 +224,6 @@ export function createMcpServerResources(backend: Backend<{ auth: any; data: any
   return {
     httpApi,
     mcpConstruct,
-    apiKeyTable,
     mcpServerLogGroup,
   };
 }

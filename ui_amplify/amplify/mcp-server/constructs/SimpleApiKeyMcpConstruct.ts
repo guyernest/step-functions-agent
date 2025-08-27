@@ -37,18 +37,17 @@ export class SimpleApiKeyMcpConstruct extends Construct {
         environment: {
           ENVIRONMENT: props.environment,
           APPLICATION_NAME: props.applicationName,
-          API_KEY_TABLE_NAME: props.apiKeyTable.tableName,
           AWS_ACCOUNT_ID: Stack.of(this).account,
           // GraphQL endpoint will be set after creation
           GRAPHQL_ENDPOINT: props.graphqlApi.attrGraphQlUrl || "", // Note: capital Q in GraphQl
-          // Use the API key from the created CfnApiKey
-          GRAPHQL_API_KEY: props.graphqlApiKey?.attrApiKey || "",
+          // API key will be passed from request headers
           RUST_LOG: "info",
           RUST_BACKTRACE: "1",
         },
         description: "Rust MCP server with API key authentication for Step Functions agents",
       }
     );
+
 
     // Create HTTP API integration
     const mcpIntegration = new HttpLambdaIntegration(
@@ -58,6 +57,7 @@ export class SimpleApiKeyMcpConstruct extends Construct {
 
     // Add MCP routes to HTTP API Gateway
     // Main MCP endpoint (handles all MCP protocol requests)
+    // Authentication is handled by passing API key to GraphQL
     props.httpApi.addRoutes({
       path: "/mcp",
       methods: [
@@ -67,7 +67,7 @@ export class SimpleApiKeyMcpConstruct extends Construct {
       integration: mcpIntegration,
     });
 
-    // Health check endpoint
+    // Health check endpoint - NOT PROTECTED (useful for monitoring)
     props.httpApi.addRoutes({
       path: "/health",
       methods: [
@@ -75,6 +75,7 @@ export class SimpleApiKeyMcpConstruct extends Construct {
         apigateway.HttpMethod.OPTIONS,
       ],
       integration: mcpIntegration,
+      // No authorizer - health check is public
     });
 
     // MCP-specific endpoints following the protocol
@@ -88,20 +89,11 @@ export class SimpleApiKeyMcpConstruct extends Construct {
       integration: mcpIntegration,
     });
     
-    // Ensure GraphQL endpoint is set (similar to reference project)
+    // Ensure GraphQL endpoint is set
     // The attribute name uses capital Q: attrGraphQlUrl
     const graphqlUrl = props.graphqlApi.attrGraphQlUrl;
     if (graphqlUrl) {
       this.mcpServerFunction.addEnvironment("GRAPHQL_ENDPOINT", graphqlUrl);
-    }
-    
-    // Also ensure API key is properly set from the created key
-    if (props.graphqlApiKey) {
-      const apiKeyValue = props.graphqlApiKey.attrApiKey;
-      console.log("Using created GraphQL API Key");
-      this.mcpServerFunction.addEnvironment("GRAPHQL_API_KEY", apiKeyValue);
-    } else {
-      console.log("Warning: No API key provided to construct");
     }
   }
 }

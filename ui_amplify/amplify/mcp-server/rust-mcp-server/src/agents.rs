@@ -6,7 +6,7 @@ use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
-use tracing::info;
+use tracing::{info, warn};
 use uuid::Uuid;
 use serde_json::{json, Value};
 
@@ -16,7 +16,7 @@ pub struct StepFunctionsAgentsClient {
     dynamodb: DynamoDbClient,
     environment: String,
     graphql_endpoint: Option<String>,
-    api_key: Option<String>,
+    // API key will be passed per request, not stored
 }
 
 /// Agent definition from registry
@@ -75,7 +75,6 @@ impl StepFunctionsAgentsClient {
         let dynamodb = DynamoDbClient::new(aws_config);
         let environment = std::env::var("ENVIRONMENT").unwrap_or_else(|_| "prod".to_string());
         let graphql_endpoint = std::env::var("GRAPHQL_ENDPOINT").ok();
-        let api_key = std::env::var("GRAPHQL_API_KEY").ok();
         
         info!("Initialized StepFunctionsAgentsClient for environment: {}", environment);
         if let Some(ref endpoint) = graphql_endpoint {
@@ -83,18 +82,12 @@ impl StepFunctionsAgentsClient {
         } else {
             info!("GraphQL endpoint not found in environment variables");
         }
-        if api_key.is_some() {
-            info!("GraphQL API key configured");
-        } else {
-            info!("GraphQL API key not found in environment variables");
-        }
         
         Self {
             sfn,
             dynamodb,
             environment,
             graphql_endpoint,
-            api_key,
         }
     }
     
@@ -217,15 +210,19 @@ impl StepFunctionsAgentsClient {
     }
     
     /// List available agents from registry
-    pub async fn list_available_agents(&self) -> Result<Vec<Agent>> {
+    pub async fn list_available_agents(&self, api_key: Option<String>) -> Result<Vec<Agent>> {
         info!("Listing available agents from registry");
         
         // If GraphQL endpoint is configured, use it
-        if let (Some(endpoint), Some(api_key)) = (&self.graphql_endpoint, &self.api_key) {
+        if let Some(endpoint) = &self.graphql_endpoint {
             info!("Using GraphQL API to list agents");
             info!("GraphQL endpoint: {}", endpoint);
-            // Log API key length for security (not the actual key)
-            info!("API key length: {}", api_key.len());
+            if let Some(ref key) = api_key {
+                // Log API key length for security (not the actual key)
+                info!("API key provided, length: {}", key.len());
+            } else {
+                warn!("No API key provided for GraphQL request");
+            }
             
             let query = r#"
                 query ListAgentsFromRegistry {
@@ -254,11 +251,15 @@ impl StepFunctionsAgentsClient {
                 .post(endpoint)
                 .header("Content-Type", "application/json");
                 
-            // Only add API key header if it's not empty
-            if !api_key.is_empty() {
-                request = request.header("x-api-key", api_key);
+            // Add API key header if provided
+            if let Some(ref key) = api_key {
+                if !key.is_empty() {
+                    request = request.header("x-api-key", key);
+                } else {
+                    info!("Warning: API key is empty, request may fail");
+                }
             } else {
-                info!("Warning: API key is empty, request may fail");
+                warn!("No API key provided, GraphQL request may fail");
             }
             
             let response = request

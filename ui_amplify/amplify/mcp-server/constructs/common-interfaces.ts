@@ -1,5 +1,4 @@
 import * as apigateway from "aws-cdk-lib/aws-apigatewayv2";
-import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as logs from "aws-cdk-lib/aws-logs";
@@ -14,28 +13,9 @@ export interface McpConstructProps {
   userPool: cognito.UserPool;
   userPoolClient: cognito.UserPoolClient;
   graphqlApi: any; // AppSync GraphQL API reference
-  graphqlApiKey?: any; // AppSync API Key reference
   mcpServerLogGroup: logs.LogGroup;
-  apiKeyTable: dynamodb.Table;
   lambdaRole: iam.Role;
   httpApi: apigateway.HttpApi;
-}
-
-/**
- * API Key structure for DynamoDB storage
- */
-export interface ApiKeyRecord {
-  api_key_hash: string; // PK - SHA256 hash of the API key
-  client_id: string; // GSI - Client identifier for lookup
-  client_name: string; // Human readable name
-  created_at: string; // ISO timestamp
-  expires_at: string; // ISO timestamp
-  last_used?: string; // ISO timestamp
-  is_active: boolean;
-  permissions: string[]; // Array of allowed operations
-  usage_count: number;
-  created_by: string; // User who created the key
-  metadata?: Record<string, any>; // Additional metadata
 }
 
 /**
