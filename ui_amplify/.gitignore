@@ -20,3 +20,7 @@ dist
 *.njsproj
 *.sln
 *.sw?
+
+# Rust build artifacts
+amplify/mcp-server/rust-mcp-server/target/
+amplify/mcp-server/rust-mcp-server/.build/

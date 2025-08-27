@@ -11,6 +11,11 @@ import { updateProviderAPIKey } from './backend/function/updateProviderAPIKey/re
 import { getToolSecretValues } from './backend/function/getToolSecretValues/resource';
 import { updateToolSecrets } from './backend/function/updateToolSecrets/resource';
 import { getStateMachineInfo } from './backend/function/getStateMachineInfo/resource';
+import { generateAPIKey } from './backend/function/generateAPIKey/resource';
+import { revokeAPIKey } from './backend/function/revokeAPIKey/resource';
+import { rotateAPIKey } from './backend/function/rotateAPIKey/resource';
+import { listAPIKeys } from './backend/function/listAPIKeys/resource';
+import { createMcpServerResources } from './mcp-server/resource';
 import { PolicyStatement, Effect, Policy } from 'aws-cdk-lib/aws-iam';
 import { aws_dynamodb, RemovalPolicy } from 'aws-cdk-lib';
 
@@ -30,6 +35,10 @@ const backend = defineBackend({
   getToolSecretValues,
   updateToolSecrets,
   getStateMachineInfo,
+  generateAPIKey,
+  revokeAPIKey,
+  rotateAPIKey,
+  listAPIKeys,
 });
 
 // Set the Cognito User Pool name
@@ -268,3 +277,34 @@ const getStateMachineInfoPolicy = new PolicyStatement({
 });
 
 backend.getStateMachineInfo.resources.lambda.addToRolePolicy(getStateMachineInfoPolicy);
+
+// Grant DynamoDB permissions to API key management Lambda functions
+const apiKeyTablePolicy = new PolicyStatement({
+  effect: Effect.ALLOW,
+  actions: [
+    'dynamodb:PutItem',
+    'dynamodb:GetItem',
+    'dynamodb:UpdateItem',
+    'dynamodb:Query',
+    'dynamodb:Scan'
+  ],
+  resources: ['*'] // Will be restricted to specific API key table
+});
+
+backend.generateAPIKey.resources.lambda.addToRolePolicy(apiKeyTablePolicy);
+backend.revokeAPIKey.resources.lambda.addToRolePolicy(apiKeyTablePolicy);
+backend.rotateAPIKey.resources.lambda.addToRolePolicy(apiKeyTablePolicy);
+backend.listAPIKeys.resources.lambda.addToRolePolicy(apiKeyTablePolicy);
+
+// Create MCP server resources for n8n integration
+const mcpResources = createMcpServerResources(backend);
+
+// Add environment variables for API key management functions to access the table
+const apiKeyTableName = `step-functions-agents-prod-api-keys`; // Use prod to match other stacks
+backend.generateAPIKey.addEnvironment('API_KEY_TABLE_NAME', apiKeyTableName);
+backend.revokeAPIKey.addEnvironment('API_KEY_TABLE_NAME', apiKeyTableName);
+backend.rotateAPIKey.addEnvironment('API_KEY_TABLE_NAME', apiKeyTableName);
+backend.listAPIKeys.addEnvironment('API_KEY_TABLE_NAME', apiKeyTableName);
+
+// Export MCP resources for external access if needed
+export { mcpResources };

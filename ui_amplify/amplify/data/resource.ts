@@ -9,6 +9,10 @@ import { updateProviderAPIKey } from '../backend/function/updateProviderAPIKey/r
 import { getToolSecretValues } from '../backend/function/getToolSecretValues/resource';
 import { updateToolSecrets } from '../backend/function/updateToolSecrets/resource';
 import { getStateMachineInfo } from '../backend/function/getStateMachineInfo/resource';
+import { generateAPIKey } from '../backend/function/generateAPIKey/resource';
+import { revokeAPIKey } from '../backend/function/revokeAPIKey/resource';
+import { rotateAPIKey } from '../backend/function/rotateAPIKey/resource';
+import { listAPIKeys } from '../backend/function/listAPIKeys/resource';
 
 const schema = a.schema({
   // Model for storing custom model costs
@@ -20,6 +24,23 @@ const schema = a.schema({
       lastUpdated: a.datetime(),
       updatedBy: a.string(),
       isActive: a.boolean().default(true),
+    })
+    .authorization((allow) => [allow.authenticated()]),
+
+  // Model for storing API keys for n8n integration
+  ApiKey: a
+    .model({
+      keyId: a.string().required(), // Short identifier (first 8 chars of hash)
+      clientName: a.string().required(),
+      clientId: a.string().required(),
+      createdAt: a.datetime(),
+      expiresAt: a.datetime(),
+      lastUsed: a.datetime(),
+      isActive: a.boolean().default(true),
+      permissions: a.string().array(),
+      usageCount: a.integer().default(0),
+      createdBy: a.string().required(),
+      metadata: a.json(),
     })
     .authorization((allow) => [allow.authenticated()]),
   
@@ -80,7 +101,10 @@ const schema = a.schema({
         entry: './listAgentsFromRegistry.js',
       })
     )
-    .authorization((allow) => [allow.authenticated()]),
+    .authorization((allow) => [
+      allow.authenticated(),
+      allow.publicApiKey()
+    ]),
   
   listToolsFromRegistry: a
     .query()
@@ -103,7 +127,10 @@ const schema = a.schema({
     })
     .returns(a.json())
     .handler(a.handler.function(startAgentExecution))
-    .authorization((allow) => [allow.authenticated()]),
+    .authorization((allow) => [
+      allow.authenticated(),
+      allow.publicApiKey()
+    ]),
   
   listStepFunctionExecutions: a
     .query()
@@ -114,7 +141,10 @@ const schema = a.schema({
     })
     .returns(a.json())
     .handler(a.handler.function(listStepFunctionExecutions))
-    .authorization((allow) => [allow.authenticated()]),
+    .authorization((allow) => [
+      allow.authenticated(),
+      allow.publicApiKey()
+    ]),
   
   getStepFunctionExecution: a
     .query()
@@ -123,7 +153,10 @@ const schema = a.schema({
     })
     .returns(a.json())
     .handler(a.handler.function(getStepFunctionExecution))
-    .authorization((allow) => [allow.authenticated()]),
+    .authorization((allow) => [
+      allow.authenticated(),
+      allow.publicApiKey()
+    ]),
   
   getExecutionStatistics: a
     .query()
@@ -335,6 +368,45 @@ const schema = a.schema({
     })
     .returns(a.json())
     .handler(a.handler.function(getStateMachineInfo))
+    .authorization((allow) => [allow.authenticated()]),
+
+  // API Key Management Operations (UI only - no API key access)
+  generateAPIKey: a
+    .mutation()
+    .arguments({
+      clientName: a.string().required(),
+      clientId: a.string().required(),
+      expiresInDays: a.integer(),
+      permissions: a.string().array()
+    })
+    .returns(a.json()) // Returns the actual API key - only shown once
+    .handler(a.handler.function(generateAPIKey))
+    .authorization((allow) => [allow.authenticated()]),
+
+  listAPIKeys: a
+    .query()
+    .arguments({})
+    .returns(a.ref('ApiKey').array())
+    .handler(a.handler.function(listAPIKeys))
+    .authorization((allow) => [allow.authenticated()]),
+
+  revokeAPIKey: a
+    .mutation()
+    .arguments({
+      keyId: a.string().required()
+    })
+    .returns(a.json())
+    .handler(a.handler.function(revokeAPIKey))
+    .authorization((allow) => [allow.authenticated()]),
+
+  rotateAPIKey: a
+    .mutation()
+    .arguments({
+      keyId: a.string().required(),
+      expiresInDays: a.integer()
+    })
+    .returns(a.json()) // Returns new API key
+    .handler(a.handler.function(rotateAPIKey))
     .authorization((allow) => [allow.authenticated()]),
 });
 
