@@ -1,0 +1,26 @@
+{
+  "name": "amplify-mcp-scripts",
+  "version": "1.0.0",
+  "description": "Scripts for MCP server automatic registration in Amplify deployments",
+  "main": "register-mcp-server.js",
+  "scripts": {
+    "register-mcp": "node register-mcp-server.js",
+    "test-registration": "node test-registration.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.490.0",
+    "@aws-sdk/lib-dynamodb": "^3.490.0"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0"
+  },
+  "author": "Step Functions Agent Framework",
+  "license": "MIT",
+  "keywords": [
+    "amplify",
+    "mcp",
+    "step-functions",
+    "automation",
+    "aws"
+  ]
+}
