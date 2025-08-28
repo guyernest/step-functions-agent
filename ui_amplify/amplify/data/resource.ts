@@ -76,6 +76,43 @@ const schema = a.schema({
     inputSchema: a.string(),
   }),
   
+  MCPTool: a.customType({
+    name: a.string().required(),
+    description: a.string(),
+    inputSchema: a.json(),
+    outputSchema: a.json(),
+  }),
+  
+  MCPServer: a.customType({
+    server_id: a.string().required(),
+    version: a.string().required(),
+    server_name: a.string().required(),
+    description: a.string(),
+    endpoint_url: a.string().required(),
+    protocol_type: a.string().required(),
+    authentication_type: a.string().required(),
+    api_key_header: a.string(),
+    available_tools: a.ref('MCPTool').array(),
+    status: a.string().required(),
+    health_check_url: a.string(),
+    health_check_interval: a.integer(),
+    configuration: a.json(),
+    metadata: a.json(),
+    deployment_stack: a.string(),
+    deployment_region: a.string(),
+    created_at: a.string().required(),
+    updated_at: a.string().required(),
+    created_by: a.string(),
+  }),
+  
+  ConnectionTestResult: a.customType({
+    success: a.boolean().required(),
+    message: a.string().required(),
+    response_time: a.integer(),
+    server_id: a.string().required(),
+    endpoint_url: a.string(),
+  }),
+  
   LLMModel: a.customType({
     pk: a.string().required(),
     provider: a.string().required(),
@@ -115,6 +152,47 @@ const schema = a.schema({
       a.handler.custom({
         dataSource: 'ToolRegistryDataSource',
         entry: './listToolsFromRegistry.js',
+      })
+    )
+    .authorization((allow) => [allow.authenticated()]),
+  
+  listMCPServersFromRegistry: a
+    .query()
+    .arguments({})
+    .returns(a.ref('MCPServer').array())
+    .handler(
+      a.handler.custom({
+        dataSource: 'MCPRegistryDataSource',
+        entry: './listMCPServersFromRegistry.js',
+      })
+    )
+    .authorization((allow) => [allow.authenticated()]),
+  
+  getMCPServer: a
+    .query()
+    .arguments({
+      server_id: a.string().required(),
+      version: a.string(),
+    })
+    .returns(a.ref('MCPServer'))
+    .handler(
+      a.handler.custom({
+        dataSource: 'MCPRegistryDataSource',
+        entry: './getMCPServer.js',
+      })
+    )
+    .authorization((allow) => [allow.authenticated()]),
+  
+  testMCPServerConnection: a
+    .query()
+    .arguments({
+      server_id: a.string().required(),
+    })
+    .returns(a.ref('ConnectionTestResult'))
+    .handler(
+      a.handler.custom({
+        dataSource: 'MCPRegistryDataSource',
+        entry: './testMCPServerConnection.js',
       })
     )
     .authorization((allow) => [allow.authenticated()]),

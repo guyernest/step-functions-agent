@@ -33,6 +33,14 @@ applications:
             - npm install --no-save @parcel/watcher
             # Deploy backend resources
             - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+        postBuild:
+          commands:
+            # Install script dependencies and register MCP server
+            - echo "Installing MCP registration script dependencies..."
+            - cd scripts && npm install --production && cd ..
+            - echo "Registering MCP server in registry..."
+            - cd scripts && npm run register-mcp && cd ..
+            - echo "✅ MCP server registration completed"
     frontend:
       phases:
         preBuild:

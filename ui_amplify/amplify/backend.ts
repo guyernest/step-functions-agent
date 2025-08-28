@@ -78,6 +78,7 @@ const externalDataSourcesStack = backend.createStack('ExternalDataSources');
 // Define table names - always use prod for now
 const agentRegistryTableName = 'AgentRegistry-prod';
 const toolRegistryTableName = 'ToolRegistry-prod';
+const mcpRegistryTableName = 'MCPServerRegistry-prod';
 
 // Reference the existing external DynamoDB tables
 const agentRegistryTable = aws_dynamodb.Table.fromTableName(
@@ -90,6 +91,13 @@ const toolRegistryTable = aws_dynamodb.Table.fromTableName(
   externalDataSourcesStack,
   'ToolRegistryTable',
   toolRegistryTableName
+);
+
+// Reference the MCP Registry table
+const mcpRegistryTable = aws_dynamodb.Table.fromTableName(
+  externalDataSourcesStack,
+  'MCPRegistryTable',
+  mcpRegistryTableName
 );
 
 // Reference the ToolSecrets table
@@ -125,6 +133,11 @@ backend.data.addDynamoDbDataSource(
 backend.data.addDynamoDbDataSource(
   'ToolRegistryDataSource',
   toolRegistryTable
+);
+
+backend.data.addDynamoDbDataSource(
+  'MCPRegistryDataSource',
+  mcpRegistryTable
 );
 
 backend.data.addDynamoDbDataSource(

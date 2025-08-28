@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Dashboard from './pages/Dashboard'
 import AgentExecution from './pages/AgentExecution'
 import Registries from './pages/Registries'
+import MCPServers from './pages/MCPServers'
 import History from './pages/History'
 import ApprovalDashboard from './pages/ApprovalDashboard'
 import Settings from './pages/Settings'
@@ -29,6 +30,7 @@ function App() {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/execute" element={<AgentExecution />} />
                 <Route path="/registries" element={<Registries />} />
+                <Route path="/mcp-servers" element={<MCPServers />} />
                 <Route path="/history" element={<History />} />
                 <Route path="/execution/:executionArn" element={<ExecutionDetail />} />
                 <Route path="/approvals" element={<ApprovalDashboard />} />

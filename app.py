@@ -15,6 +15,7 @@ import aws_cdk as cdk
 from stacks.shared.shared_llm_stack import SharedLLMStack
 from stacks.shared.shared_infrastructure_stack import SharedInfrastructureStack
 from stacks.shared.agent_registry_stack import AgentRegistryStack
+from stacks.shared.mcp_registry_stack import MCPRegistryStack
 from stacks.tools.db_interface_tool_stack import DBInterfaceToolStack
 from stacks.tools.e2b_tool_stack import E2BToolStack
 from stacks.tools.google_maps_tool_stack import GoogleMapsToolStack
@@ -100,6 +101,39 @@ def main():
         env=env,
         description=f"Agent Registry for dynamic configurations in {environment} environment"
     )
+    
+    # Get MCP endpoint URL from context or environment
+    # This will be set by the UI Amplify deployment
+    mcp_endpoint_url = os.environ.get('MCP_ENDPOINT_URL', 'https://api.example.com/mcp')
+    if environment == "prod":
+        # Use the production MCP endpoint from our deployment
+        mcp_endpoint_url = "https://fkg9gkvzxk.execute-api.us-west-2.amazonaws.com/mcp"
+    
+    # Deploy MCP Registry stack
+    # This creates DynamoDB table for MCP Server Registry
+    mcp_registry_stack = MCPRegistryStack(
+        app,
+        f"MCPRegistryStack-{environment}",
+        env_name=environment,
+        mcp_endpoint_url=mcp_endpoint_url,
+        env=env,
+        description=f"MCP Server Registry for {environment} environment"
+    )
+    
+    # Deploy MCP GraphQL API stack
+    # This creates AppSync GraphQL API for MCP Registry
+    from stacks.shared.mcp_graphql_stack import MCPGraphQLStack
+    
+    mcp_graphql_stack = MCPGraphQLStack(
+        app,
+        f"MCPGraphQLStack-{environment}",
+        mcp_registry_table_name=mcp_registry_stack.mcp_registry_table.table_name,
+        mcp_registry_table_arn=mcp_registry_stack.mcp_registry_table.table_arn,
+        env_name=environment,
+        env=env,
+        description=f"MCP Registry GraphQL API for {environment} environment"
+    )
+    mcp_graphql_stack.add_dependency(mcp_registry_stack)
     
     # Deploy tool stacks
     # These deploy individual tool Lambda functions and register them in DynamoDB

@@ -1,0 +1,155 @@
+"""
+MCP Registry GraphQL Schema
+
+Defines the GraphQL types, queries, and mutations for the MCP Server Registry.
+This schema is used by AppSync to expose the MCP Registry API.
+"""
+
+# Tool definition type for MCP servers
+type Tool {
+  name: String!
+  description: String
+  inputSchema: AWSJSON
+  outputSchema: AWSJSON
+}
+
+# Main MCP Server type
+type MCPServer {
+  server_id: String!
+  version: String!
+  server_name: String!
+  description: String
+  endpoint_url: String!
+  protocol_type: String!  # jsonrpc, graphql, rest, websocket
+  authentication_type: String!  # none, api_key, oauth, iam
+  api_key_header: String
+  available_tools: [Tool]
+  status: String!  # active, inactive, maintenance, unhealthy, pending
+  health_check_url: String
+  health_check_interval: Int
+  configuration: AWSJSON
+  metadata: AWSJSON
+  deployment_stack: String
+  deployment_region: String
+  created_at: String!
+  updated_at: String!
+  created_by: String
+}
+
+# Connection test result
+type ConnectionTestResult {
+  success: Boolean!
+  message: String!
+  response_time: Int  # milliseconds
+  server_id: String!
+  endpoint_url: String
+}
+
+# Registration result
+type RegisterMCPServerResult {
+  success: Boolean!
+  server_id: String
+  version: String
+  message: String!
+}
+
+# Status update result
+type StatusUpdateResult {
+  success: Boolean!
+  server_id: String
+  version: String
+  status: String
+  message: String!
+}
+
+# Approval result
+type ApprovalResult {
+  success: Boolean!
+  server_id: String
+  message: String!
+}
+
+# Input type for registering a new MCP server
+input RegisterMCPServerInput {
+  server_id: String  # Optional, will be generated if not provided
+  version: String  # Optional, defaults to "1.0.0"
+  server_name: String!
+  description: String
+  endpoint_url: String!
+  protocol_type: String  # Defaults to "jsonrpc"
+  authentication_type: String  # Defaults to "none"
+  api_key_header: String  # Required if auth_type is "api_key"
+  available_tools: [ToolInput]
+  health_check_url: String
+  health_check_interval: Int
+  configuration: AWSJSON
+  metadata: AWSJSON
+  created_by: String
+}
+
+# Input type for tool definition
+input ToolInput {
+  name: String!
+  description: String
+  inputSchema: AWSJSON
+  outputSchema: AWSJSON
+}
+
+# Input type for updating an MCP server
+input UpdateMCPServerInput {
+  server_name: String
+  description: String
+  endpoint_url: String
+  protocol_type: String
+  authentication_type: String
+  api_key_header: String
+  available_tools: [ToolInput]
+  health_check_url: String
+  health_check_interval: Int
+  configuration: AWSJSON
+  metadata: AWSJSON
+}
+
+# Query operations
+type Query {
+  # List all MCP servers
+  listMCPServersFromRegistry: [MCPServer]
+  
+  # Get specific server details
+  getMCPServer(server_id: String!, version: String): MCPServer
+  
+  # Find servers by status
+  listMCPServersByStatus(status: String!): [MCPServer]
+  
+  # Find servers by protocol
+  listMCPServersByProtocol(protocol_type: String!): [MCPServer]
+  
+  # Test server connection
+  testMCPServerConnection(server_id: String!): ConnectionTestResult
+}
+
+# Mutation operations
+type Mutation {
+  # Register new MCP server
+  registerMCPServer(input: RegisterMCPServerInput!): RegisterMCPServerResult
+  
+  # Update server configuration
+  updateMCPServer(
+    server_id: String!
+    version: String!
+    input: UpdateMCPServerInput!
+  ): StatusUpdateResult
+  
+  # Update server status
+  updateMCPServerStatus(
+    server_id: String!
+    version: String!
+    status: String!
+  ): StatusUpdateResult
+  
+  # Approve pending server
+  approveMCPServer(server_id: String!): ApprovalResult
+  
+  # Decommission server
+  decommissionMCPServer(server_id: String!, version: String!): StatusUpdateResult
+}
