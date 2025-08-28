@@ -35,12 +35,12 @@ applications:
             - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
         postBuild:
           commands:
-            # Install script dependencies and register MCP server
+            # Install script dependencies and attempt to register MCP server
             - echo "Installing MCP registration script dependencies..."
             - cd scripts && npm install --production && cd ..
-            - echo "Registering MCP server in registry..."
-            - cd scripts && npm run register-mcp && cd ..
-            - echo "✅ MCP server registration completed"
+            - echo "Attempting to register MCP server in registry..."
+            - cd scripts && npm run register-mcp || echo "⚠️ Registration failed but build continues" && cd ..
+            - echo "✅ MCP server deployment phase completed"
     frontend:
       phases:
         preBuild:

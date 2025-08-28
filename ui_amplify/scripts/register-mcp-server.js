@@ -250,13 +250,18 @@ async function main() {
       console.log(`   Status: ${serverData.status}`);
       console.log(`   Tools: ${JSON.parse(serverData.available_tools).length} available`);
     } else {
-      console.error('❌ Failed to register MCP server');
-      process.exit(1);
+      console.warn('⚠️  Failed to register MCP server in registry');
+      console.warn('   This is expected if the build role lacks DynamoDB permissions.');
+      console.warn('   The MCP server will still be deployed and functional.');
+      console.warn('   You can manually register it from the UI later.');
+      // Don't fail the build - registration is optional
     }
 
   } catch (error) {
-    console.error('❌ Registration failed:', error.message);
-    process.exit(1);
+    console.warn('⚠️  Registration encountered an error:', error.message);
+    console.warn('   This is expected if the build role lacks permissions.');
+    console.warn('   The MCP server will still be deployed and functional.');
+    // Don't fail the build - registration is optional
   }
 }
 
