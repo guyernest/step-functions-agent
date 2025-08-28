@@ -1,6 +1,6 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { PutItemCommand, QueryCommand, UpdateItemCommand } from "@aws-sdk/client-dynamodb";
-import { createHash, randomBytes } from 'crypto';
+import * as crypto from 'crypto';
 
 const client = new DynamoDBClient({});
 
@@ -59,9 +59,9 @@ export const handler = async (event: RotateAPIKeyEvent) => {
     }
 
     // Generate a new API key
-    const keyBytes = randomBytes(32);
+    const keyBytes = crypto.randomBytes(32);
     const newApiKey = `sfaf_${keyBytes.toString('base64url')}`;
-    const newApiKeyHash = createHash('sha256').update(newApiKey).digest('hex');
+    const newApiKeyHash = crypto.createHash('sha256').update(newApiKey).digest('hex');
     
     // Calculate expiration date
     const now = new Date();
