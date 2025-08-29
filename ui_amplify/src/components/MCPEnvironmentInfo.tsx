@@ -8,7 +8,6 @@ import {
   Badge,
   Button,
   Alert,
-  Divider,
   Table,
   TableCell,
   TableBody,
@@ -47,7 +46,7 @@ const MCPEnvironmentInfo: React.FC = () => {
   const currentMCPInfo: MCPServerEnvironmentInfo = {
     endpoint: amplifyOutputs.custom?.mcpServerEndpoint || 'Not configured',
     region: amplifyOutputs.data?.aws_region || 'Unknown',
-    functionName: amplifyOutputs.custom?.functions?.mcpServer || 'Unknown',
+    functionName: amplifyOutputs.custom?.lambdaFunctions?.mcpServer || 'Unknown',
     logGroup: amplifyOutputs.custom?.logGroups?.mcpServer || 'Unknown',
     environment: process.env.NODE_ENV || 'development'
   }

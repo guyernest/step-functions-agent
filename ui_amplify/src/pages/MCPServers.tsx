@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   Card,
   Heading,
@@ -10,7 +9,6 @@ import {
   Badge,
   SearchField,
   Flex,
-  Icon,
   Divider,
   Button,
   Table,
@@ -60,7 +58,6 @@ interface ConnectionResult {
 }
 
 const MCPServers: React.FC = () => {
-  const navigate = useNavigate()
   const [servers, setServers] = useState<MCPServer[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -76,7 +73,7 @@ const MCPServers: React.FC = () => {
   const fetchServers = async () => {
     try {
       setLoading(true)
-      const response = await client.queries.listMCPServersFromRegistry()
+      const response = await client.queries.listMCPServersFromRegistry({})
       if (response.data) {
         setServers(response.data as MCPServer[])
       }
@@ -95,7 +92,7 @@ const MCPServers: React.FC = () => {
     setTestingConnection(serverId)
     try {
       const startTime = Date.now()
-      const response = await client.queries.testMCPServerConnection({ serverId })
+      const response = await client.queries.testMCPServerConnection({ server_id: serverId })
       const endTime = Date.now()
       
       if (response.data) {
@@ -255,7 +252,7 @@ const MCPServers: React.FC = () => {
                                 >
                                   {server.protocol_type.toUpperCase()}
                                 </Badge>
-                                <Badge variation="neutral">
+                                <Badge variation="info">
                                   {getAuthTypeDisplay(server.authentication_type)}
                                 </Badge>
                               </Flex>
