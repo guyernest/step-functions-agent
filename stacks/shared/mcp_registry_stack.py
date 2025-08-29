@@ -92,6 +92,10 @@ class MCPRegistryStack(Stack):
             projection_type=dynamodb.ProjectionType.ALL
         )
         
+        # Note: Amplify build role permissions should be granted using:
+        #   make grant-amplify-mcp-permissions
+        # This is because the Amplify role is managed outside of CDK
+        
         # Create Lambda for seeding initial data
         seed_lambda = _lambda.Function(
             self,

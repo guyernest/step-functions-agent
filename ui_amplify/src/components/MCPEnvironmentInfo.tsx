@@ -101,64 +101,40 @@ const MCPEnvironmentInfo: React.FC = () => {
     setRegistering(true)
     setMessage(null)
 
-    const serverData = {
-      server_id: generateServerId(),
-      version: '1.0.0',
-      server_name: `Step Functions Agents MCP Server (${currentMCPInfo.environment})`,
-      description: `MCP server providing access to AWS Step Functions agents for AI-powered task execution and automation in ${currentMCPInfo.environment} environment`,
-      endpoint_url: currentMCPInfo.endpoint,
-      protocol_type: 'jsonrpc',
-      authentication_type: 'api_key',
-      api_key_header: 'x-api-key',
-      available_tools: availableTools.map(tool => ({
-        name: tool.name,
-        description: tool.description,
-        inputSchema: {
-          type: 'object',
-          properties: {},
-          required: []
-        }
-      })),
-      status: 'active',
-      health_check_url: currentMCPInfo.endpoint.replace('/mcp', '/health'),
-      health_check_interval: 300,
-      configuration: {
-        timeout_seconds: 30,
-        max_retries: 3,
-        supports_batch: false,
-        protocol_version: '2024-11-05',
-        lambda_function: currentMCPInfo.functionName
-      },
-      metadata: {
-        managed_by: 'amplify',
-        team: 'platform',
-        environment: currentMCPInfo.environment,
-        cost_center: 'engineering',
-        tags: [currentMCPInfo.environment, 'mcp', 'step-functions'],
-        implementation: 'rust',
-        aws_region: currentMCPInfo.region,
-        deployment_method: 'amplify'
-      },
-      deployment_stack: `amplify-${currentMCPInfo.environment}`,
-      deployment_region: currentMCPInfo.region,
-      created_by: 'amplify-deployment'
-    }
-
     try {
-      // For now, we'll show what would be registered
-      // Later we can implement the actual registration mutation
-      console.log('Would register MCP server with data:', serverData)
-      
-      // TODO: Implement actual registration via GraphQL mutation
-      // const response = await client.mutations.registerMCPServer({ input: serverData })
-      
-      setMessage({
-        type: 'success',
-        text: 'MCP server registration prepared successfully! (Registration mutation not yet implemented)'
+      // Check if MCP endpoint is configured
+      if (!currentMCPInfo.endpoint || currentMCPInfo.endpoint === 'Not configured') {
+        setMessage({
+          type: 'error',
+          text: 'MCP server endpoint is not configured. Deploy the MCP server first.'
+        })
+        return
+      }
+
+      // Call the GraphQL mutation to register the MCP server
+      const response = await client.mutations.registerMCPServer({
+        endpoint: currentMCPInfo.endpoint,
+        environment: currentMCPInfo.environment
       })
       
-      // Refresh the list
-      await fetchRegistryServers()
+      if (response.data) {
+        const result = typeof response.data === 'string' ? JSON.parse(response.data) : response.data
+        
+        if (result.success) {
+          setMessage({
+            type: 'success',
+            text: `Successfully registered MCP server: ${result.serverId} v${result.version}`
+          })
+          
+          // Refresh the list to show the newly registered server
+          await fetchRegistryServers()
+        } else {
+          setMessage({
+            type: 'error',
+            text: result.message || 'Failed to register MCP server'
+          })
+        }
+      }
       
     } catch (error) {
       console.error('Error registering MCP server:', error)

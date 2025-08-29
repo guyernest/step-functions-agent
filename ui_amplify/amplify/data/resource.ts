@@ -9,6 +9,7 @@ import { updateProviderAPIKey } from '../backend/function/updateProviderAPIKey/r
 import { getToolSecretValues } from '../backend/function/getToolSecretValues/resource';
 import { updateToolSecrets } from '../backend/function/updateToolSecrets/resource';
 import { getStateMachineInfo } from '../backend/function/getStateMachineInfo/resource';
+import { registerMCPServer } from '../backend/function/registerMCPServer/resource';
 // API Key management functions - to be implemented if needed
 // import { generateAPIKey } from '../backend/function/generateAPIKey/resource';
 // import { revokeAPIKey } from '../backend/function/revokeAPIKey/resource';
@@ -196,6 +197,16 @@ const schema = a.schema({
       })
     )
     .authorization((allow) => [allow.authenticated()]),
+  
+  registerMCPServer: a
+    .mutation()
+    .arguments({
+      endpoint: a.string().required(),
+      environment: a.string(),
+    })
+    .returns(a.json())
+    .handler(a.handler.function(registerMCPServer))
+    .authorization((allow) => [allow.authenticated(), allow.publicApiKey()]),
   
   startAgentExecution: a
     .mutation()

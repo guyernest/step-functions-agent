@@ -11,6 +11,7 @@ import { updateProviderAPIKey } from './backend/function/updateProviderAPIKey/re
 import { getToolSecretValues } from './backend/function/getToolSecretValues/resource';
 import { updateToolSecrets } from './backend/function/updateToolSecrets/resource';
 import { getStateMachineInfo } from './backend/function/getStateMachineInfo/resource';
+import { registerMCPServer } from './backend/function/registerMCPServer/resource';
 // API Key management functions - to be implemented if needed
 // import { generateAPIKey } from './backend/function/generateAPIKey/resource';
 // import { revokeAPIKey } from './backend/function/revokeAPIKey/resource';
@@ -36,6 +37,7 @@ const backend = defineBackend({
   getToolSecretValues,
   updateToolSecrets,
   getStateMachineInfo,
+  registerMCPServer,
   // API key management functions - to be implemented
   // generateAPIKey,
   // revokeAPIKey,
@@ -292,6 +294,15 @@ const getStateMachineInfoPolicy = new PolicyStatement({
 });
 
 backend.getStateMachineInfo.resources.lambda.addToRolePolicy(getStateMachineInfoPolicy);
+
+// Configure registerMCPServer Lambda function
+// Grant write permissions to MCP Registry table
+mcpRegistryTable.grantWriteData(backend.registerMCPServer.resources.lambda);
+mcpRegistryTable.grantReadData(backend.registerMCPServer.resources.lambda);
+
+// Add environment variables using the backend method
+backend.registerMCPServer.addEnvironment('MCP_REGISTRY_TABLE_NAME', mcpRegistryTableName);
+backend.registerMCPServer.addEnvironment('ENV_NAME', 'prod');
 
 // Grant DynamoDB permissions to API key management Lambda functions
 const apiKeyTablePolicy = new PolicyStatement({

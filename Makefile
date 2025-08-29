@@ -105,6 +105,9 @@ help:
 	@echo "  make populate-llm-models - Populate LLM Models table"
 	@echo "  make populate-tool-secrets - Populate Tool Secrets table"
 	@echo ""
+	@echo "🌐 MCP Registry Commands:"
+	@echo "  make populate-mcp-registry - Manually populate MCP Registry table"
+	@echo ""
 	@echo "🧹 Cleanup:"
 	@echo "  make clean             - Clean all build artifacts"
 	@echo "  make clean-venv        - Clean and recreate virtual environment"
@@ -559,6 +562,14 @@ populate-llm-models:
 populate-tool-secrets:
 	@echo "🔐 Populating Tool Secrets table..."
 	@$(PYTHON) scripts/populate_tool_secrets.py $(AWS_PROFILE) $(AWS_REGION)
+
+# ============================================
+# MCP Registry Commands
+# ============================================
+.PHONY: populate-mcp-registry
+populate-mcp-registry:
+	@echo "📊 Populating MCP Registry table..."
+	@$(PYTHON) scripts/populate_mcp_registry.py
 
 # ============================================
 # UI Commands
