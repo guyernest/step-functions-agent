@@ -5,6 +5,8 @@ export function request(ctx) {
   var description = ctx.arguments.description;
   var inputData = ctx.arguments.test_input;
   var expectedOutput = ctx.arguments.expected_output;
+  var validationType = ctx.arguments.validation_type;
+  var validationConfig = ctx.arguments.validation_config;
   var metadata = ctx.arguments.metadata;
   
   var id = resourceId + '#' + testName;
@@ -26,6 +28,14 @@ export function request(ctx) {
   // Only add optional fields if they have values
   if (expectedOutput) {
     attributeValues.expected_output = util.dynamodb.toDynamoDB(expectedOutput);
+  }
+  
+  if (validationType) {
+    attributeValues.validation_type = util.dynamodb.toDynamoDB(validationType);
+  }
+  
+  if (validationConfig) {
+    attributeValues.validation_config = util.dynamodb.toDynamoDB(validationConfig);
   }
   
   if (metadata) {
@@ -62,6 +72,8 @@ export function response(ctx) {
     // AWSJSON expects strings, not parsed objects
     test_input: ctx.arguments.test_input || '{}',
     expected_output: ctx.arguments.expected_output || null,
+    validation_type: ctx.arguments.validation_type || null,
+    validation_config: ctx.arguments.validation_config || null,
     metadata: ctx.arguments.metadata || null,
     created_at: now,
     updated_at: now

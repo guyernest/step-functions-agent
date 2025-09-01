@@ -133,9 +133,11 @@ async function executeToolTest(input: ExecuteHealthTestInput) {
 
   // Get test event if specified
   let testInput = customInput;
+  let testEvent: any = null;
+  
   if (testEventId && !customInput) {
     console.log(`Fetching test event: resource_type=tool, id=${testEventId}`);
-    const testEvent = await getTestEvent('tool', toolName, testEventId);
+    testEvent = await getTestEvent('tool', toolName, testEventId);
     if (!testEvent) {
       throw new Error(`Test event ${testEventId} not found`);
     }
@@ -195,24 +197,41 @@ async function executeToolTest(input: ExecuteHealthTestInput) {
     }
   }
 
+  // Validate result if test event has expected output
+  let validationResult = null;
+  let validationPassed = true;
+  
+  if (testEvent && testEvent.expected_output?.S) {
+    const expectedOutput = JSON.parse(testEvent.expected_output.S || '{}');
+    const validationType = testEvent.validation_type?.S || 'exact';
+    const validationConfig = testEvent.validation_config?.S ? JSON.parse(testEvent.validation_config.S) : {};
+    
+    validationResult = await validateOutput(result, expectedOutput, validationType, validationConfig);
+    validationPassed = validationResult.passed;
+    
+    console.log('Validation result:', JSON.stringify(validationResult, null, 2));
+  }
+
   // Store test result
   await storeTestResult({
     test_event_id: testEventId || `${toolName}_custom`,
     resource_id: toolName,
     execution_time: executionTime,
-    success: invokeResponse.StatusCode === 200,
+    success: invokeResponse.StatusCode === 200 && validationPassed,
     output: result,
     metadata: {
       tool_name: toolName,
-      lambda_arn: toolInfo.lambda_arn?.S
+      lambda_arn: toolInfo.lambda_arn?.S,
+      validation_result: validationResult
     }
   });
 
   return {
-    success: invokeResponse.StatusCode === 200,
+    success: invokeResponse.StatusCode === 200 && validationPassed,
     result,
     executionTime,
-    testEventId: testEventId
+    testEventId: testEventId,
+    validationResult
   };
 }
 
@@ -441,6 +460,286 @@ async function getAllAgents(): Promise<string[]> {
   // Query agent registry for all agents
   // This is a simplified implementation
   return [];
+}
+
+// Validation function for different types of output validation
+async function validateOutput(
+  actual: any,
+  expected: any,
+  validationType: string,
+  config: any = {}
+): Promise<{ passed: boolean; message: string; details?: any }> {
+  console.log(`Validating output with type: ${validationType}`);
+  console.log('Actual:', JSON.stringify(actual, null, 2));
+  console.log('Expected:', JSON.stringify(expected, null, 2));
+  console.log('Config:', JSON.stringify(config, null, 2));
+
+  // Parse expected if it's a JSON string
+  let expectedValue = expected;
+  if (typeof expected === 'string') {
+    try {
+      expectedValue = JSON.parse(expected);
+    } catch {
+      // Keep as string if not valid JSON
+      expectedValue = expected;
+    }
+  }
+
+  // Create string representations for comparison
+  const actualStr = typeof actual === 'string' ? actual : JSON.stringify(actual);
+  const expectedStr = typeof expectedValue === 'string' ? expectedValue : JSON.stringify(expectedValue);
+
+  // For contains and regex, also search within JSON structure
+  const getSearchableText = (obj: any): string => {
+    if (typeof obj === 'string') return obj;
+    if (typeof obj === 'number') return obj.toString();
+    if (typeof obj === 'object' && obj !== null) {
+      // Collect all string/number values from the object
+      const values: string[] = [];
+      const traverse = (o: any) => {
+        for (const key in o) {
+          const val = o[key];
+          if (typeof val === 'string' || typeof val === 'number') {
+            values.push(val.toString());
+          } else if (typeof val === 'object' && val !== null) {
+            traverse(val);
+          }
+        }
+      };
+      traverse(obj);
+      return values.join(' ');
+    }
+    return JSON.stringify(obj);
+  };
+
+  switch (validationType) {
+    case 'exact':
+      // Exact match comparison - compare parsed values if both are objects
+      let exactMatch = false;
+      if (typeof actual === 'object' && typeof expectedValue === 'object') {
+        exactMatch = JSON.stringify(actual) === JSON.stringify(expectedValue);
+      } else {
+        exactMatch = actualStr === expectedStr;
+      }
+      return {
+        passed: exactMatch,
+        message: exactMatch ? 'Exact match' : 'Output does not match expected value',
+        details: { 
+          actual: actualStr.substring(0, 500), 
+          expected: expectedStr.substring(0, 500),
+          validationType: 'exact'
+        }
+      };
+
+    case 'contains':
+      // Check if actual output contains the expected string
+      // Search both in stringified form and within object values
+      const searchableText = getSearchableText(actual);
+      const contains = searchableText.includes(expectedStr) || actualStr.includes(expectedStr);
+      return {
+        passed: contains,
+        message: contains ? 'Output contains expected value' : 'Output does not contain expected value',
+        details: { 
+          actual: actualStr.substring(0, 500), 
+          expected: expectedStr,
+          searchableText: searchableText.substring(0, 500),
+          validationType: 'contains'
+        }
+      };
+
+    case 'regex':
+      // Regex pattern matching - search both stringified and within values
+      try {
+        const pattern = new RegExp(expectedStr, config.flags || 'g');
+        const searchableText = getSearchableText(actual);
+        const matches = pattern.test(searchableText) || pattern.test(actualStr);
+        return {
+          passed: matches,
+          message: matches ? 'Pattern matched' : 'Pattern did not match',
+          details: { 
+            actual: actualStr.substring(0, 500), 
+            pattern: expectedStr, 
+            flags: config.flags || 'g',
+            matchGroups: searchableText.match(pattern),
+            validationType: 'regex'
+          }
+        };
+      } catch (error: any) {
+        return {
+          passed: false,
+          message: `Invalid regex pattern: ${error.message}`,
+          details: { error: error.message, validationType: 'regex' }
+        };
+      }
+
+    case 'schema':
+      // JSON schema validation (simplified - you could use ajv library for full support)
+      try {
+        if (config.type === 'object' && typeof actual !== 'object') {
+          return {
+            passed: false,
+            message: 'Expected object type',
+            details: { actualType: typeof actual }
+          };
+        }
+        
+        if (config.required) {
+          const missingFields = config.required.filter((field: string) => 
+            !(field in (actual as any))
+          );
+          if (missingFields.length > 0) {
+            return {
+              passed: false,
+              message: 'Missing required fields',
+              details: { missingFields }
+            };
+          }
+        }
+        
+        if (config.properties) {
+          for (const prop in config.properties) {
+            const propConfig = config.properties[prop];
+            if (propConfig.type && prop in (actual as any)) {
+              const actualType = typeof (actual as any)[prop];
+              if (actualType !== propConfig.type) {
+                return {
+                  passed: false,
+                  message: `Property ${prop} has wrong type`,
+                  details: { property: prop, expected: propConfig.type, actual: actualType }
+                };
+              }
+            }
+          }
+        }
+        
+        return {
+          passed: true,
+          message: 'Schema validation passed',
+          details: { schema: config, validationType: 'schema' }
+        };
+      } catch (error: any) {
+        return {
+          passed: false,
+          message: `Schema validation error: ${error.message}`,
+          details: { error: error.message }
+        };
+      }
+
+    case 'range':
+      // Numeric range validation
+      const actualNum = typeof actual === 'number' ? actual : parseFloat(actualStr);
+      const expectedNum = typeof expected === 'number' ? expected : parseFloat(expectedStr);
+      
+      if (isNaN(actualNum)) {
+        return {
+          passed: false,
+          message: 'Actual value is not a number',
+          details: { actual: actualStr }
+        };
+      }
+      
+      const tolerance = config.tolerance || 0;
+      const minValue = config.min !== undefined ? config.min : expectedNum - tolerance;
+      const maxValue = config.max !== undefined ? config.max : expectedNum + tolerance;
+      
+      const inRange = actualNum >= minValue && actualNum <= maxValue;
+      return {
+        passed: inRange,
+        message: inRange ? 'Value is within range' : 'Value is outside range',
+        details: { actual: actualNum, min: minValue, max: maxValue }
+      };
+
+    case 'semantic':
+      // Semantic similarity for LLM outputs (simplified - could use embeddings for better comparison)
+      // For now, just check if key concepts are present
+      if (config.concepts) {
+        const actualLower = actualStr.toLowerCase();
+        const missingConcepts = config.concepts.filter((concept: string) => 
+          !actualLower.includes(concept.toLowerCase())
+        );
+        
+        const passed = missingConcepts.length === 0;
+        return {
+          passed,
+          message: passed ? 'All key concepts present' : 'Missing key concepts',
+          details: { 
+            concepts: config.concepts,
+            missingConcepts,
+            threshold: config.threshold || 0.8 
+          }
+        };
+      }
+      
+      // Fallback to fuzzy string matching
+      const similarity = calculateSimilarity(actualStr, expectedStr);
+      const threshold = config.threshold || 0.8;
+      const passed = similarity >= threshold;
+      
+      return {
+        passed,
+        message: `Similarity: ${(similarity * 100).toFixed(2)}%`,
+        details: { similarity, threshold }
+      };
+
+    case 'ignore':
+    case 'none':
+      // No validation - always passes
+      return {
+        passed: true,
+        message: 'Validation skipped',
+        details: {}
+      };
+
+    default:
+      // Default to exact match
+      console.warn(`Unknown validation type: ${validationType}, defaulting to exact match`);
+      const defaultMatch = actualStr === expectedStr;
+      return {
+        passed: defaultMatch,
+        message: defaultMatch ? 'Exact match (default)' : 'Output does not match (default)',
+        details: { actual: actualStr, expected: expectedStr }
+      };
+  }
+}
+
+// Simple string similarity calculation (Levenshtein distance based)
+function calculateSimilarity(str1: string, str2: string): number {
+  const longer = str1.length > str2.length ? str1 : str2;
+  const shorter = str1.length > str2.length ? str2 : str1;
+  
+  if (longer.length === 0) return 1.0;
+  
+  const distance = levenshteinDistance(longer, shorter);
+  return (longer.length - distance) / longer.length;
+}
+
+// Levenshtein distance implementation
+function levenshteinDistance(str1: string, str2: string): number {
+  const matrix: number[][] = [];
+  
+  for (let i = 0; i <= str2.length; i++) {
+    matrix[i] = [i];
+  }
+  
+  for (let j = 0; j <= str1.length; j++) {
+    matrix[0][j] = j;
+  }
+  
+  for (let i = 1; i <= str2.length; i++) {
+    for (let j = 1; j <= str1.length; j++) {
+      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1      // deletion
+        );
+      }
+    }
+  }
+  
+  return matrix[str2.length][str1.length];
 }
 
 // Helper function to convert DynamoDB Map to plain object

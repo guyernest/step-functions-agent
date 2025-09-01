@@ -79,6 +79,13 @@ export default function ToolTest() {
   const [showSaveTestModal, setShowSaveTestModal] = useState(false);
   const [newTestName, setNewTestName] = useState('');
   const [newTestDescription, setNewTestDescription] = useState('');
+  const [validationType, setValidationType] = useState('exact');
+  const [validationConfig, setValidationConfig] = useState('{}');
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [updateValidationType, setUpdateValidationType] = useState('exact');
+  const [updateValidationConfig, setUpdateValidationConfig] = useState('{}');
+  const [updateExpectedOutput, setUpdateExpectedOutput] = useState('');
+  const [previewValidationResult, setPreviewValidationResult] = useState<{ passed: boolean; message: string } | null>(null);
 
   useEffect(() => {
     loadTools();
@@ -253,17 +260,48 @@ export default function ToolTest() {
         return;
       }
 
+      // Parse validation config if needed
+      let parsedConfig = null;
+      if (validationType !== 'exact' && validationType !== 'ignore') {
+        try {
+          parsedConfig = JSON.parse(validationConfig || '{}');
+        } catch (e) {
+          setError('Invalid validation configuration JSON');
+          return;
+        }
+      }
+
+      // Handle expected output formatting for AWSJSON
+      let formattedExpectedOutput = null;
+      if (testResult?.success) {
+        const outputValue = testResult.result || testResult.output;
+        if (typeof outputValue === 'string') {
+          // If already a string, check if it's valid JSON
+          try {
+            JSON.parse(outputValue);
+            formattedExpectedOutput = outputValue; // Already valid JSON string
+          } catch {
+            // Not valid JSON, so JSON-encode the string
+            formattedExpectedOutput = JSON.stringify(outputValue);
+          }
+        } else {
+          // It's an object/array/number, stringify it
+          formattedExpectedOutput = JSON.stringify(outputValue);
+        }
+      }
+
       const response = await client.mutations.saveTestEvent({
         resource_type: 'tool',
         resource_id: selectedTool,
         test_name: newTestName,
         description: newTestDescription || null,
         test_input: JSON.stringify(parsedInput),  // Renamed from 'input' to avoid GraphQL conflicts
-        expected_output: testResult?.success ? (testResult.result || JSON.stringify(testResult.output)) : null,
+        validation_type: validationType,
+        validation_config: parsedConfig ? JSON.stringify(parsedConfig) : null,
+        expected_output: formattedExpectedOutput,
         metadata: JSON.stringify({
           saved_from_test: true,
           execution_time: testResult?.executionTime || null,
-          validation_type: testResult?.success ? 'exact' : null,
           saved_at: new Date().toISOString()
         })
       });
@@ -274,6 +312,8 @@ export default function ToolTest() {
         setShowSaveTestModal(false);
         setNewTestName('');
         setNewTestDescription('');
+        setValidationType('exact');
+        setValidationConfig('{}');
         setError(null);
         // Show success message
         setSuccess(`Test event "${newTestName}" saved successfully!`);
@@ -315,7 +355,7 @@ export default function ToolTest() {
       const response = await client.mutations.executeToolTest({
         tool_name: selectedTool,
         test_event_id: selectedTestEvent || undefined,
-        custom_input: !selectedTestEvent ? parsedInput : undefined,
+        custom_input: !selectedTestEvent ? JSON.stringify(parsedInput) : undefined,
       });
       
       console.log('Response from testToolExecution:', response);
@@ -598,9 +638,43 @@ export default function ToolTest() {
                 
                 <Alert variation={testResult.success ? 'success' : 'error'}>
                   {testResult.success 
-                    ? `Test successful${testResult.executionTime ? ` - Execution time: ${testResult.executionTime}ms` : ''}`
+                    ? (testResult.validationResult 
+                        ? `Test ${testResult.validationResult.passed ? 'passed' : 'failed'}: ${testResult.validationResult.message}${testResult.executionTime ? ` (${testResult.executionTime}ms)` : ''}`
+                        : `Test successful${testResult.executionTime ? ` - Execution time: ${testResult.executionTime}ms` : ''}`)
                     : testResult.error || 'Test failed'}
                 </Alert>
+                
+                {/* Show validation details if present */}
+                {testResult.validationResult && (
+                  <Card variation="outlined" marginTop="1rem" backgroundColor={testResult.validationResult.passed ? "rgba(0,255,0,0.05)" : "rgba(255,0,0,0.05)"}>
+                    <Heading level={5}>Validation Details</Heading>
+                    <Flex direction="column" gap="0.5rem" marginTop="0.5rem">
+                      <Text>
+                        <strong>Validation Type:</strong> {testResult.validationResult.details?.validationType || 'Unknown'}
+                      </Text>
+                      {testResult.validationResult.details?.expected !== undefined && (
+                        <View>
+                          <Text fontWeight="bold">Expected:</Text>
+                          <View backgroundColor="rgba(0,0,0,0.05)" padding="0.5rem" borderRadius="4px">
+                            <pre style={{ margin: 0, fontSize: '11px', fontFamily: 'monospace' }}>
+                              {testResult.validationResult.details.expected}
+                            </pre>
+                          </View>
+                        </View>
+                      )}
+                      {testResult.validationResult.details?.actual !== undefined && (
+                        <View>
+                          <Text fontWeight="bold">Actual:</Text>
+                          <View backgroundColor="rgba(0,0,0,0.05)" padding="0.5rem" borderRadius="4px">
+                            <pre style={{ margin: 0, fontSize: '11px', fontFamily: 'monospace' }}>
+                              {testResult.validationResult.details.actual}
+                            </pre>
+                          </View>
+                        </View>
+                      )}
+                    </Flex>
+                  </Card>
+                )}
 
                 {testResult.output && (
                   <>
@@ -715,28 +789,16 @@ export default function ToolTest() {
                     {testResult.testEventId && (
                       <Button
                         variation="secondary"
-                        onClick={async () => {
-                          // Update existing test event with expected output
-                          try {
-                            const outputToSave = testResult.result || JSON.stringify(testResult.output);
-                            await client.mutations.saveTestEvent({
-                              resource_type: 'tool',
-                              resource_id: selectedTool,
-                              test_name: testResult.testEventId.split('#')[1],
-                              test_input: testInput,
-                              expected_output: outputToSave,
-                              metadata: JSON.stringify({
-                                validation_type: 'exact',
-                                last_successful_run: new Date().toISOString(),
-                                execution_time: testResult.executionTime
-                              })
-                            });
-                            setSuccess('Expected output saved for health testing!');
-                            setTimeout(() => setSuccess(null), 3000);
-                          } catch (err) {
-                            console.error('Error saving expected output:', err);
-                            setError('Failed to save expected output');
-                          }
+                        onClick={() => {
+                          // Set initial values for update modal
+                          const outputToSave = testResult.result || JSON.stringify(testResult.output);
+                          setUpdateExpectedOutput(
+                            typeof outputToSave === 'string' ? outputToSave : JSON.stringify(outputToSave, null, 2)
+                          );
+                          setUpdateValidationType('exact');
+                          setUpdateValidationConfig('{}');
+                          setPreviewValidationResult(null);
+                          setShowUpdateModal(true);
                         }}
                       >
                         Update Expected Output
@@ -746,6 +808,261 @@ export default function ToolTest() {
                 )}
               </Card>
             </>
+          )}
+
+          {showUpdateModal && testResult && (
+            <Card variation="elevated" marginTop="1rem">
+              <Heading level={4}>Update Expected Output</Heading>
+              <Flex direction="column" gap="1rem">
+                <Text fontSize="small" color="gray">
+                  Test Event: {testResult.testEventId}
+                </Text>
+                
+                <TextAreaField
+                  label="Expected Output"
+                  value={updateExpectedOutput}
+                  onChange={(e) => setUpdateExpectedOutput(e.target.value)}
+                  rows={8}
+                  descriptiveText="Enter the expected value. For 'contains' validation, you can enter just the text to search for (e.g., '174 mi'). For 'exact' match, enter the complete expected output."
+                />
+                
+                <SelectField
+                  label="Validation Type"
+                  value={updateValidationType}
+                  onChange={(e) => setUpdateValidationType(e.target.value)}
+                  descriptiveText="How to validate the output against expected results"
+                >
+                  <option value="exact">Exact Match - Output must match exactly</option>
+                  <option value="contains">Contains - Output must contain the expected text</option>
+                  <option value="regex">Regex - Output must match the pattern</option>
+                  <option value="schema">JSON Schema - Validate structure and types</option>
+                  <option value="range">Numeric Range - Value must be within range</option>
+                  <option value="semantic">Semantic - Similar meaning (for LLM outputs)</option>
+                  <option value="ignore">No Validation - Always passes</option>
+                </SelectField>
+
+                {updateValidationType === 'regex' && (
+                  <TextAreaField
+                    label="Validation Configuration"
+                    value={updateValidationConfig}
+                    onChange={(e) => setUpdateValidationConfig(e.target.value)}
+                    placeholder='{"flags": "gi"}'
+                    rows={2}
+                    descriptiveText="JSON configuration for regex flags"
+                  />
+                )}
+
+                {updateValidationType === 'contains' && (
+                  <Text fontSize="small" color="gray">
+                    The test will pass if the actual output contains the expected text anywhere within it.
+                  </Text>
+                )}
+
+                {updateValidationType === 'schema' && (
+                  <TextAreaField
+                    label="Validation Configuration"
+                    value={updateValidationConfig}
+                    onChange={(e) => setUpdateValidationConfig(e.target.value)}
+                    placeholder='{"type": "object", "required": ["field1"], "properties": {"field1": {"type": "string"}}}'
+                    rows={4}
+                    descriptiveText="JSON Schema definition"
+                  />
+                )}
+
+                {updateValidationType === 'range' && (
+                  <TextAreaField
+                    label="Validation Configuration"
+                    value={updateValidationConfig}
+                    onChange={(e) => setUpdateValidationConfig(e.target.value)}
+                    placeholder='{"min": 0, "max": 100, "tolerance": 5}'
+                    rows={2}
+                    descriptiveText="Numeric range configuration"
+                  />
+                )}
+
+                {updateValidationType === 'semantic' && (
+                  <TextAreaField
+                    label="Validation Configuration"
+                    value={updateValidationConfig}
+                    onChange={(e) => setUpdateValidationConfig(e.target.value)}
+                    placeholder='{"threshold": 0.8, "concepts": ["key", "important", "terms"]}'
+                    rows={3}
+                    descriptiveText="Similarity threshold (0-1) or key concepts to check"
+                  />
+                )}
+                
+                {/* Local Validation Preview */}
+                <Card variation="outlined">
+                  <Flex direction="column" gap="0.5rem">
+                    <Text fontWeight="bold">Test Validation Locally</Text>
+                    <Button
+                      size="small"
+                      variation="link"
+                      onClick={() => {
+                        // Perform local validation
+                        const actualOutput = testResult.result || JSON.stringify(testResult.output);
+                        const actualStr = typeof actualOutput === 'string' ? actualOutput : JSON.stringify(actualOutput);
+                        
+                        let expectedValue;
+                        try {
+                          expectedValue = JSON.parse(updateExpectedOutput);
+                        } catch {
+                          expectedValue = updateExpectedOutput;
+                        }
+                        const expectedStr = typeof expectedValue === 'string' ? expectedValue : JSON.stringify(expectedValue);
+                        
+                        // For contains and regex, also search within JSON structure values
+                        const getSearchableText = (obj: any): string => {
+                          if (typeof obj === 'string') return obj;
+                          if (typeof obj === 'number') return obj.toString();
+                          if (typeof obj === 'object' && obj !== null) {
+                            const values: string[] = [];
+                            const traverse = (o: any) => {
+                              for (const key in o) {
+                                const val = o[key];
+                                if (typeof val === 'string' || typeof val === 'number') {
+                                  values.push(val.toString());
+                                } else if (typeof val === 'object' && val !== null) {
+                                  traverse(val);
+                                }
+                              }
+                            };
+                            traverse(obj);
+                            return values.join(' ');
+                          }
+                          return JSON.stringify(obj);
+                        };
+                        
+                        let validationPassed = false;
+                        let validationMessage = '';
+                        
+                        switch (updateValidationType) {
+                          case 'exact':
+                            validationPassed = actualStr === expectedStr;
+                            validationMessage = validationPassed ? '✓ Exact match' : '✗ Output does not match';
+                            break;
+                          case 'contains':
+                            // Search in both stringified and extracted values
+                            const searchableText = getSearchableText(testResult.output || testResult.result);
+                            validationPassed = actualStr.includes(expectedStr) || searchableText.includes(expectedStr);
+                            validationMessage = validationPassed 
+                              ? `✓ Output contains "${expectedStr}"` 
+                              : `✗ Output does not contain "${expectedStr}"`;
+                            break;
+                          case 'regex':
+                            try {
+                              const config = JSON.parse(updateValidationConfig || '{}');
+                              const pattern = new RegExp(expectedStr, config.flags || 'g');
+                              const searchable = getSearchableText(testResult.output || testResult.result);
+                              validationPassed = pattern.test(actualStr) || pattern.test(searchable);
+                              validationMessage = validationPassed 
+                                ? `✓ Pattern matches` 
+                                : `✗ Pattern does not match`;
+                            } catch (e) {
+                              validationMessage = '✗ Invalid regex pattern';
+                            }
+                            break;
+                          case 'ignore':
+                            validationPassed = true;
+                            validationMessage = '✓ Validation skipped (always passes)';
+                            break;
+                          default:
+                            validationMessage = 'Validation type requires server-side execution';
+                        }
+                        
+                        // Update the preview result state
+                        setPreviewValidationResult({
+                          passed: validationPassed,
+                          message: validationMessage
+                        });
+                      }}
+                    >
+                      Preview Validation Result
+                    </Button>
+                    
+                    {/* Display validation preview result */}
+                    {previewValidationResult && (
+                      <Alert
+                        variation={previewValidationResult.passed ? 'success' : 'error'}
+                        isDismissible
+                        onDismiss={() => setPreviewValidationResult(null)}
+                      >
+                        {previewValidationResult.message}
+                      </Alert>
+                    )}
+                    
+                    <Text fontSize="small" color="gray">
+                      Test if your validation logic would pass with the current output
+                    </Text>
+                  </Flex>
+                </Card>
+                
+                <Flex gap="0.5rem">
+                  <Button
+                    variation="primary"
+                    onClick={async () => {
+                      try {
+                        // Parse validation config if needed
+                        let parsedConfig = null;
+                        if (updateValidationType !== 'exact' && updateValidationType !== 'ignore' && updateValidationType !== 'contains') {
+                          try {
+                            parsedConfig = JSON.parse(updateValidationConfig || '{}');
+                          } catch (e) {
+                            setError('Invalid validation configuration JSON');
+                            return;
+                          }
+                        }
+
+                        // Handle expected output formatting for AWSJSON
+                        let formattedExpectedOutput;
+                        try {
+                          // Try to parse as JSON first
+                          JSON.parse(updateExpectedOutput);
+                          formattedExpectedOutput = updateExpectedOutput; // Already valid JSON
+                        } catch {
+                          // If not valid JSON, treat as string/number and JSON encode it
+                          formattedExpectedOutput = JSON.stringify(updateExpectedOutput);
+                        }
+
+                        await client.mutations.saveTestEvent({
+                          resource_type: 'tool',
+                          resource_id: selectedTool,
+                          test_name: testResult.testEventId.split('#')[1],
+                          test_input: testInput,
+                          expected_output: formattedExpectedOutput,
+                          validation_type: updateValidationType,
+                          validation_config: parsedConfig ? JSON.stringify(parsedConfig) : null,
+                          metadata: JSON.stringify({
+                            last_successful_run: new Date().toISOString(),
+                            execution_time: testResult.executionTime,
+                            updated_validation: true
+                          })
+                        });
+                        setSuccess(`Expected output updated with ${updateValidationType} validation!`);
+                        setShowUpdateModal(false);
+                        setTimeout(() => setSuccess(null), 3000);
+                      } catch (err) {
+                        console.error('Error updating expected output:', err);
+                        setError('Failed to update expected output');
+                      }
+                    }}
+                  >
+                    Update
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setShowUpdateModal(false);
+                      setUpdateExpectedOutput('');
+                      setUpdateValidationType('exact');
+                      setUpdateValidationConfig('{}');
+                      setPreviewValidationResult(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </Flex>
+              </Flex>
+            </Card>
           )}
 
           {showSaveTestModal && (
@@ -766,6 +1083,70 @@ export default function ToolTest() {
                   placeholder="Describe what this test validates"
                   rows={3}
                 />
+                
+                {testResult?.success && (
+                  <>
+                    <SelectField
+                      label="Validation Type"
+                      value={validationType}
+                      onChange={(e) => setValidationType(e.target.value)}
+                      descriptiveText="How to validate the output against expected results"
+                    >
+                      <option value="exact">Exact Match - Output must match exactly</option>
+                      <option value="contains">Contains - Output must contain the expected text</option>
+                      <option value="regex">Regex - Output must match the pattern</option>
+                      <option value="schema">JSON Schema - Validate structure and types</option>
+                      <option value="range">Numeric Range - Value must be within range</option>
+                      <option value="semantic">Semantic - Similar meaning (for LLM outputs)</option>
+                      <option value="ignore">No Validation - Always passes</option>
+                    </SelectField>
+
+                    {validationType === 'regex' && (
+                      <TextAreaField
+                        label="Validation Configuration"
+                        value={validationConfig}
+                        onChange={(e) => setValidationConfig(e.target.value)}
+                        placeholder='{"flags": "gi"}'
+                        rows={2}
+                        descriptiveText="JSON configuration for regex flags"
+                      />
+                    )}
+
+                    {validationType === 'schema' && (
+                      <TextAreaField
+                        label="Validation Configuration"
+                        value={validationConfig}
+                        onChange={(e) => setValidationConfig(e.target.value)}
+                        placeholder='{"type": "object", "required": ["field1"], "properties": {"field1": {"type": "string"}}}'
+                        rows={4}
+                        descriptiveText="JSON Schema definition"
+                      />
+                    )}
+
+                    {validationType === 'range' && (
+                      <TextAreaField
+                        label="Validation Configuration"
+                        value={validationConfig}
+                        onChange={(e) => setValidationConfig(e.target.value)}
+                        placeholder='{"min": 0, "max": 100, "tolerance": 5}'
+                        rows={2}
+                        descriptiveText="Numeric range configuration"
+                      />
+                    )}
+
+                    {validationType === 'semantic' && (
+                      <TextAreaField
+                        label="Validation Configuration"
+                        value={validationConfig}
+                        onChange={(e) => setValidationConfig(e.target.value)}
+                        placeholder='{"threshold": 0.8, "concepts": ["key", "important", "terms"]}'
+                        rows={3}
+                        descriptiveText="Similarity threshold (0-1) or key concepts to check"
+                      />
+                    )}
+                  </>
+                )}
+                
                 <View>
                   <Text fontWeight="bold" marginBottom="0.5rem">Test Input Preview:</Text>
                   <View backgroundColor="rgba(0,0,0,0.05)" padding="0.5rem" borderRadius="4px">
@@ -803,6 +1184,8 @@ export default function ToolTest() {
                       setShowSaveTestModal(false);
                       setNewTestName('');
                       setNewTestDescription('');
+                      setValidationType('exact');
+                      setValidationConfig('{}');
                     }}
                   >
                     Cancel

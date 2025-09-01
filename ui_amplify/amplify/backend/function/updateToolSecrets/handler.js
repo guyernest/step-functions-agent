@@ -1,0 +1,53 @@
+import { SecretsManagerClient, GetSecretValueCommand, UpdateSecretCommand } from '@aws-sdk/client-secrets-manager';
+const secretsManager = new SecretsManagerClient({ region: process.env.AWS_REGION || 'us-west-2' });
+const ENVIRONMENT = 'prod'; // Always use prod for now
+export const handler = async (event) => {
+    console.log('Update tool secrets request:', event);
+    const { toolName, secrets } = event.arguments || {};
+    if (!toolName || !secrets) {
+        return {
+            success: false,
+            error: 'toolName and secrets are required'
+        };
+    }
+    try {
+        const secretId = `/ai-agent/tool-secrets/${ENVIRONMENT}`;
+        // First get the current secret values
+        const currentResult = await secretsManager.send(new GetSecretValueCommand({
+            SecretId: secretId
+        }));
+        if (!currentResult.SecretString) {
+            return {
+                success: false,
+                error: 'No existing secret found'
+            };
+        }
+        // Parse current values
+        const currentValues = JSON.parse(currentResult.SecretString);
+        // Merge new values with existing ones (only update provided keys)
+        if (!currentValues[toolName]) {
+            currentValues[toolName] = {};
+        }
+        currentValues[toolName] = {
+            ...currentValues[toolName],
+            ...secrets
+        };
+        // Update the secret
+        await secretsManager.send(new UpdateSecretCommand({
+            SecretId: secretId,
+            SecretString: JSON.stringify(currentValues)
+        }));
+        return {
+            success: true,
+            message: `Successfully updated secrets for ${toolName}`,
+            toolName
+        };
+    }
+    catch (error) {
+        console.error('Error updating tool secrets:', error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to update secrets'
+        };
+    }
+};

@@ -139,6 +139,8 @@ const schema = a.schema({
     description: a.string(),
     test_input: a.json().required(),  // Renamed from 'input' to avoid GraphQL conflicts
     expected_output: a.json(),
+    validation_type: a.string(),  // 'exact', 'contains', 'regex', 'schema', 'semantic', 'range', 'ignore'
+    validation_config: a.json(),  // Additional configuration for validation (e.g., threshold for semantic, schema definition)
     metadata: a.json(),
     created_at: a.string(),
     updated_at: a.string(),
@@ -284,6 +286,8 @@ const schema = a.schema({
       description: a.string(),
       test_input: a.json().required(),  // Renamed from 'input' to avoid GraphQL conflicts
       expected_output: a.json(),
+      validation_type: a.string(),  // 'exact', 'contains', 'regex', 'schema', 'semantic', 'range', 'ignore'
+      validation_config: a.json(),  // Additional configuration for validation
       metadata: a.json(),
     })
     .returns(a.ref('TestEvent'))
