@@ -47,6 +47,11 @@ interface TestResult {
   };
   logs?: string[];
   cloudWatchUrl?: string;
+  validationResult?: {
+    passed: boolean;
+    message: string;
+    details?: any;
+  };
 }
 
 interface TestEvent {
@@ -788,7 +793,6 @@ export default function ToolTest() {
                     </Button>
                     {testResult.testEventId && (
                       <Button
-                        variation="secondary"
                         onClick={() => {
                           // Set initial values for update modal
                           const outputToSave = testResult.result || JSON.stringify(testResult.output);
@@ -1027,7 +1031,7 @@ export default function ToolTest() {
                         await client.mutations.saveTestEvent({
                           resource_type: 'tool',
                           resource_id: selectedTool,
-                          test_name: testResult.testEventId.split('#')[1],
+                          test_name: testResult.testEventId ? testResult.testEventId.split('#')[1] : 'unknown',
                           test_input: testInput,
                           expected_output: formattedExpectedOutput,
                           validation_type: updateValidationType,
