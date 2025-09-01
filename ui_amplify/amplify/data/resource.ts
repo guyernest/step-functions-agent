@@ -10,6 +10,7 @@ import { getToolSecretValues } from '../backend/function/getToolSecretValues/res
 import { updateToolSecrets } from '../backend/function/updateToolSecrets/resource';
 import { getStateMachineInfo } from '../backend/function/getStateMachineInfo/resource';
 import { registerMCPServer } from '../backend/function/registerMCPServer/resource';
+import { executeHealthTest } from '../backend/function/executeHealthTest/resource';
 // API Key management functions - to be implemented if needed
 // import { generateAPIKey } from '../backend/function/generateAPIKey/resource';
 // import { revokeAPIKey } from '../backend/function/revokeAPIKey/resource';
@@ -130,6 +131,40 @@ const schema = a.schema({
     updated_at: a.string(),
   }),
   
+  TestEvent: a.customType({
+    id: a.string().required(),
+    resource_type: a.string().required(),
+    resource_id: a.string().required(),
+    test_name: a.string().required(),
+    description: a.string(),
+    test_input: a.json().required(),  // Renamed from 'input' to avoid GraphQL conflicts
+    expected_output: a.json(),
+    metadata: a.json(),
+    created_at: a.string(),
+    updated_at: a.string(),
+  }),
+  
+  TestResult: a.customType({
+    test_event_id: a.string().required(),
+    executed_at: a.string().required(),
+    resource_id: a.string().required(),
+    execution_time: a.integer().required(),
+    success: a.boolean().required(),
+    output: a.json(),
+    error: a.string(),
+    metadata: a.json(),
+  }),
+  
+  TestExecutionResponse: a.customType({
+    success: a.boolean().required(),
+    result: a.json(),
+    executionTime: a.integer(),
+    error: a.string(),
+    testEventId: a.string(),
+    executionArn: a.string(),
+    message: a.string(),
+  }),
+  
   listAgentsFromRegistry: a
     .query()
     .arguments({})
@@ -207,6 +242,97 @@ const schema = a.schema({
     .returns(a.json())
     .handler(a.handler.function(registerMCPServer))
     .authorization((allow) => [allow.authenticated(), allow.publicApiKey()]),
+  
+  // Test Event Queries
+  listTestEvents: a
+    .query()
+    .arguments({
+      resource_type: a.string().required(),
+      resource_id: a.string().required(),
+    })
+    .returns(a.ref('TestEvent').array())
+    .handler(
+      a.handler.custom({
+        dataSource: 'TestEventsDataSource',
+        entry: './resolvers/listTestEvents.js',
+      })
+    )
+    .authorization((allow) => [allow.authenticated()]),
+  
+  listTestResults: a
+    .query()
+    .arguments({
+      resource_id: a.string().required(),
+      limit: a.integer(),
+    })
+    .returns(a.ref('TestResult').array())
+    .handler(
+      a.handler.custom({
+        dataSource: 'TestResultsDataSource',
+        entry: './resolvers/listTestResults.js',
+      })
+    )
+    .authorization((allow) => [allow.authenticated()]),
+  
+  // Test Event Mutations
+  saveTestEvent: a
+    .mutation()
+    .arguments({
+      resource_type: a.string().required(),
+      resource_id: a.string().required(),
+      test_name: a.string().required(),
+      description: a.string(),
+      test_input: a.json().required(),  // Renamed from 'input' to avoid GraphQL conflicts
+      expected_output: a.json(),
+      metadata: a.json(),
+    })
+    .returns(a.ref('TestEvent'))
+    .handler(
+      a.handler.custom({
+        dataSource: 'TestEventsDataSource',
+        entry: './resolvers/saveTestEvent.js',
+      })
+    )
+    .authorization((allow) => [allow.authenticated()]),
+  
+  deleteTestEvent: a
+    .mutation()
+    .arguments({
+      resource_type: a.string().required(),
+      id: a.string().required(),
+    })
+    .returns(a.boolean())
+    .handler(
+      a.handler.custom({
+        dataSource: 'TestEventsDataSource',
+        entry: './resolvers/deleteTestEvent.js',
+      })
+    )
+    .authorization((allow) => [allow.authenticated()]),
+  
+  executeToolTest: a
+    .mutation()
+    .arguments({
+      tool_name: a.string().required(),
+      test_event_id: a.string(),
+      custom_input: a.json(),
+    })
+    .returns(a.ref('TestExecutionResponse'))
+    .handler(a.handler.function(executeHealthTest))
+    .authorization((allow) => [allow.authenticated()]),
+  
+  executeAgentTest: a
+    .mutation()
+    .arguments({
+      agent_name: a.string().required(),
+      prompt: a.string().required(),
+      auto_approve: a.boolean(),
+      provider_override: a.string(),
+      model_override: a.string(),
+    })
+    .returns(a.ref('TestExecutionResponse'))
+    .handler(a.handler.function(executeHealthTest))
+    .authorization((allow) => [allow.authenticated()]),
   
   startAgentExecution: a
     .mutation()

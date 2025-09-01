@@ -14,9 +14,11 @@ This directory contains the implementation of the tools {{cookiecutter.tool_name
 ├── tests/
 │   ├── __init__.py
 │   ├── test_tool.py
-|   └── requirements-test.txt
+│   ├── test-event.json (single test event)
+│   ├── test-events.json (multiple test scenarios)
+│   └── requirements-test.txt
 ├── template.yaml (AWS SAM template)
-|── .env (API keys)
+├── .env (API keys)
 └── README.md (this file)
 ```
 
@@ -39,6 +41,46 @@ uv pip compile requirements.in --output-file requirements.txt
 ```
 
 The `requirements.txt` file is used to install the dependencies in the Lambda function by the SAM CLI and the CDK.
+
+## Test Events
+
+This tool includes test events that can be used for automated health testing and validation. Test events are stored in:
+- `tests/test-event.json` - Single test event for quick testing
+- `tests/test-events.json` - Multiple test scenarios for comprehensive testing
+
+### Test Events Format
+
+The `tests/test-events.json` file should contain multiple test scenarios:
+
+```json
+{
+  "smoke_test": {
+    "description": "Basic functionality test",
+    "input": {
+      "{{cookiecutter.input_param_name}}": "{{cookiecutter.input_test_value}}"
+    },
+    "expected_output": {
+      "validation_type": "contains",
+      "value": "expected_substring"
+    }
+  },
+  "edge_case_test": {
+    "description": "Test with edge case input",
+    "input": {
+      "{{cookiecutter.input_param_name}}": ""
+    },
+    "expected_output": {
+      "validation_type": "schema",
+      "value": {"type": "object"}
+    }
+  }
+}
+```
+
+These test events will be automatically discovered and made available in the management console for:
+- Quick tool testing during development
+- Automated health checks
+- Regression testing
 
 ## Testing
 

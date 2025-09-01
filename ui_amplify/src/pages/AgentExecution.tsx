@@ -11,7 +11,8 @@ import {
   Button,
   Alert,
   Loader,
-  Flex
+  Flex,
+  SwitchField
 } from '@aws-amplify/ui-react'
 import { generateClient } from 'aws-amplify/data'
 import type { Schema } from '../../amplify/data/resource'
@@ -22,6 +23,13 @@ interface Agent {
   id: string
   name: string
   description: string
+}
+
+interface TestPrompt {
+  id: string
+  test_name: string
+  description?: string | null
+  test_input: string  // AWSJSON - comes as a JSON string
 }
 
 const AgentExecution: React.FC = () => {
@@ -36,6 +44,13 @@ const AgentExecution: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [executionArn, setExecutionArn] = useState<string | null>(null)
+  const [testPrompts, setTestPrompts] = useState<TestPrompt[]>([])
+  const [selectedTestPrompt, setSelectedTestPrompt] = useState('')
+  const [testMode, setTestMode] = useState(false)
+  const [autoApprove, setAutoApprove] = useState(false)
+  const [showSavePromptModal, setShowSavePromptModal] = useState(false)
+  const [newPromptName, setNewPromptName] = useState('')
+  const [newPromptDescription, setNewPromptDescription] = useState('')
 
   useEffect(() => {
     fetchAgents()
@@ -54,12 +69,94 @@ const AgentExecution: React.FC = () => {
   }, [searchParams, agents])
 
   // Update URL when agent selection changes
-  const handleAgentChange = (agentName: string) => {
+  const handleAgentChange = async (agentName: string) => {
     setSelectedAgent(agentName)
+    setSelectedTestPrompt('')
+    setTestPrompts([])
     if (agentName) {
       setSearchParams({ agent: agentName })
+      // Load test prompts for this agent
+      await loadTestPrompts(agentName)
     } else {
       setSearchParams({})
+    }
+  }
+
+  const loadTestPrompts = async (agentName: string) => {
+    try {
+      const response = await client.queries.listTestEvents({
+        resource_type: 'agent',
+        resource_id: agentName
+      })
+      
+      if (response.data) {
+        const prompts = response.data
+          .filter((event): event is NonNullable<typeof event> => event !== null && event !== undefined)
+          .map(event => ({
+            id: event.id,
+            test_name: event.test_name,
+            description: event.description,
+            test_input: event.test_input  // Renamed from 'input'
+          } as TestPrompt))
+        setTestPrompts(prompts)
+      }
+    } catch (err) {
+      console.error('Error loading test prompts:', err)
+      // Don't show error - test prompts are optional
+    }
+  }
+
+  const handleTestPromptChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const promptId = e.target.value
+    setSelectedTestPrompt(promptId)
+    
+    if (promptId) {
+      const testPrompt = testPrompts.find(p => p.id === promptId)
+      if (testPrompt && testPrompt.test_input) {
+        // Parse the JSON string and extract the prompt
+        try {
+          const parsed = JSON.parse(testPrompt.test_input);
+          if (parsed.prompt) {
+            setInput(parsed.prompt);
+          }
+        } catch (e) {
+          console.error('Error parsing test_input:', e);
+        }
+      }
+    }
+  }
+
+  const handleSaveTestPrompt = async () => {
+    if (!selectedAgent || !newPromptName || !input) {
+      setError('Agent name, test name, and prompt are required')
+      return
+    }
+
+    try {
+      const response = await client.mutations.saveTestEvent({
+        resource_type: 'agent',
+        resource_id: selectedAgent,
+        test_name: newPromptName,
+        description: newPromptDescription || undefined,
+        test_input: JSON.stringify({ prompt: input }),  // Renamed from 'input' and stringified
+        metadata: JSON.stringify({
+          saved_from_execution: true,
+          test_mode: testMode,
+          auto_approve: autoApprove
+        })
+      })
+
+      if (response.data) {
+        // Reload test prompts
+        await loadTestPrompts(selectedAgent)
+        setShowSavePromptModal(false)
+        setNewPromptName('')
+        setNewPromptDescription('')
+        setSuccess('Test prompt saved successfully!')
+      }
+    } catch (err) {
+      console.error('Error saving test prompt:', err)
+      setError('Failed to save test prompt')
     }
   }
 
@@ -102,14 +199,24 @@ const AgentExecution: React.FC = () => {
 
     try {
       // Format the plain text input into the expected JSON structure
-      const formattedInput = input.trim() ? JSON.stringify({
+      const messageData = {
         messages: [
           {
             role: "user",
             content: input.trim()
           }
         ]
-      }) : undefined
+      }
+
+      // Add test mode metadata if enabled
+      if (testMode) {
+        (messageData as any).metadata = {
+          test_mode: true,
+          auto_approve: autoApprove
+        }
+      }
+
+      const formattedInput = input.trim() ? JSON.stringify(messageData) : undefined
 
       const response = await client.mutations.startAgentExecution({
         agentName: selectedAgent,
@@ -220,6 +327,45 @@ const AgentExecution: React.FC = () => {
               ))}
             </SelectField>
 
+            {selectedAgent && testPrompts.length > 0 && (
+              <SelectField
+                label="Test Prompts (Optional)"
+                value={selectedTestPrompt}
+                onChange={handleTestPromptChange}
+                marginBottom="15px"
+                descriptiveText="Select a predefined test prompt or enter custom input below"
+              >
+                <option value="">-- Custom input --</option>
+                {testPrompts.map((prompt) => (
+                  <option key={prompt.id} value={prompt.id}>
+                    {prompt.test_name} {prompt.description && `- ${prompt.description}`}
+                  </option>
+                ))}
+              </SelectField>
+            )}
+
+            {selectedAgent && (
+              <Card variation="outlined" marginBottom="15px">
+                <Heading level={5}>Test Mode Options</Heading>
+                <Flex direction="column" gap="10px">
+                  <SwitchField
+                    label="Test Mode"
+                    isChecked={testMode}
+                    onChange={(e) => setTestMode(e.target.checked)}
+                    descriptiveText="Enable test mode for this execution"
+                  />
+                  {testMode && (
+                    <SwitchField
+                      label="Auto-Approve"
+                      isChecked={autoApprove}
+                      onChange={(e) => setAutoApprove(e.target.checked)}
+                      descriptiveText="Automatically approve any human approval steps"
+                    />
+                  )}
+                </Flex>
+              </Card>
+            )}
+
             <TextAreaField
               label="Message"
               placeholder="What can you do?"
@@ -283,14 +429,24 @@ const AgentExecution: React.FC = () => {
             />
 
             <Flex justifyContent="space-between" alignItems="center">
-              <Button
-                variation="primary"
-                onClick={handleExecute}
-                isLoading={executing}
-                isDisabled={!selectedAgent || executing}
-              >
-                Start Execution
-              </Button>
+              <Flex gap="10px">
+                <Button
+                  variation="primary"
+                  onClick={handleExecute}
+                  isLoading={executing}
+                  isDisabled={!selectedAgent || executing}
+                >
+                  Start Execution
+                </Button>
+                
+                {selectedAgent && input && (
+                  <Button
+                    onClick={() => setShowSavePromptModal(true)}
+                  >
+                    Save as Test Prompt
+                  </Button>
+                )}
+              </Flex>
               
               {selectedAgent && (
                 <Text fontSize="small" color="gray">
@@ -301,6 +457,45 @@ const AgentExecution: React.FC = () => {
           </View>
         )}
       </Card>
+
+      {showSavePromptModal && (
+        <Card variation="elevated" marginTop="20px">
+          <Heading level={4}>Save Test Prompt</Heading>
+          <Flex direction="column" gap="15px">
+            <TextField
+              label="Test Name"
+              value={newPromptName}
+              onChange={(e) => setNewPromptName(e.target.value)}
+              placeholder="e.g., basic_query_test"
+              required
+            />
+            <TextAreaField
+              label="Description"
+              value={newPromptDescription}
+              onChange={(e) => setNewPromptDescription(e.target.value)}
+              placeholder="Describe what this test validates"
+              rows={3}
+            />
+            <Flex gap="10px">
+              <Button
+                variation="primary"
+                onClick={handleSaveTestPrompt}
+              >
+                Save Test Prompt
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowSavePromptModal(false)
+                  setNewPromptName('')
+                  setNewPromptDescription('')
+                }}
+              >
+                Cancel
+              </Button>
+            </Flex>
+          </Flex>
+        </Card>
+      )}
 
       <Card variation="elevated" marginTop="20px">
         <Heading level={4}>About Agent Execution</Heading>

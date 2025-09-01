@@ -10,9 +10,10 @@ This directory contains the implementation of the tools {{cookiecutter.tool_name
 {{cookiecutter.tool_name}}/
 ├── src/
 │   └── index.ts
-|   └── local-test.ts
+│   └── local-test.ts
 ├── tests/
-│   └── test-event.json
+│   ├── test-event.json (single test event)
+│   └── test-events.json (multiple test scenarios)
 ├── package.json
 ├── tsconfig.json
 ├── template.yaml (for SAM CLI)
@@ -33,6 +34,46 @@ To build the TypeScript code, run the following command:
 npm install
 npm run build
 ```
+
+## Test Events
+
+This tool includes test events that can be used for automated health testing and validation. Test events are stored in:
+- `tests/test-event.json` - Single test event for quick testing
+- `tests/test-events.json` - Multiple test scenarios for comprehensive testing
+
+### Test Events Format
+
+The `tests/test-events.json` file should contain multiple test scenarios:
+
+```json
+{
+  "smoke_test": {
+    "description": "Basic functionality test",
+    "input": {
+      "{{cookiecutter.input_param_name}}": "{{cookiecutter.input_test_value}}"
+    },
+    "expected_output": {
+      "validation_type": "contains",
+      "value": "expected_substring"
+    }
+  },
+  "edge_case_test": {
+    "description": "Test with edge case input",
+    "input": {
+      "{{cookiecutter.input_param_name}}": ""
+    },
+    "expected_output": {
+      "validation_type": "schema",
+      "value": {"type": "object"}
+    }
+  }
+}
+```
+
+These test events will be automatically discovered and made available in the management console for:
+- Quick tool testing during development
+- Automated health checks
+- Regression testing
 
 ## Testing
 

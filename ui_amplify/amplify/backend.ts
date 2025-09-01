@@ -12,6 +12,7 @@ import { getToolSecretValues } from './backend/function/getToolSecretValues/reso
 import { updateToolSecrets } from './backend/function/updateToolSecrets/resource';
 import { getStateMachineInfo } from './backend/function/getStateMachineInfo/resource';
 import { registerMCPServer } from './backend/function/registerMCPServer/resource';
+import { executeHealthTest } from './backend/function/executeHealthTest/resource';
 // API Key management functions - to be implemented if needed
 // import { generateAPIKey } from './backend/function/generateAPIKey/resource';
 // import { revokeAPIKey } from './backend/function/revokeAPIKey/resource';
@@ -38,6 +39,7 @@ const backend = defineBackend({
   updateToolSecrets,
   getStateMachineInfo,
   registerMCPServer,
+  executeHealthTest,
   // API key management functions - to be implemented
   // generateAPIKey,
   // revokeAPIKey,
@@ -81,6 +83,8 @@ const externalDataSourcesStack = backend.createStack('ExternalDataSources');
 const agentRegistryTableName = 'AgentRegistry-prod';
 const toolRegistryTableName = 'ToolRegistry-prod';
 const mcpRegistryTableName = 'MCPServerRegistry-prod';
+const testEventsTableName = 'TestEvents-prod';
+const testResultsTableName = 'TestResults-prod';
 
 // Reference the existing external DynamoDB tables
 const agentRegistryTable = aws_dynamodb.Table.fromTableName(
@@ -107,6 +111,20 @@ const toolSecretsTable = aws_dynamodb.Table.fromTableName(
   externalDataSourcesStack,
   'ToolSecretsTable',
   'ToolSecrets-prod'
+);
+
+// Reference the TestEvents table
+const testEventsTable = aws_dynamodb.Table.fromTableName(
+  externalDataSourcesStack,
+  'TestEventsTable',
+  testEventsTableName
+);
+
+// Reference the TestResults table
+const testResultsTable = aws_dynamodb.Table.fromTableName(
+  externalDataSourcesStack,
+  'TestResultsTable',
+  testResultsTableName
 );
 
 // Create the LLMModels table as part of this stack
@@ -150,6 +168,16 @@ backend.data.addDynamoDbDataSource(
 backend.data.addDynamoDbDataSource(
   'ToolSecretsDataSource',
   toolSecretsTable
+);
+
+backend.data.addDynamoDbDataSource(
+  'TestEventsDataSource',
+  testEventsTable
+);
+
+backend.data.addDynamoDbDataSource(
+  'TestResultsDataSource',
+  testResultsTable
 );
 
 // Grant Step Functions permissions to the startAgentExecution Lambda
@@ -303,6 +331,26 @@ mcpRegistryTable.grantReadData(backend.registerMCPServer.resources.lambda);
 // Add environment variables using the backend method
 backend.registerMCPServer.addEnvironment('MCP_REGISTRY_TABLE_NAME', mcpRegistryTableName);
 backend.registerMCPServer.addEnvironment('ENV_NAME', 'prod');
+
+// Configure executeHealthTest Lambda function
+// Grant permissions to test-related tables
+testEventsTable.grantReadWriteData(backend.executeHealthTest.resources.lambda);
+testResultsTable.grantReadWriteData(backend.executeHealthTest.resources.lambda);
+toolRegistryTable.grantReadData(backend.executeHealthTest.resources.lambda);
+agentRegistryTable.grantReadData(backend.executeHealthTest.resources.lambda);
+
+// Grant permissions to invoke Lambda functions and Step Functions
+const executeHealthTestPolicy = new PolicyStatement({
+  effect: Effect.ALLOW,
+  actions: [
+    'lambda:InvokeFunction',
+    'states:StartExecution',
+    'states:DescribeExecution'
+  ],
+  resources: ['*']
+});
+
+backend.executeHealthTest.resources.lambda.addToRolePolicy(executeHealthTestPolicy);
 
 // Grant DynamoDB permissions to API key management Lambda functions
 const apiKeyTablePolicy = new PolicyStatement({

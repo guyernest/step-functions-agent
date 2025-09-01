@@ -16,6 +16,7 @@ from stacks.shared.shared_llm_stack import SharedLLMStack
 from stacks.shared.shared_infrastructure_stack import SharedInfrastructureStack
 from stacks.shared.agent_registry_stack import AgentRegistryStack
 from stacks.shared.mcp_registry_stack import MCPRegistryStack
+from stacks.shared.test_events_stack import TestEventsStack
 from stacks.tools.db_interface_tool_stack import DBInterfaceToolStack
 from stacks.tools.e2b_tool_stack import E2BToolStack
 from stacks.tools.google_maps_tool_stack import GoogleMapsToolStack
@@ -118,6 +119,16 @@ def main():
         mcp_endpoint_url=mcp_endpoint_url,
         env=env,
         description=f"MCP Server Registry for {environment} environment"
+    )
+    
+    # Deploy Test Events stack
+    # This creates DynamoDB tables for test events and results
+    test_events_stack = TestEventsStack(
+        app,
+        f"TestEventsStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Test Events Registry for health testing in {environment} environment"
     )
     
     # Deploy MCP GraphQL API stack

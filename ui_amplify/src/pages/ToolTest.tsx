@@ -13,7 +13,8 @@ import {
   SelectField,
   TextAreaField,
   Badge,
-  Divider
+  Divider,
+  TextField
 } from '@aws-amplify/ui-react';
 
 const client = generateClient<Schema>();
@@ -30,9 +31,13 @@ interface ToolInfo {
 
 interface TestResult {
   success: boolean;
-  output?: any;
+  result?: string;  // Raw result from the Lambda
+  output?: any;  // Parsed result for display
   error?: string;
   executionTime?: number;
+  testEventId?: string;
+  executionArn?: string;
+  message?: string;
   metadata?: {
     lambdaArn?: string;
     statusCode?: number;
@@ -44,6 +49,19 @@ interface TestResult {
   cloudWatchUrl?: string;
 }
 
+interface TestEvent {
+  id: string;
+  resource_type: string;
+  resource_id: string;
+  test_name: string;
+  description?: string | null;
+  test_input: string;  // AWSJSON - comes as a JSON string
+  expected_output?: string | null;  // AWSJSON - comes as a JSON string
+  metadata?: string | null;  // AWSJSON - comes as a JSON string
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
 export default function ToolTest() {
   const [searchParams] = useSearchParams();
   const [tools, setTools] = useState<ToolInfo[]>([]);
@@ -53,8 +71,14 @@ export default function ToolTest() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [inputSchema, setInputSchema] = useState<any>(null);
   const [logLevel, setLogLevel] = useState<string>('INFO');
+  const [testEvents, setTestEvents] = useState<TestEvent[]>([]);
+  const [selectedTestEvent, setSelectedTestEvent] = useState<string>('');
+  const [showSaveTestModal, setShowSaveTestModal] = useState(false);
+  const [newTestName, setNewTestName] = useState('');
+  const [newTestDescription, setNewTestDescription] = useState('');
 
   useEffect(() => {
     loadTools();
@@ -100,9 +124,40 @@ export default function ToolTest() {
     }
   };
 
-  const handleToolSelection = (toolName: string) => {
+  const loadTestEvents = async (toolName: string) => {
+    try {
+      const response = await client.queries.listTestEvents({
+        resource_type: 'tool',
+        resource_id: toolName
+      });
+      
+      if (response.data) {
+        const events = response.data
+          .filter((event): event is NonNullable<typeof event> => event !== null && event !== undefined)
+          .map(event => ({
+            ...event,
+            description: event.description || null,
+            expected_output: event.expected_output || null,
+            metadata: event.metadata || null,
+            created_at: event.created_at || null,
+            updated_at: event.updated_at || null
+          } as TestEvent));
+        setTestEvents(events);
+      }
+    } catch (err) {
+      console.error('Error loading test events:', err);
+      // Don't show error - test events are optional
+    }
+  };
+
+  const handleToolSelection = async (toolName: string) => {
     setTestResult(null);
     setError(null);
+    setSelectedTestEvent('');
+    setTestEvents([]);
+    
+    // Load test events for this tool
+    await loadTestEvents(toolName);
     
     // Try to get input schema from tool
     const tool = tools.find(t => t.name === toolName);
@@ -167,6 +222,69 @@ export default function ToolTest() {
     return example;
   };
 
+  const handleTestEventChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const testEventId = e.target.value;
+    setSelectedTestEvent(testEventId);
+    
+    if (testEventId) {
+      const testEvent = testEvents.find(t => t.id === testEventId);
+      if (testEvent) {
+        // test_input is already a JSON string from AWSJSON type
+        const parsedInput = typeof testEvent.test_input === 'string' 
+          ? testEvent.test_input 
+          : JSON.stringify(testEvent.test_input, null, 2);
+        setTestInput(parsedInput);
+      }
+    }
+  };
+
+  const handleSaveTestEvent = async () => {
+    if (!selectedTool || !newTestName) {
+      setError('Tool and test name are required');
+      return;
+    }
+
+    try {
+      let parsedInput;
+      try {
+        parsedInput = JSON.parse(testInput || '{}');
+      } catch (e) {
+        setError('Invalid JSON input');
+        return;
+      }
+
+      const response = await client.mutations.saveTestEvent({
+        resource_type: 'tool',
+        resource_id: selectedTool,
+        test_name: newTestName,
+        description: newTestDescription || null,
+        test_input: JSON.stringify(parsedInput),  // Renamed from 'input' to avoid GraphQL conflicts
+        expected_output: testResult?.success ? (testResult.result || JSON.stringify(testResult.output)) : null,
+        metadata: JSON.stringify({
+          saved_from_test: true,
+          execution_time: testResult?.executionTime || null,
+          validation_type: testResult?.success ? 'exact' : null,
+          saved_at: new Date().toISOString()
+        })
+      });
+
+      if (response.data) {
+        // Reload test events
+        await loadTestEvents(selectedTool);
+        setShowSaveTestModal(false);
+        setNewTestName('');
+        setNewTestDescription('');
+        setError(null);
+        // Show success message
+        setSuccess(`Test event "${newTestName}" saved successfully!`);
+        setTimeout(() => setSuccess(null), 3000);
+      }
+    } catch (err) {
+      console.error('Error saving test event:', err);
+      setError('Failed to save test event');
+    }
+  };
+
   const handleTest = async () => {
     if (!selectedTool) {
       setError('Please select a tool to test');
@@ -188,17 +306,16 @@ export default function ToolTest() {
       }
 
       // Call the test execution Lambda
-      const testInputString = JSON.stringify(parsedInput);
-      console.log('Calling testToolExecution with:', {
-        toolName: selectedTool,
-        testInput: testInputString,
-        logLevel: logLevel,
+      console.log('Calling executeToolTest with:', {
+        tool_name: selectedTool,
+        test_event_id: selectedTestEvent || undefined,
+        custom_input: !selectedTestEvent ? parsedInput : undefined,
       });
       
-      const response = await client.mutations.testToolExecution({
-        toolName: selectedTool,
-        testInput: testInputString,
-        logLevel: logLevel,
+      const response = await client.mutations.executeToolTest({
+        tool_name: selectedTool,
+        test_event_id: selectedTestEvent || undefined,
+        custom_input: !selectedTestEvent ? parsedInput : undefined,
       });
       
       console.log('Response from testToolExecution:', response);
@@ -206,15 +323,15 @@ export default function ToolTest() {
       console.log('Response data:', response.data);
 
       if (response.data) {
-        // Check if response.data is the string directly or has testToolExecution property
+        // The response comes back with executeToolTest property
         let dataToProcess: any = response.data;
         
-        // If response has a testToolExecution property, use that
-        if (response.data && typeof response.data === 'object' && 'testToolExecution' in response.data) {
-          dataToProcess = (response.data as any).testToolExecution;
+        // Check for executeToolTest property (the actual mutation name)
+        if (response.data && typeof response.data === 'object' && 'executeToolTest' in response.data) {
+          dataToProcess = (response.data as any).executeToolTest;
         }
         
-        // Now parse the data if it's a string
+        // Now process the result
         let result;
         if (typeof dataToProcess === 'string') {
           try {
@@ -222,12 +339,22 @@ export default function ToolTest() {
             console.log('Parsed test result:', result);
           } catch (e) {
             console.error('Failed to parse response:', e);
-            setError('Failed to parse test execution response');
-            return;
+            // If it's not JSON, use it as is
+            result = dataToProcess;
           }
         } else {
           result = dataToProcess;
-          console.log('Test result (not string):', result);
+          console.log('Test result:', result);
+        }
+        
+        // Parse the nested result if it's a string
+        if (result.result && typeof result.result === 'string') {
+          try {
+            result.output = JSON.parse(result.result);
+          } catch (e) {
+            // If parsing fails, use as is
+            result.output = result.result;
+          }
         }
         
         console.log('Setting test result:', result);
@@ -267,6 +394,12 @@ export default function ToolTest() {
             {error}
           </Alert>
         )}
+        
+        {success && (
+          <Alert variation="success" isDismissible onDismiss={() => setSuccess(null)}>
+            {success}
+          </Alert>
+        )}
 
         <Flex direction="column" gap="1rem">
           <SelectField
@@ -303,6 +436,86 @@ export default function ToolTest() {
                   )}
                 </Flex>
               </Card>
+
+              <Flex direction="column" gap="0.5rem">
+                <Flex justifyContent="space-between" alignItems="center">
+                  <Text fontWeight="bold">Test Events</Text>
+                  <Button 
+                    size="small" 
+                    onClick={() => {
+                      // Ensure we have valid JSON before opening modal
+                      if (!testInput || testInput.trim() === '' || testInput.trim() === '{}') {
+                        // Set example input if empty or just {}
+                        try {
+                          const example = inputSchema && inputSchema.properties ? generateExampleFromSchema(inputSchema) : {};
+                          setTestInput(JSON.stringify(example, null, 2));
+                        } catch (err) {
+                          console.error('Error generating example:', err);
+                          // Use empty object as fallback
+                          setTestInput('{}');
+                        }
+                      } else {
+                        // Try to format existing input
+                        try {
+                          const parsed = JSON.parse(testInput);
+                          setTestInput(JSON.stringify(parsed, null, 2));
+                        } catch (e) {
+                          setError('Please enter valid JSON in the Test Input field before adding a test event');
+                          return;
+                        }
+                      }
+                      setShowSaveTestModal(true);
+                    }}
+                    isDisabled={!selectedTool}
+                  >
+                    Add Test Event
+                  </Button>
+                </Flex>
+                {testEvents.length > 0 ? (
+                  <Flex direction="column" gap="0.5rem">
+                    <SelectField
+                      label=""
+                      descriptiveText="Select a predefined test event or create custom input below"
+                      value={selectedTestEvent}
+                      onChange={handleTestEventChange}
+                    >
+                      <option value="">Custom input</option>
+                      {testEvents.map(event => (
+                        <option key={event.id} value={event.id}>
+                          {event.test_name} {event.description && `- ${event.description}`}
+                        </option>
+                      ))}
+                    </SelectField>
+                    {selectedTestEvent && (
+                      <Button
+                        size="small"
+                        variation="warning"
+                        onClick={async () => {
+                          if (window.confirm(`Delete test event "${testEvents.find(t => t.id === selectedTestEvent)?.test_name}"?`)) {
+                            try {
+                              await client.mutations.deleteTestEvent({
+                                resource_type: 'tool',
+                                id: selectedTestEvent
+                              });
+                              await loadTestEvents(selectedTool);
+                              setSelectedTestEvent('');
+                            } catch (err) {
+                              console.error('Error deleting test event:', err);
+                              setError('Failed to delete test event');
+                            }
+                          }
+                        }}
+                      >
+                        Delete Selected Test Event
+                      </Button>
+                    )}
+                  </Flex>
+                ) : (
+                  <Alert variation="info">
+                    No test events saved for this tool. Create one using the "Add Test Event" button.
+                  </Alert>
+                )}
+              </Flex>
 
               {inputSchema && inputSchema.properties && (
                 <Card variation="outlined">
@@ -490,8 +703,113 @@ export default function ToolTest() {
                     </Button>
                   </View>
                 )}
+
+                {testResult.success && (
+                  <Flex marginTop="1rem" gap="0.5rem">
+                    <Button
+                      variation="primary"
+                      onClick={() => setShowSaveTestModal(true)}
+                    >
+                      Save as Test Event with Expected Output
+                    </Button>
+                    {testResult.testEventId && (
+                      <Button
+                        variation="secondary"
+                        onClick={async () => {
+                          // Update existing test event with expected output
+                          try {
+                            const outputToSave = testResult.result || JSON.stringify(testResult.output);
+                            await client.mutations.saveTestEvent({
+                              resource_type: 'tool',
+                              resource_id: selectedTool,
+                              test_name: testResult.testEventId.split('#')[1],
+                              test_input: testInput,
+                              expected_output: outputToSave,
+                              metadata: JSON.stringify({
+                                validation_type: 'exact',
+                                last_successful_run: new Date().toISOString(),
+                                execution_time: testResult.executionTime
+                              })
+                            });
+                            setSuccess('Expected output saved for health testing!');
+                            setTimeout(() => setSuccess(null), 3000);
+                          } catch (err) {
+                            console.error('Error saving expected output:', err);
+                            setError('Failed to save expected output');
+                          }
+                        }}
+                      >
+                        Update Expected Output
+                      </Button>
+                    )}
+                  </Flex>
+                )}
               </Card>
             </>
+          )}
+
+          {showSaveTestModal && (
+            <Card variation="elevated" marginTop="1rem">
+              <Heading level={4}>Save Test Event</Heading>
+              <Flex direction="column" gap="1rem">
+                <TextField
+                  label="Test Name"
+                  value={newTestName}
+                  onChange={(e) => setNewTestName(e.target.value)}
+                  placeholder="e.g., smoke_test, edge_case_test"
+                  required
+                />
+                <TextAreaField
+                  label="Description"
+                  value={newTestDescription}
+                  onChange={(e) => setNewTestDescription(e.target.value)}
+                  placeholder="Describe what this test validates"
+                  rows={3}
+                />
+                <View>
+                  <Text fontWeight="bold" marginBottom="0.5rem">Test Input Preview:</Text>
+                  <View backgroundColor="rgba(0,0,0,0.05)" padding="0.5rem" borderRadius="4px">
+                    <pre style={{ margin: 0, fontSize: '12px', overflow: 'auto', maxHeight: '200px' }}>
+                      {testInput}
+                    </pre>
+                  </View>
+                </View>
+                {testResult?.success && (
+                  <View>
+                    <Text fontWeight="bold" marginBottom="0.5rem">Expected Output (for automated health testing):</Text>
+                    <Alert variation="info" marginBottom="0.5rem">
+                      The current test output will be saved as the expected output for automated health testing
+                    </Alert>
+                    <View backgroundColor="rgba(0,0,0,0.05)" padding="0.5rem" borderRadius="4px">
+                      <pre style={{ margin: 0, fontSize: '12px', overflow: 'auto', maxHeight: '200px' }}>
+                        {testResult.result ? 
+                          (typeof testResult.result === 'string' ? 
+                            JSON.stringify(JSON.parse(testResult.result), null, 2) : 
+                            JSON.stringify(testResult.result, null, 2)) :
+                          JSON.stringify(testResult.output, null, 2)}
+                      </pre>
+                    </View>
+                  </View>
+                )}
+                <Flex gap="0.5rem">
+                  <Button
+                    variation="primary"
+                    onClick={handleSaveTestEvent}
+                  >
+                    Save Test Event
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setShowSaveTestModal(false);
+                      setNewTestName('');
+                      setNewTestDescription('');
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </Flex>
+              </Flex>
+            </Card>
           )}
         </Flex>
       </Card>
