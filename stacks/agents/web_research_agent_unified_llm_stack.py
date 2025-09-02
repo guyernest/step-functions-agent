@@ -2,6 +2,7 @@ from aws_cdk import Stack, Fn
 from constructs import Construct
 from .modular_base_agent_unified_llm_stack import ModularBaseAgentUnifiedLLMStack
 import json
+from pathlib import Path
 
 
 class WebResearchAgentUnifiedLLMStack(ModularBaseAgentUnifiedLLMStack):
@@ -33,6 +34,20 @@ class WebResearchAgentUnifiedLLMStack(ModularBaseAgentUnifiedLLMStack):
         # Import research tool Lambda ARNs
         web_research_lambda_arn = Fn.import_value(f"WebResearchLambdaArn-{env_name}")
         yfinance_lambda_arn = Fn.import_value(f"YFinanceLambdaArn-{env_name}")
+        
+        # Load tool names from Lambda's single source of truth
+        web_research_tools_file = Path(__file__).parent.parent.parent / 'lambda' / 'tools' / 'web-research' / 'tool-names.json'
+        with open(web_research_tools_file, 'r') as f:
+            web_research_tools = json.load(f)
+        
+        yfinance_tools_file = Path(__file__).parent.parent.parent / 'lambda' / 'tools' / 'yfinance' / 'tool-names.json'
+        with open(yfinance_tools_file, 'r') as f:
+            yfinance_tools = json.load(f)
+        
+        # Only use the tools we need for research
+        research_tools_needed = ["research_company", "list_industries", "top_industry_companies", "top_sector_companies"]
+        
+        print(f"✅ WebResearchAgentUnifiedLLM: Using tools: {research_tools_needed}")
         
         # Define tool configurations for web research (same as research_agent_stack)
         tool_configs = [

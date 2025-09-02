@@ -8,6 +8,8 @@ from aws_cdk import (
 )
 from constructs import Construct
 from .base_tool_construct import BaseToolConstruct
+import json
+from pathlib import Path
 
 
 class FinancialToolStack(Stack):
@@ -76,43 +78,124 @@ class FinancialToolStack(Stack):
             role=financial_lambda_role,
         )
 
+        # Load tool names from Lambda's single source of truth
+        tool_names_file = Path(__file__).parent.parent.parent / 'lambda' / 'tools' / 'yfinance' / 'tool-names.json'
+        with open(tool_names_file, 'r') as f:
+            tool_names = json.load(f)
+        
+        print(f"✅ FinancialToolStack: Loaded {len(tool_names)} tool names from tool-names.json: {tool_names}")
+        
         # Register all financial tools using BaseToolConstruct with self-contained definitions
         tool_specs = [
             {
-                "tool_name": "get_stock_data",
-                "description": "Get stock price data and financial information using Yahoo Finance",
+                "tool_name": "get_ticker_data",
+                "description": "Get stock price data for a ticker symbol within a date range",
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "symbol": {"type": "string", "description": "Stock ticker symbol"},
-                        "period": {"type": "string", "description": "Data period (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max)"},
-                        "interval": {"type": "string", "description": "Data interval (1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo)"}
+                        "ticker": {"type": "string", "description": "Stock ticker symbol"},
+                        "start_date": {"type": "string", "description": "Start date (YYYY-MM-DD)"},
+                        "end_date": {"type": "string", "description": "End date (YYYY-MM-DD)"}
                     },
-                    "required": ["symbol"]
+                    "required": ["ticker", "start_date", "end_date"]
                 },
                 "language": "python",
-                "tags": ["finance", "stocks", "yfinance"],
+                "tags": ["finance", "stocks", "yfinance", "historical"],
                 "author": "system",
                 "lambda_arn": financial_lambda.function_arn,
                 "lambda_function_name": financial_lambda.function_name
             },
             {
-                "tool_name": "get_company_info",
-                "description": "Get detailed company information and fundamentals",
+                "tool_name": "get_ticker_recent_history",
+                "description": "Get recent stock price history for a ticker",
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "symbol": {"type": "string", "description": "Stock ticker symbol"}
+                        "ticker": {"type": "string", "description": "Stock ticker symbol"},
+                        "period": {"type": "string", "description": "Time period (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max)", "default": "1mo"}
                     },
-                    "required": ["symbol"]
+                    "required": ["ticker"]
                 },
                 "language": "python",
-                "tags": ["finance", "company", "fundamentals"],
+                "tags": ["finance", "stocks", "yfinance", "recent"],
+                "author": "system",
+                "lambda_arn": financial_lambda.function_arn,
+                "lambda_function_name": financial_lambda.function_name
+            },
+            {
+                "tool_name": "list_industries",
+                "description": "List all industries within a specific sector",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "sector_key": {"type": "string", "description": "Sector key (e.g., technology, healthcare, financial-services)"}
+                    },
+                    "required": ["sector_key"]
+                },
+                "language": "python",
+                "tags": ["finance", "sectors", "industries", "yfinance"],
+                "author": "system",
+                "lambda_arn": financial_lambda.function_arn,
+                "lambda_function_name": financial_lambda.function_name
+            },
+            {
+                "tool_name": "top_sector_companies",
+                "description": "Get top companies within a specific sector",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "sector_key": {"type": "string", "description": "Sector key to get top companies for"}
+                    },
+                    "required": ["sector_key"]
+                },
+                "language": "python",
+                "tags": ["finance", "sectors", "companies", "rankings"],
+                "author": "system",
+                "lambda_arn": financial_lambda.function_arn,
+                "lambda_function_name": financial_lambda.function_name
+            },
+            {
+                "tool_name": "top_industry_companies",
+                "description": "Get top companies within a specific industry",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "industry_key": {"type": "string", "description": "Industry key to get top companies for"}
+                    },
+                    "required": ["industry_key"]
+                },
+                "language": "python",
+                "tags": ["finance", "industries", "companies", "rankings"],
+                "author": "system",
+                "lambda_arn": financial_lambda.function_arn,
+                "lambda_function_name": financial_lambda.function_name
+            },
+            {
+                "tool_name": "download_tickers_data",
+                "description": "Download data for multiple tickers at once",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "tickers": {"type": "array", "items": {"type": "string"}, "description": "List of ticker symbols"},
+                        "start_date": {"type": "string", "description": "Start date (YYYY-MM-DD)"},
+                        "end_date": {"type": "string", "description": "End date (YYYY-MM-DD)"}
+                    },
+                    "required": ["tickers", "start_date", "end_date"]
+                },
+                "language": "python",
+                "tags": ["finance", "stocks", "yfinance", "bulk"],
                 "author": "system",
                 "lambda_arn": financial_lambda.function_arn,
                 "lambda_function_name": financial_lambda.function_name
             }
         ]
+        
+        # Validate that all tool specs match declared names
+        spec_names = {spec["tool_name"] for spec in tool_specs}
+        declared_names = set(tool_names)
+        
+        if spec_names != declared_names:
+            raise ValueError(f"Tool name mismatch! Specs: {spec_names}, Declared: {declared_names}")
         
         BaseToolConstruct(
             self,

@@ -100,6 +100,10 @@ help:
 	@echo "  make test-call-llm     - Test Python LLM handlers"
 	@echo "  make test-robustness   - Run robustness tests"
 	@echo ""
+	@echo "🔍 Validation:"
+	@echo "  make validate-tools    - Check tool name alignment across stacks"
+	@echo "  make validate-all      - Run all validation checks"
+	@echo ""
 	@echo "📊 Database Population:"
 	@echo "  make populate-tables   - Populate all configuration tables"
 	@echo "  make populate-llm-models - Populate LLM Models table"
@@ -515,10 +519,22 @@ clean-venv:
 	@make venv
 
 # ============================================
+# Validation Commands
+# ============================================
+.PHONY: validate-tools
+validate-tools:
+	@echo "🔍 Validating tool name alignment across stacks..."
+	@$(PYTHON) scripts/validate_tool_alignment.py
+
+.PHONY: validate-all
+validate-all: validate-tools
+	@echo "✅ All validations completed"
+
+# ============================================
 # Deployment Commands
 # ============================================
 .PHONY: deploy-prep
-deploy-prep: clean setup build test
+deploy-prep: clean setup build test validate-all
 	@echo "✅ Ready for deployment!"
 	@echo "Run 'make deploy-all' to deploy all stacks"
 

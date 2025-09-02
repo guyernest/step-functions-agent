@@ -18,6 +18,7 @@ from constructs import Construct
 from .base_tool_construct import MultiToolConstruct
 import os
 import json
+from pathlib import Path
 
 
 class ImageAnalysisToolStack(Stack):
@@ -165,25 +166,49 @@ class ImageAnalysisToolStack(Stack):
     def _register_tools_using_base_construct(self):
         """Register all image analysis tools using the BaseToolConstruct pattern"""
         
+        # Load tool names from Lambda's single source of truth
+        tool_names_file = Path(__file__).parent.parent.parent / 'lambda' / 'tools' / 'image-analysis' / 'tool-names.json'
+        with open(tool_names_file, 'r') as f:
+            tool_names = json.load(f)
+        
+        print(f"✅ ImageAnalysisToolStack: Loaded {len(tool_names)} tool names from tool-names.json: {tool_names}")
+        
         # Define image analysis tool specifications with self-contained definitions
         image_tools = [
             {
-                "tool_name": "image_analysis",
+                "tool_name": "analyze_images",  # Corrected name to match Lambda
                 "description": "Analyze images using AI with natural language queries and multimodal understanding",
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "image_url": {"type": "string", "description": "URL or S3 path to image"},
-                        "query": {"type": "string", "description": "Natural language query about the image"},
-                        "max_tokens": {"type": "integer", "description": "Maximum tokens for response", "default": 1000}
+                        "image_locations": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "bucket": {"type": "string", "description": "S3 bucket name"},
+                                    "key": {"type": "string", "description": "S3 object key"}
+                                },
+                                "required": ["bucket", "key"]
+                            },
+                            "description": "List of S3 image locations"
+                        },
+                        "query": {"type": "string", "description": "Natural language query about the images"}
                     },
-                    "required": ["image_url", "query"]
+                    "required": ["image_locations", "query"]
                 },
                 "language": "python",
-                "tags": ["ai", "vision", "gemini"],
+                "tags": ["ai", "vision", "gemini", "multimodal"],
                 "author": "system"
             }
         ]
+        
+        # Validate that all tool specs match declared names
+        spec_names = {spec["tool_name"] for spec in image_tools}
+        declared_names = set(tool_names)
+        
+        if spec_names != declared_names:
+            raise ValueError(f"Tool name mismatch! Specs: {spec_names}, Declared: {declared_names}")
         
         # Use MultiToolConstruct to register image analysis tools
         MultiToolConstruct(

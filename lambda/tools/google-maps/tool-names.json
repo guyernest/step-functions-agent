@@ -1,0 +1,9 @@
+[
+  "maps_geocode",
+  "maps_reverse_geocode",
+  "maps_search_places",
+  "maps_place_details",
+  "maps_distance_matrix",
+  "maps_elevation",
+  "maps_directions"
+]

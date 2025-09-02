@@ -5,8 +5,23 @@ import fetch from 'node-fetch'
 import { getToolSecrets, getLegacySecret } from './toolSecrets';
 // import { Tracer } from '@aws-lambda-powertools/tracer';
 
+// Import tool names from single source of truth
+import toolNamesJson from '../tool-names.json';
+
 const logger = new Logger({ serviceName: 'ai-agents' });
 // const tracer = new Tracer({ serviceName: 'ai-agents' });
+
+// Create enum-like object from tool names for type safety
+const TOOL_NAMES = Object.freeze(
+    toolNamesJson.reduce((acc, name) => {
+        const key = name.toUpperCase().replace(/-/g, '_');
+        acc[key] = name;
+        return acc;
+    }, {} as Record<string, string>)
+);
+
+// Validate that all tool names in our switch statement are declared
+const declaredToolNames = new Set(toolNamesJson);
 
 
 // Response interfaces
@@ -523,21 +538,28 @@ export const handler: Handler = async (event) => {
     const tool_use = event
     const tool_name = tool_use["name"]
     try {
+        // Validate tool name is declared
+        if (!declaredToolNames.has(tool_name)) {
+            logger.warn(`Tool name '${tool_name}' not in declared tool names`, { 
+                declaredNames: Array.from(declaredToolNames) 
+            });
+        }
+        
         let result: string
         switch (tool_name) {
-          case "maps_geocode": {
+          case TOOL_NAMES.MAPS_GEOCODE: {
             const { address } = tool_use.input as { address: string }
             result = await handleGeocode(address);
             break;
           }
     
-          case "maps_reverse_geocode": {
+          case TOOL_NAMES.MAPS_REVERSE_GEOCODE: {
             const { latitude, longitude } = tool_use.input as { latitude: number, longitude: number }
             result = await handleReverseGeocode(latitude, longitude);
             break;
           }
     
-          case "maps_search_places": {
+          case TOOL_NAMES.MAPS_SEARCH_PLACES: {
             const { query, location, radius } = tool_use.input as { 
                 query: string;
                 location?: { latitude: number; longitude: number };
@@ -547,13 +569,13 @@ export const handler: Handler = async (event) => {
             break;
           }
     
-          case "maps_place_details": {
+          case TOOL_NAMES.MAPS_PLACE_DETAILS: {
             const { place_id } = tool_use.input as { place_id: string }
             result = await handlePlaceDetails(place_id);
             break;
           }
     
-          case "maps_distance_matrix": {
+          case TOOL_NAMES.MAPS_DISTANCE_MATRIX: {
             const { origins, destinations, mode } = tool_use.input as { 
                 origins: string[], 
                 destinations: string[], 
@@ -563,7 +585,7 @@ export const handler: Handler = async (event) => {
             break;
           }
     
-          case "maps_elevation": {
+          case TOOL_NAMES.MAPS_ELEVATION: {
             const { locations } = tool_use.input as { 
                 locations: Array<{ latitude: number; longitude: number }>;
             }
@@ -571,7 +593,7 @@ export const handler: Handler = async (event) => {
             break;
           }
     
-          case "maps_directions": {
+          case TOOL_NAMES.MAPS_DIRECTIONS: {
             const { origin, destination, mode } = tool_use.input as { 
                 origin: string;
                 destination: string;

@@ -1,6 +1,8 @@
 from aws_cdk import Stack, Fn
 from constructs import Construct
 from .modular_base_agent_stack import ModularBaseAgentStack
+import json
+from pathlib import Path
 
 
 class ImageAnalysisAgentStack(ModularBaseAgentStack):
@@ -29,13 +31,21 @@ class ImageAnalysisAgentStack(ModularBaseAgentStack):
         # Import Image Analysis Lambda ARN
         image_analysis_lambda_arn = Fn.import_value(f"ImageAnalysisLambdaArn-{env_name}")
         
+        # Load tool names from Lambda's single source of truth
+        tool_names_file = Path(__file__).parent.parent.parent / 'lambda' / 'tools' / 'image-analysis' / 'tool-names.json'
+        with open(tool_names_file, 'r') as f:
+            tool_names = json.load(f)
+        
+        print(f"✅ ImageAnalysisAgent: Loaded {len(tool_names)} tool names from tool-names.json: {tool_names}")
+        
         # Define tool configurations
         tool_configs = [
             {
-                "tool_name": "analyze_images",
+                "tool_name": tool_name,
                 "lambda_arn": image_analysis_lambda_arn,
                 "requires_approval": False
             }
+            for tool_name in tool_names
         ]
         
                 

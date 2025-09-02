@@ -175,19 +175,25 @@ class WebResearchToolStack(Stack):
     def _register_tools_using_base_construct(self):
         """Register web research tools using BaseToolConstruct with self-contained definitions"""
         
+        # Load tool names from Lambda's single source of truth
+        tool_names_file = Path(__file__).parent.parent.parent / 'lambda' / 'tools' / 'web-research' / 'tool-names.json'
+        with open(tool_names_file, 'r') as f:
+            tool_names = json.load(f)
+        
+        print(f"✅ WebResearchToolStack: Loaded {len(tool_names)} tool names from tool-names.json: {tool_names}")
+        
         # Define tool specifications with self-contained definitions
         tool_specs = [
             {
-                "tool_name": "web_research",
+                "tool_name": "research_company",  # Now using the correct name from Lambda
                 "description": "Research companies and topics using AI-powered web search with Perplexity API",
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "Research query or company name"},
-                        "focus": {"type": "string", "description": "Research focus area (e.g., financials, products, news)"},
-                        "max_tokens": {"type": "integer", "description": "Maximum response tokens", "default": 2000}
+                        "company": {"type": "string", "description": "Company name to research"},
+                        "topics": {"type": "array", "items": {"type": "string"}, "description": "Optional specific topics to research"}
                     },
-                    "required": ["query"]
+                    "required": ["company"]
                 },
                 "language": "go",
                 "tags": ["research", "perplexity", "web", "ai"],
@@ -196,6 +202,13 @@ class WebResearchToolStack(Stack):
                 "lambda_function_name": self.go_research_lambda.function_name
             }
         ]
+        
+        # Validate that all tool specs match declared names
+        spec_names = {spec["tool_name"] for spec in tool_specs}
+        declared_names = set(tool_names)
+        
+        if spec_names != declared_names:
+            raise ValueError(f"Tool name mismatch! Specs: {spec_names}, Declared: {declared_names}")
         
         # Use BaseToolConstruct for registration with secret requirements
         BaseToolConstruct(

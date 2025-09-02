@@ -198,10 +198,17 @@ class GoogleMapsToolStack(Stack):
     def _register_tools_using_base_construct(self):
         """Register all Google Maps tools using BaseToolConstruct with self-contained definitions"""
         
-        # Define tool specifications with self-contained definitions
+        # Load tool names from Lambda's single source of truth
+        tool_names_file = Path(__file__).parent.parent.parent / 'lambda' / 'tools' / 'google-maps' / 'tool-names.json'
+        with open(tool_names_file, 'r') as f:
+            tool_names = json.load(f)
+        
+        print(f"✅ Loaded {len(tool_names)} tool names from {tool_names_file.name}: {tool_names}")
+        
+        # Define tool specifications - validate names match the Lambda's declarations
         tool_specs = [
             {
-                "tool_name": "geocode",
+                "tool_name": "maps_geocode",
                 "description": "Convert addresses to coordinates using Google Maps Geocoding API",
                 "input_schema": {
                     "type": "object",
@@ -217,7 +224,7 @@ class GoogleMapsToolStack(Stack):
                 "lambda_function_name": self.google_maps_lambda.function_name
             },
             {
-                "tool_name": "reverse_geocode",
+                "tool_name": "maps_reverse_geocode",
                 "description": "Convert coordinates to addresses using Google Maps Reverse Geocoding API",
                 "input_schema": {
                     "type": "object",
@@ -234,7 +241,7 @@ class GoogleMapsToolStack(Stack):
                 "lambda_function_name": self.google_maps_lambda.function_name
             },
             {
-                "tool_name": "places_search",
+                "tool_name": "maps_search_places",
                 "description": "Search for places using Google Maps Places API",
                 "input_schema": {
                     "type": "object",
@@ -252,7 +259,23 @@ class GoogleMapsToolStack(Stack):
                 "lambda_function_name": self.google_maps_lambda.function_name
             },
             {
-                "tool_name": "directions",
+                "tool_name": "maps_place_details",
+                "description": "Get detailed information about a specific place using Google Maps Place Details API",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "place_id": {"type": "string", "description": "The place ID to get details for"}
+                    },
+                    "required": ["place_id"]
+                },
+                "language": "typescript",
+                "tags": ["maps", "places", "details", "google"],
+                "author": "system",
+                "lambda_arn": self.google_maps_lambda.function_arn,
+                "lambda_function_name": self.google_maps_lambda.function_name
+            },
+            {
+                "tool_name": "maps_directions",
                 "description": "Get directions between locations using Google Maps Directions API",
                 "input_schema": {
                     "type": "object",
@@ -270,7 +293,7 @@ class GoogleMapsToolStack(Stack):
                 "lambda_function_name": self.google_maps_lambda.function_name
             },
             {
-                "tool_name": "distance_matrix",
+                "tool_name": "maps_distance_matrix",
                 "description": "Calculate travel distances and times between multiple origins and destinations",
                 "input_schema": {
                     "type": "object",
@@ -286,8 +309,50 @@ class GoogleMapsToolStack(Stack):
                 "author": "system",
                 "lambda_arn": self.google_maps_lambda.function_arn,
                 "lambda_function_name": self.google_maps_lambda.function_name
+            },
+            {
+                "tool_name": "maps_elevation",
+                "description": "Get elevation data for locations on the earth",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "locations": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "latitude": {"type": "number", "description": "Latitude coordinate"},
+                                    "longitude": {"type": "number", "description": "Longitude coordinate"}
+                                },
+                                "required": ["latitude", "longitude"]
+                            },
+                            "description": "Array of locations to get elevation for"
+                        }
+                    },
+                    "required": ["locations"]
+                },
+                "language": "typescript",
+                "tags": ["maps", "elevation", "altitude", "google"],
+                "author": "system",
+                "lambda_arn": self.google_maps_lambda.function_arn,
+                "lambda_function_name": self.google_maps_lambda.function_name
             }
         ]
+        
+        # Validate that all tool specs match declared names
+        spec_names = {spec["tool_name"] for spec in tool_specs}
+        declared_names = set(tool_names)
+        
+        # Check for mismatches
+        missing_specs = declared_names - spec_names
+        if missing_specs:
+            raise ValueError(f"Tool names declared in tool-names.json but not in CDK specs: {missing_specs}")
+        
+        extra_specs = spec_names - declared_names
+        if extra_specs:
+            raise ValueError(f"Tool specs in CDK not declared in tool-names.json: {extra_specs}")
+        
+        print(f"✅ All {len(tool_specs)} tool names validated against tool-names.json")
         
         # Use BaseToolConstruct for registration with secret requirements
         BaseToolConstruct(

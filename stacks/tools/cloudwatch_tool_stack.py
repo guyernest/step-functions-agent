@@ -9,6 +9,8 @@ from aws_cdk import (
 )
 from constructs import Construct
 from .base_tool_construct import BaseToolConstruct
+import json
+from pathlib import Path
 
 
 class CloudWatchToolStack(Stack):
@@ -70,10 +72,34 @@ class CloudWatchToolStack(Stack):
             role=cloudwatch_lambda_role,
         )
 
+        # Load tool names from Lambda's single source of truth
+        tool_names_file = Path(__file__).parent.parent.parent / 'lambda' / 'tools' / 'cloudwatch-insights' / 'tool-names.json'
+        with open(tool_names_file, 'r') as f:
+            tool_names = json.load(f)
+        
+        print(f"✅ CloudWatchToolStack: Loaded {len(tool_names)} tool names from tool-names.json: {tool_names}")
+        
         # Register all CloudWatch tools using BaseToolConstruct with self-contained definitions
         tool_specs = [
             {
-                "tool_name": "query_cloudwatch_logs",
+                "tool_name": "find_log_groups_by_tag",
+                "description": "Find CloudWatch log groups by tag name and value",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "tag_name": {"type": "string", "description": "Tag name to search for"},
+                        "tag_value": {"type": "string", "description": "Tag value to search for"}
+                    },
+                    "required": ["tag_name", "tag_value"]
+                },
+                "language": "python",
+                "tags": ["cloudwatch", "logs", "discovery"],
+                "author": "system",
+                "lambda_arn": cloudwatch_lambda.function_arn,
+                "lambda_function_name": cloudwatch_lambda.function_name
+            },
+            {
+                "tool_name": "execute_query",
                 "description": "Execute CloudWatch Logs Insights queries to analyze log data",
                 "input_schema": {
                     "type": "object",
@@ -86,7 +112,20 @@ class CloudWatchToolStack(Stack):
                     "required": ["log_groups", "query"]
                 },
                 "language": "python",
-                "tags": ["cloudwatch", "logs", "monitoring"],
+                "tags": ["cloudwatch", "logs", "monitoring", "query"],
+                "author": "system",
+                "lambda_arn": cloudwatch_lambda.function_arn,
+                "lambda_function_name": cloudwatch_lambda.function_name
+            },
+            {
+                "tool_name": "get_query_generation_prompt",
+                "description": "Get the prompt template for generating CloudWatch Logs Insights queries",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {}
+                },
+                "language": "python",
+                "tags": ["cloudwatch", "logs", "prompt"],
                 "author": "system",
                 "lambda_arn": cloudwatch_lambda.function_arn,
                 "lambda_function_name": cloudwatch_lambda.function_name
@@ -109,6 +148,13 @@ class CloudWatchToolStack(Stack):
                 "lambda_function_name": cloudwatch_lambda.function_name
             }
         ]
+        
+        # Validate that all tool specs match declared names
+        spec_names = {spec["tool_name"] for spec in tool_specs}
+        declared_names = set(tool_names)
+        
+        if spec_names != declared_names:
+            raise ValueError(f"Tool name mismatch! Specs: {spec_names}, Declared: {declared_names}")
         
         BaseToolConstruct(
             self,

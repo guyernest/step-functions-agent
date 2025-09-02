@@ -1,0 +1,8 @@
+[
+  "get_ticker_data",
+  "get_ticker_recent_history",
+  "list_industries",
+  "top_sector_companies",
+  "top_industry_companies",
+  "download_tickers_data"
+]

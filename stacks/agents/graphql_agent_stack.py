@@ -1,6 +1,8 @@
 from aws_cdk import Stack, Fn
 from constructs import Construct
 from .modular_base_agent_stack import ModularBaseAgentStack
+import json
+from pathlib import Path
 
 
 class GraphQLAgentStack(ModularBaseAgentStack):
@@ -29,18 +31,21 @@ class GraphQLAgentStack(ModularBaseAgentStack):
         # Import GraphQL interface Lambda ARN
         graphql_lambda_arn = Fn.import_value(f"GraphQLInterfaceLambdaArn-{env_name}")
         
+        # Load tool names from Lambda's single source of truth
+        tool_names_file = Path(__file__).parent.parent.parent / 'lambda' / 'tools' / 'graphql-interface' / 'tool-names.json'
+        with open(tool_names_file, 'r') as f:
+            tool_names = json.load(f)
+        
+        print(f"✅ GraphQLAgent: Loaded {len(tool_names)} tool names from tool-names.json: {tool_names}")
+        
         # Define tool configurations
         tool_configs = [
             {
-                "tool_name": "execute_graphql_query",
-                "lambda_arn": graphql_lambda_arn,
-                "requires_approval": False
-            },
-            {
-                "tool_name": "generate_query_prompt",
+                "tool_name": tool_name,
                 "lambda_arn": graphql_lambda_arn,
                 "requires_approval": False
             }
+            for tool_name in tool_names
         ]
         
                 

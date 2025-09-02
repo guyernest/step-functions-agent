@@ -1,0 +1,6 @@
+[
+  "find_log_groups_by_tag",
+  "execute_query",
+  "get_query_generation_prompt",
+  "get_service_graph"
+]

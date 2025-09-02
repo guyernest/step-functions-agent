@@ -18,6 +18,7 @@ from constructs import Construct
 from .base_tool_construct import MultiToolConstruct
 import os
 import json
+from pathlib import Path
 
 
 class GraphQLInterfaceToolStack(Stack):
@@ -167,40 +168,52 @@ class GraphQLInterfaceToolStack(Stack):
     def _register_tools_using_base_construct(self):
         """Register all GraphQL interface tools using the BaseToolConstruct pattern"""
         
+        # Load tool names from Lambda's single source of truth
+        tool_names_file = Path(__file__).parent.parent.parent / 'lambda' / 'tools' / 'graphql-interface' / 'tool-names.json'
+        with open(tool_names_file, 'r') as f:
+            tool_names = json.load(f)
+        
+        print(f"✅ GraphQLInterfaceToolStack: Loaded {len(tool_names)} tool names from tool-names.json: {tool_names}")
+        
         # Define GraphQL interface tool specifications with self-contained definitions
         graphql_tools = [
             {
-                "tool_name": "graphql_interface",
+                "tool_name": "execute_graphql_query",
                 "description": "Execute GraphQL queries against any endpoint with dynamic schema support",
                 "input_schema": {
                     "type": "object",
                     "properties": {
                         "query": {"type": "string", "description": "GraphQL query to execute"},
-                        "variables": {"type": "object", "description": "Query variables"},
-                        "endpoint": {"type": "string", "description": "GraphQL endpoint URL (optional, uses configured default)"}
+                        "variables": {"type": "object", "description": "Query variables (optional)"}
                     },
                     "required": ["query"]
                 },
                 "language": "python",
-                "tags": ["graphql", "api", "query"],
+                "tags": ["graphql", "api", "query", "execution"],
                 "author": "system"
             },
             {
-                "tool_name": "generate_graphql_prompt",
-                "description": "Generate AI prompts for GraphQL query creation based on schema analysis",
+                "tool_name": "generate_query_prompt",
+                "description": "Generate a prompt template for creating GraphQL queries based on schema",
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "schema": {"type": "string", "description": "GraphQL schema definition"},
-                        "query_intent": {"type": "string", "description": "Description of what you want to query"}
+                        "description": {"type": "string", "description": "Description of what you want to query"}
                     },
-                    "required": ["schema", "query_intent"]
+                    "required": ["description"]
                 },
                 "language": "python",
-                "tags": ["graphql", "ai", "prompt", "schema"],
+                "tags": ["graphql", "prompt", "schema", "generation"],
                 "author": "system"
             }
         ]
+        
+        # Validate that all tool specs match declared names
+        spec_names = {spec["tool_name"] for spec in graphql_tools}
+        declared_names = set(tool_names)
+        
+        if spec_names != declared_names:
+            raise ValueError(f"Tool name mismatch! Specs: {spec_names}, Declared: {declared_names}")
         
         # Use MultiToolConstruct to register GraphQL interface tools
         MultiToolConstruct(

@@ -2,6 +2,7 @@ from aws_cdk import Stack, Fn
 from constructs import Construct
 from .modular_base_agent_stack import ModularBaseAgentStack
 import json
+from pathlib import Path
 
 
 class CloudWatchAgentStack(ModularBaseAgentStack):
@@ -37,28 +38,21 @@ class CloudWatchAgentStack(ModularBaseAgentStack):
         # Import CloudWatch tools Lambda ARN
         cloudwatch_lambda_arn = Fn.import_value(f"CloudWatchInsightsLambdaArn-{env_name}")
         
+        # Load tool names from Lambda's single source of truth
+        tool_names_file = Path(__file__).parent.parent.parent / 'lambda' / 'tools' / 'cloudwatch-insights' / 'tool-names.json'
+        with open(tool_names_file, 'r') as f:
+            tool_names = json.load(f)
+        
+        print(f"✅ CloudWatchAgent: Loaded {len(tool_names)} tool names from tool-names.json: {tool_names}")
+        
         # Define tool configurations
         tool_configs = [
             {
-                "tool_name": "find_log_groups_by_tag",
-                "lambda_arn": cloudwatch_lambda_arn,
-                "requires_approval": False
-            },
-            {
-                "tool_name": "execute_query",
-                "lambda_arn": cloudwatch_lambda_arn,
-                "requires_approval": False
-            },
-            {
-                "tool_name": "get_query_generation_prompt",
-                "lambda_arn": cloudwatch_lambda_arn,
-                "requires_approval": False
-            },
-            {
-                "tool_name": "get_service_graph",
+                "tool_name": tool_name,
                 "lambda_arn": cloudwatch_lambda_arn,
                 "requires_approval": False
             }
+            for tool_name in tool_names
         ]
         
         # Define system prompt for this agent

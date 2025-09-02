@@ -10,11 +10,13 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
+    "resolveJsonModule": true,
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": "./"
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "tool-names.json"
   ],
   "exclude": [
     "node_modules",

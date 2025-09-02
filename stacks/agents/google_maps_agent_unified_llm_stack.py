@@ -2,6 +2,7 @@ from aws_cdk import Stack, Fn
 from constructs import Construct
 from .modular_base_agent_unified_llm_stack import ModularBaseAgentUnifiedLLMStack
 import json
+from pathlib import Path
 
 
 class GoogleMapsAgentUnifiedLLMStack(ModularBaseAgentUnifiedLLMStack):
@@ -40,43 +41,21 @@ class GoogleMapsAgentUnifiedLLMStack(ModularBaseAgentUnifiedLLMStack):
         # Import Google Maps Lambda ARN
         google_maps_lambda_arn = Fn.import_value(f"GoogleMapsLambdaArn-{env_name}")
         
-        # Define tool configurations for all Google Maps tools
+        # Load tool names from Lambda's single source of truth
+        tool_names_file = Path(__file__).parent.parent.parent / 'lambda' / 'tools' / 'google-maps' / 'tool-names.json'
+        with open(tool_names_file, 'r') as f:
+            tool_names = json.load(f)
+        
+        print(f"✅ GoogleMapsAgentUnifiedLLM: Loaded {len(tool_names)} tool names from tool-names.json")
+        
+        # Define tool configurations using loaded names
         tool_configs = [
             {
-                "tool_name": "maps_geocode",
-                "lambda_arn": google_maps_lambda_arn,
-                "requires_activity": False
-            },
-            {
-                "tool_name": "maps_reverse_geocode",
-                "lambda_arn": google_maps_lambda_arn,
-                "requires_activity": False
-            },
-            {
-                "tool_name": "maps_search_places",
-                "lambda_arn": google_maps_lambda_arn,
-                "requires_activity": False
-            },
-            {
-                "tool_name": "maps_place_details",
-                "lambda_arn": google_maps_lambda_arn,
-                "requires_activity": False
-            },
-            {
-                "tool_name": "maps_distance_matrix",
-                "lambda_arn": google_maps_lambda_arn,
-                "requires_activity": False
-            },
-            {
-                "tool_name": "maps_elevation",
-                "lambda_arn": google_maps_lambda_arn,
-                "requires_activity": False
-            },
-            {
-                "tool_name": "maps_directions",
+                "tool_name": tool_name,
                 "lambda_arn": google_maps_lambda_arn,
                 "requires_activity": False
             }
+            for tool_name in tool_names
         ]
         
         # System prompt optimized for location services
