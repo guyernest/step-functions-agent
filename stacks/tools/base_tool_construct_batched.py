@@ -8,7 +8,6 @@ from constructs import Construct
 from ..shared.naming_conventions import NamingConventions
 from typing import List, Dict, Any, Optional
 import json
-from datetime import datetime, timezone
 
 
 class BatchedToolConstruct(Construct):
@@ -84,9 +83,6 @@ class BatchedToolConstruct(Construct):
     def _register_all_tools_batched(self):
         """Register all tools in a single batch write operation"""
         
-        # Generate current timestamp
-        current_timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-        
         # Prepare all tools for batch write
         batch_items = []
         self.tool_names = []  # Store at class level for delete operation
@@ -101,6 +97,8 @@ class BatchedToolConstruct(Construct):
             self.tool_names.append(tool_spec["tool_name"])
             
             # Create complete tool specification
+            # Note: We don't set timestamps here - let the Lambda or DynamoDB handle them
+            # This prevents unnecessary updates due to timestamp changes
             complete_tool_spec = {
                 "tool_name": tool_spec["tool_name"],
                 "description": tool_spec["description"],
@@ -114,9 +112,7 @@ class BatchedToolConstruct(Construct):
                 "human_approval_required": tool_spec.get("human_approval_required", False),
                 "requires_activity": tool_spec.get("requires_activity", False),
                 "activity_type": tool_spec.get("activity_type", ""),
-                "activity_arn": tool_spec.get("activity_arn", ""),
-                "created_at": tool_spec.get("created_at", current_timestamp),
-                "updated_at": tool_spec.get("updated_at", current_timestamp)
+                "activity_arn": tool_spec.get("activity_arn", "")
             }
             
             # Convert complex objects to JSON strings
@@ -207,8 +203,8 @@ class BatchedToolConstruct(Construct):
                             "tool_name": {"S": tool_name},
                             "secret_keys": {"L": secret_keys_list},
                             "environment": {"S": self.env_name},
-                            "description": {"S": ""},
-                            "registered_at": {"S": datetime.now(timezone.utc).isoformat()}
+                            "description": {"S": ""}
+                            # Note: Removed registered_at to prevent unnecessary updates
                         }
                     }),
                     "DeleteParameters": json.dumps({

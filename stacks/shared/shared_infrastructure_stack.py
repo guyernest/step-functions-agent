@@ -232,12 +232,14 @@ class SharedInfrastructureStack(Stack):
 import json
 import boto3
 import urllib3
+from datetime import datetime
 
 http = urllib3.PoolManager()
 dynamodb = boto3.client('dynamodb')
 
 def handler(event, context):
-    print(f"Received event: {json.dumps(event)}")
+    print(f"Received event type: {event.get('RequestType')}")
+    print(f"Physical Resource ID: {event.get('PhysicalResourceId', 'NEW')}")
     
     response_status = "SUCCESS"
     response_data = {}
@@ -246,39 +248,91 @@ def handler(event, context):
     try:
         request_type = event['RequestType']
         properties = event['ResourceProperties']
+        old_properties = event.get('OldResourceProperties', {})
         
         # Extract DynamoDB operation details
         service = properties.get('Service', 'dynamodb')
         action = properties.get('Action')
         parameters = json.loads(properties.get('Parameters', '{}'))
         
+        # Check if this is a replacement (DELETE + CREATE)
+        is_replacement = (request_type == 'Update' and 
+                         properties.get('PhysicalResourceId') != old_properties.get('PhysicalResourceId'))
+        
+        print(f"Request Type: {request_type}, Is Replacement: {is_replacement}")
         print(f"Service: {service}, Action: {action}")
-        print(f"Parameters: {json.dumps(parameters)}")
+        
+        # Log the tools being processed
+        if 'RequestItems' in parameters:
+            for table_name, items in parameters.get('RequestItems', {}).items():
+                tool_names = []
+                for item in items:
+                    if 'PutRequest' in item:
+                        tool_names.append(item['PutRequest']['Item'].get('tool_name', {}).get('S', 'unknown'))
+                    elif 'DeleteRequest' in item:
+                        tool_names.append(item['DeleteRequest']['Key'].get('tool_name', {}).get('S', 'unknown'))
+                print(f"Processing {len(items)} items for table {table_name}: {tool_names}")
         
         if service != 'dynamodb':
             raise ValueError(f"Unsupported service: {service}")
         
         # Execute the DynamoDB operation
-        if request_type in ['Create', 'Update']:
+        if request_type == 'Create':
+            # For CREATE, add timestamps to items
+            current_time = datetime.utcnow().isoformat() + 'Z'
             if action == 'batchWriteItem':
-                print(f"Executing batchWriteItem with {len(parameters.get('RequestItems', {}))} tables")
+                print(f"CREATE: Executing batchWriteItem with {len(parameters.get('RequestItems', {}))} tables")
+                # Add created_at and updated_at timestamps to each item
+                for table_name, requests in parameters.get('RequestItems', {}).items():
+                    for request in requests:
+                        if 'PutRequest' in request:
+                            item = request['PutRequest']['Item']
+                            if 'created_at' not in item:
+                                item['created_at'] = {'S': current_time}
+                            if 'updated_at' not in item:
+                                item['updated_at'] = {'S': current_time}
                 response = dynamodb.batch_write_item(**parameters)
                 unprocessed = response.get('UnprocessedItems', {})
                 if unprocessed:
                     print(f"Warning: Unprocessed items: {json.dumps(unprocessed)}")
                 response_data = {'UnprocessedItems': unprocessed}
-                print(f"BatchWriteItem response: {json.dumps(response)}")
             elif action == 'putItem':
-                print(f"Executing putItem")
+                print(f"CREATE: Executing putItem")
+                # Add timestamps to single item
+                if 'created_at' not in parameters['Item']:
+                    parameters['Item']['created_at'] = {'S': current_time}
+                if 'updated_at' not in parameters['Item']:
+                    parameters['Item']['updated_at'] = {'S': current_time}
                 response = dynamodb.put_item(**parameters)
                 response_data = {'Item': 'Created'}
-                print(f"PutItem response: {json.dumps(response)}")
-            elif action == 'deleteItem':
-                print(f"Executing deleteItem")
-                response = dynamodb.delete_item(**parameters)
-                response_data = {'Item': 'Deleted'}
             else:
-                raise ValueError(f"Unsupported action: {action}")
+                raise ValueError(f"Unsupported action for CREATE: {action}")
+                
+        elif request_type == 'Update':
+            # For UPDATE, only update the updated_at timestamp
+            current_time = datetime.utcnow().isoformat() + 'Z'
+            if action == 'batchWriteItem':
+                print(f"UPDATE: Executing batchWriteItem to update tools")
+                # Update the updated_at timestamp for each item
+                for table_name, requests in parameters.get('RequestItems', {}).items():
+                    for request in requests:
+                        if 'PutRequest' in request:
+                            item = request['PutRequest']['Item']
+                            # Keep existing created_at if not present in update
+                            item['updated_at'] = {'S': current_time}
+                response = dynamodb.batch_write_item(**parameters)
+                unprocessed = response.get('UnprocessedItems', {})
+                if unprocessed:
+                    print(f"Warning: Unprocessed items: {json.dumps(unprocessed)}")
+                response_data = {'UnprocessedItems': unprocessed}
+            elif action == 'putItem':
+                print(f"UPDATE: Executing putItem")
+                # Update the updated_at timestamp
+                parameters['Item']['updated_at'] = {'S': current_time}
+                response = dynamodb.put_item(**parameters)
+                response_data = {'Item': 'Updated'}
+            else:
+                raise ValueError(f"Unsupported action for UPDATE: {action}")
         elif request_type == 'Delete':
             # Handle delete operations
             delete_params = json.loads(properties.get('DeleteParameters', '{}'))
@@ -300,10 +354,21 @@ def handler(event, context):
     
     # Send response back to CloudFormation
     response_url = event['ResponseURL']
+    
+    # For UPDATE, we must return the same PhysicalResourceId to avoid replacement
+    # For CREATE, we use the one from properties or generate a new one
+    if request_type == 'Create':
+        final_physical_id = properties.get('PhysicalResourceId', physical_resource_id)
+    else:
+        # For Update and Delete, always use the existing PhysicalResourceId
+        final_physical_id = physical_resource_id
+    
+    print(f"Returning PhysicalResourceId: {final_physical_id}")
+    
     response_body = {
         'Status': response_status,
         'Reason': f"See CloudWatch Log Stream: {context.log_stream_name}",
-        'PhysicalResourceId': physical_resource_id,
+        'PhysicalResourceId': final_physical_id,
         'StackId': event['StackId'],
         'RequestId': event['RequestId'],
         'LogicalResourceId': event['LogicalResourceId'],
