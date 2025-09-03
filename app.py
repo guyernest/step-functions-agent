@@ -167,6 +167,7 @@ def main():
         env=env,
         description=f"E2B code execution tool for {environment} environment"
     )
+    e2b_tool.add_dependency(shared_infrastructure_stack)
     
     # Google Maps Tool - provides location-based services
     google_maps_tool = GoogleMapsToolStack(
@@ -176,6 +177,7 @@ def main():
         env=env,
         description=f"Google Maps tool for {environment} environment"
     )
+    google_maps_tool.add_dependency(shared_infrastructure_stack)
     
     # Financial Tools - provides Yahoo Finance data analysis
     financial_tools = FinancialToolStack(
@@ -185,6 +187,7 @@ def main():
         env=env,
         description=f"Financial data tools for {environment} environment"
     )
+    financial_tools.add_dependency(shared_infrastructure_stack)
     
     # Web Research Tools - provides AI-powered company research
     web_research_tools = WebResearchToolStack(
@@ -204,6 +207,7 @@ def main():
         env=env,
         description=f"CloudWatch monitoring tools for {environment} environment"
     )
+    cloudwatch_tools.add_dependency(shared_infrastructure_stack)
     
     # Clustering Tools - high-performance data analysis with HDBSCAN and semantic search
     clustering_tools = ClusteringToolStack(
@@ -258,6 +262,7 @@ def main():
         env=env,
         description=f"Microsoft Graph and Office 365 integration tools for {environment} environment"
     )
+    microsoft_graph_tools.add_dependency(shared_infrastructure_stack)
     
     # Web Automation Tools - browser automation and intelligent web scraping
     web_automation_tools = WebAutomationToolStack(
@@ -395,6 +400,7 @@ def main():
         max_content_size=10000,
         description=f"Microsoft Graph tool with long content support for {environment} environment"
     )
+    microsoft_graph_long_content.add_dependency(shared_infrastructure_stack)
     
     # Test Automation Remote Agent with Rust LLM and Long Content Support
     test_automation_remote_agent_rust_long = TestAutomationRemoteAgentRustLongContentStack(
