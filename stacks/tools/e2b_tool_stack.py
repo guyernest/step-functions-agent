@@ -12,7 +12,7 @@ from aws_cdk import (
     RemovalPolicy
 )
 from constructs import Construct
-from .base_tool_construct import BaseToolConstruct
+from .base_tool_construct_batched import BatchedToolConstruct
 from ..shared.naming_conventions import NamingConventions
 import json
 import os
@@ -270,8 +270,8 @@ class E2BToolStack(Stack):
             }
         ]
         
-        # Use BaseToolConstruct for registration with secret requirements
-        BaseToolConstruct(
+        # Use BatchedToolConstruct for registration with secret requirements
+        BatchedToolConstruct(
             self,
             "CodeExecutionTools",
             tool_specs=tool_specs,

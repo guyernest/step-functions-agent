@@ -12,7 +12,7 @@ from aws_cdk import (
     custom_resources as cr,
 )
 from constructs import Construct
-from .base_tool_construct import BaseToolConstruct
+from .base_tool_construct_batched import BatchedToolConstruct
 from ..shared.naming_conventions import NamingConventions
 import json
 
@@ -156,8 +156,8 @@ class DBInterfaceToolStack(Stack):
             }
         ]
         
-        # Use BaseToolConstruct for registration
-        BaseToolConstruct(
+        # Use BatchedToolConstruct for registration
+        BatchedToolConstruct(
             self,
             "DatabaseTools",
             tool_specs=tool_specs,

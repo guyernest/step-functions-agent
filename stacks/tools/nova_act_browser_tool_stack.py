@@ -13,7 +13,7 @@ from aws_cdk import (
     CfnOutput
 )
 from constructs import Construct
-from .base_tool_construct import BaseToolConstruct
+from .base_tool_construct_batched import BatchedToolConstruct
 
 
 class NovaActBrowserToolStack(Stack):
@@ -196,7 +196,7 @@ class NovaActBrowserToolStack(Stack):
                 })
         }]
         
-        tool_construct = BaseToolConstruct(
+        tool_construct = BatchedToolConstruct(
             self, "NovaActBrowserTool",
             tool_specs=tool_specs,
             lambda_function=self.nova_act_browser_lambda,

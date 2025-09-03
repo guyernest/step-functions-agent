@@ -9,6 +9,7 @@ from aws_cdk import (
 )
 from constructs import Construct
 from .base_tool_construct import BaseToolConstruct
+from .base_tool_construct_batched import BatchedToolConstruct
 import json
 from pathlib import Path
 
@@ -156,7 +157,8 @@ class CloudWatchToolStack(Stack):
         if spec_names != declared_names:
             raise ValueError(f"Tool name mismatch! Specs: {spec_names}, Declared: {declared_names}")
         
-        BaseToolConstruct(
+        # Use BatchedToolConstruct to avoid throttling with 4 tools
+        BatchedToolConstruct(
             self,
             "CloudWatchTools",
             tool_specs=tool_specs,

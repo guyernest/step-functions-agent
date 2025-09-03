@@ -210,9 +210,9 @@ class MicrosoftGraphToolStack(Stack):
         ]
         
         # Use BaseToolConstruct directly to register Microsoft Graph tools with secret requirements
-        from .base_tool_construct import BaseToolConstruct
+        from .base_tool_construct_batched import BatchedToolConstruct
         
-        BaseToolConstruct(
+        BatchedToolConstruct(
             self,
             "MicrosoftGraphToolsRegistry",
             tool_specs=microsoft_tools,

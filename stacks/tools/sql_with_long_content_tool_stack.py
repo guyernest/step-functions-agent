@@ -10,8 +10,7 @@ from constructs import Construct
 from typing import Dict, Any, Optional
 from ..shared.long_content_tool_construct import LongContentToolConstruct
 from ..shared.naming_conventions import NamingConventions
-from stacks.shared.tool_definitions import ToolDefinition, ToolLanguage, ToolStatus
-from .base_tool_construct import BaseToolConstruct
+from .base_tool_construct_batched import BatchedToolConstruct
 
 
 class SqlWithLongContentToolStack(Stack):
@@ -73,10 +72,10 @@ class SqlWithLongContentToolStack(Stack):
         """Create SQL tools with long content support using the actual db-interface code"""
         
         # Tool definitions matching the simple SQL agent
-        get_db_schema_tool = ToolDefinition(
-            tool_name="get_db_schema",
-            description="Get database schema information including tables and columns",
-            input_schema={
+        get_db_schema_tool = {
+            "tool_name": "get_db_schema",
+            "description": "Get database schema information including tables and columns",
+            "input_schema": {
                 "type": "object",
                 "properties": {
                     "table_name": {
@@ -85,12 +84,12 @@ class SqlWithLongContentToolStack(Stack):
                     }
                 }
             },
-            language=ToolLanguage.PYTHON,
-            lambda_handler="lambda_handler",
-            tags=["database", "schema", "sql", "metadata", "long-content"],
-            status=ToolStatus.ACTIVE,
-            human_approval_required=False
-        )
+            "language": "python",
+            "lambda_handler": "lambda_handler",
+            "tags": ["database", "schema", "sql", "metadata", "long-content"],
+            "status": "active",
+            "human_approval_required": False
+        }
         
         # Create the SQL tools Lambda with long content support using PythonFunction
         # This will automatically handle requirements.txt for pandas and other dependencies
@@ -132,10 +131,10 @@ class SqlWithLongContentToolStack(Stack):
         # Store tool definitions for registration
         self.get_db_schema_tool = get_db_schema_tool
         
-        execute_sql_query_tool = ToolDefinition(
-            tool_name="execute_sql_query",
-            description="Execute SQL query against the database",
-            input_schema={
+        execute_sql_query_tool = {
+            "tool_name": "execute_sql_query",
+            "description": "Execute SQL query against the database",
+            "input_schema": {
                 "type": "object",
                 "properties": {
                     "query": {
@@ -145,12 +144,12 @@ class SqlWithLongContentToolStack(Stack):
                 },
                 "required": ["query"]
             },
-            language=ToolLanguage.PYTHON,
-            lambda_handler="lambda_handler",
-            tags=["database", "sql", "query", "execution", "long-content"],
-            status=ToolStatus.ACTIVE,
-            human_approval_required=False
-        )
+            "language": "python",
+            "lambda_handler": "lambda_handler",
+            "tags": ["database", "sql", "query", "execution", "long-content"],
+            "status": "active",
+            "human_approval_required": False
+        }
         
         self.execute_sql_query_tool = execute_sql_query_tool
         
@@ -170,31 +169,33 @@ class SqlWithLongContentToolStack(Stack):
                 {
                     "tool_name": "get_db_schema",
                     "description": "Get database schema information including tables and columns",
-                    "input_schema": self.get_db_schema_tool.input_schema,
+                    "input_schema": self.get_db_schema_tool["input_schema"],
                     "lambda_arn": self.sql_tools_lambda.function_arn,
                     "lambda_function_name": self.sql_tools_lambda.function_name,
                     "language": "python",
                     "human_approval_required": False,
+                    "tags": self.get_db_schema_tool.get("tags", []),
                     "supports_long_content": True,
                     "max_content_size": self.max_content_size,
-                    "status": "ACTIVE"
+                    "status": "active"
                 },
                 {
                     "tool_name": "execute_sql_query",
                     "description": "Execute SQL query against the database",
-                    "input_schema": self.execute_sql_query_tool.input_schema,
+                    "input_schema": self.execute_sql_query_tool["input_schema"],
                     "lambda_arn": self.sql_tools_lambda.function_arn,
                     "lambda_function_name": self.sql_tools_lambda.function_name,
                     "language": "python",
                     "human_approval_required": False,
+                    "tags": self.execute_sql_query_tool.get("tags", []),
                     "supports_long_content": True,
                     "max_content_size": self.max_content_size,
-                    "status": "ACTIVE"
+                    "status": "active"
                 }
             ]
             
             # Use BaseToolConstruct for registration
-            BaseToolConstruct(
+            BatchedToolConstruct(
                 self,
                 "SqlLongContentToolsRegistration",
                 tool_specs=tool_specs,

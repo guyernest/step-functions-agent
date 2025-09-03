@@ -15,6 +15,7 @@ from aws_cdk import (
 from constructs import Construct
 from ..shared.naming_conventions import NamingConventions
 from .base_tool_construct import BaseToolConstruct
+from .base_tool_construct_batched import BatchedToolConstruct
 import os
 import json
 from pathlib import Path
@@ -354,8 +355,9 @@ class GoogleMapsToolStack(Stack):
         
         print(f"✅ All {len(tool_specs)} tool names validated against tool-names.json")
         
-        # Use BaseToolConstruct for registration with secret requirements
-        BaseToolConstruct(
+        # Use BatchedToolConstruct for registration with secret requirements
+        # This reduces Custom Resources from 7 to 1, avoiding throttling issues
+        BatchedToolConstruct(
             self,
             "GoogleMapsTools",
             tool_specs=tool_specs,

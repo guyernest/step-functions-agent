@@ -8,7 +8,8 @@ from aws_cdk import (
     aws_lambda as _lambda,
     aws_lambda_python_alpha as _lambda_python,
     aws_secretsmanager as secretsmanager,
-    RemovalPolicy
+    RemovalPolicy,
+    custom_resources as cr
 )
 from constructs import Construct
 from .naming_conventions import NamingConventions
@@ -36,6 +37,9 @@ class SharedInfrastructureStack(Stack):
         
         # Create consolidated tool secrets infrastructure
         self._create_tool_secrets_infrastructure()
+        
+        # Create shared Custom Resource provider for DynamoDB operations
+        self._create_shared_custom_resource_provider()
         
         # Create stack exports
         self._create_stack_exports()
@@ -179,6 +183,155 @@ class SharedInfrastructureStack(Stack):
             }
         )
 
+    def _create_shared_custom_resource_provider(self):
+        """Create a shared Custom Resource provider for DynamoDB operations"""
+        
+        # Create a Lambda role for the shared Custom Resource handler
+        shared_cr_role = iam.Role(
+            self,
+            "SharedCustomResourceRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AWSLambdaBasicExecutionRole"
+                )
+            ]
+        )
+        
+        # Grant DynamoDB permissions to the role
+        shared_cr_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "dynamodb:BatchWriteItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                ],
+                resources=[
+                    self.tool_registry_table.table_arn,
+                    self.tool_secrets_table.table_arn,
+                    f"{self.tool_registry_table.table_arn}/index/*",
+                    f"{self.tool_secrets_table.table_arn}/index/*"
+                ]
+            )
+        )
+        
+        # Create the Lambda function for handling Custom Resource requests
+        self.shared_cr_lambda = _lambda.Function(
+            self,
+            "SharedCustomResourceLambda",
+            function_name=f"shared-custom-resource-{self.env_name}",
+            description="Shared Custom Resource handler for DynamoDB operations across all tool stacks",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            handler="index.handler",
+            code=_lambda.Code.from_inline("""
+import json
+import boto3
+import urllib3
+
+http = urllib3.PoolManager()
+dynamodb = boto3.client('dynamodb')
+
+def handler(event, context):
+    print(f"Received event: {json.dumps(event)}")
+    
+    response_status = "SUCCESS"
+    response_data = {}
+    physical_resource_id = event.get('PhysicalResourceId', context.log_stream_name)
+    
+    try:
+        request_type = event['RequestType']
+        properties = event['ResourceProperties']
+        
+        # Extract DynamoDB operation details
+        service = properties.get('Service', 'dynamodb')
+        action = properties.get('Action')
+        parameters = json.loads(properties.get('Parameters', '{}'))
+        
+        print(f"Service: {service}, Action: {action}")
+        print(f"Parameters: {json.dumps(parameters)}")
+        
+        if service != 'dynamodb':
+            raise ValueError(f"Unsupported service: {service}")
+        
+        # Execute the DynamoDB operation
+        if request_type in ['Create', 'Update']:
+            if action == 'batchWriteItem':
+                print(f"Executing batchWriteItem with {len(parameters.get('RequestItems', {}))} tables")
+                response = dynamodb.batch_write_item(**parameters)
+                unprocessed = response.get('UnprocessedItems', {})
+                if unprocessed:
+                    print(f"Warning: Unprocessed items: {json.dumps(unprocessed)}")
+                response_data = {'UnprocessedItems': unprocessed}
+                print(f"BatchWriteItem response: {json.dumps(response)}")
+            elif action == 'putItem':
+                print(f"Executing putItem")
+                response = dynamodb.put_item(**parameters)
+                response_data = {'Item': 'Created'}
+                print(f"PutItem response: {json.dumps(response)}")
+            elif action == 'deleteItem':
+                print(f"Executing deleteItem")
+                response = dynamodb.delete_item(**parameters)
+                response_data = {'Item': 'Deleted'}
+            else:
+                raise ValueError(f"Unsupported action: {action}")
+        elif request_type == 'Delete':
+            # Handle delete operations
+            delete_params = json.loads(properties.get('DeleteParameters', '{}'))
+            if delete_params:
+                print(f"Executing delete with action: {action}")
+                if action == 'batchWriteItem':
+                    response = dynamodb.batch_write_item(**delete_params)
+                elif action == 'deleteItem':
+                    response = dynamodb.delete_item(**delete_params)
+                print(f"Delete response: {json.dumps(response)}")
+            response_data = {'Deleted': True}
+            
+    except Exception as e:
+        print(f"Error executing DynamoDB operation: {str(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        response_status = "FAILED"
+        response_data = {'Error': str(e)}
+    
+    # Send response back to CloudFormation
+    response_url = event['ResponseURL']
+    response_body = {
+        'Status': response_status,
+        'Reason': f"See CloudWatch Log Stream: {context.log_stream_name}",
+        'PhysicalResourceId': physical_resource_id,
+        'StackId': event['StackId'],
+        'RequestId': event['RequestId'],
+        'LogicalResourceId': event['LogicalResourceId'],
+        'Data': response_data
+    }
+    
+    json_response_body = json.dumps(response_body)
+    headers = {'content-type': '', 'content-length': str(len(json_response_body))}
+    
+    try:
+        response = http.request('PUT', response_url, headers=headers, body=json_response_body)
+        print(f"CloudFormation response status: {response.status}")
+    except Exception as e:
+        print(f"Failed to send response to CloudFormation: {str(e)}")
+    
+    return response_data
+            """),
+            timeout=Duration.seconds(60),
+            role=shared_cr_role
+        )
+        
+        # Create a provider that wraps the Lambda function
+        self.shared_cr_provider = cr.Provider(
+            self,
+            "SharedDynamoDBProvider",
+            on_event_handler=self.shared_cr_lambda
+        )
+
     def _create_stack_exports(self):
         """Create CloudFormation outputs for other stacks to import"""
         
@@ -234,6 +387,15 @@ class SharedInfrastructureStack(Stack):
             value=self.secret_structure_manager.function_arn,
             export_name=f"SecretStructureManagerArn-{self.env_name}",
             description="ARN of the secret structure manager Lambda"
+        )
+        
+        # Export shared Custom Resource provider service token
+        CfnOutput(
+            self,
+            "SharedCustomResourceProviderToken",
+            value=self.shared_cr_provider.service_token,
+            export_name=f"SharedCustomResourceProviderToken-{self.env_name}",
+            description="Service token for the shared Custom Resource provider"
         )
 
     def get_tool_registry_table(self) -> dynamodb.Table:

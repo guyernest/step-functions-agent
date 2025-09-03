@@ -15,7 +15,6 @@ except ImportError:
     _lambda_python = None
 
 from constructs import Construct
-from ..shared.tool_definitions import ToolDefinition, ToolLanguage
 from ..shared.naming_conventions import NamingConventions
 import os
 import json
@@ -245,19 +244,13 @@ class MicrosoftGraphLongContentToolStack(Stack):
 
     def _register_tools_using_base_construct(self):
         """Register tools in DynamoDB using the base tool construct"""
-        from ..shared.base_tool_construct import BaseToolConstruct
+        from .base_tool_construct_batched import BatchedToolConstruct
         
-        base_construct = BaseToolConstruct(
-            self,
-            "MicrosoftGraphLongContentToolRegistry",
-            env_name=self.env_name
-        )
-        
-        # Define tool locally instead of importing from shared definitions
-        graph_tool = ToolDefinition(
-            tool_name="MicrosoftGraphAPI",
-            description="Access Microsoft Graph API including emails, Teams messages, SharePoint, and user management",
-            input_schema={
+        # Define tool specifications
+        tool_specs = [{
+            "tool_name": "MicrosoftGraphAPI",
+            "description": "Access Microsoft Graph API including emails, Teams messages, SharePoint, and user management",
+            "input_schema": {
                 "type": "object",
                 "properties": {
                     "endpoint": {
@@ -277,20 +270,21 @@ class MicrosoftGraphLongContentToolStack(Stack):
                 },
                 "required": ["endpoint"]
             },
-            language=ToolLanguage.PYTHON,
-            lambda_handler="lambda_handler",
-            tags=["microsoft", "graph", "email", "teams", "sharepoint", "enterprise"],
-            human_approval_required=True
-        )
+            "language": "python",
+            "tags": ["microsoft", "graph", "email", "teams", "sharepoint", "enterprise"],
+            "human_approval_required": True,
+            "lambda_arn": self.microsoft_graph_lambda.function_arn,
+            "lambda_function_name": self.microsoft_graph_lambda.function_name
+        }]
         
-        # Register the tool using the base construct method
-        base_construct._register_tool(
-            tool_definition=graph_tool,
-            lambda_function=self.microsoft_graph_lambda
+        # Use BatchedToolConstruct for registration
+        BatchedToolConstruct(
+            self,
+            "MicrosoftGraphLongContentToolRegistry",
+            tool_specs=tool_specs,
+            lambda_function=self.microsoft_graph_lambda,
+            env_name=self.env_name
         )
-        
-        # Create exports for the tool
-        base_construct._create_exports()
         
         print(f"📝 Registered Microsoft Graph tool with long content")
 

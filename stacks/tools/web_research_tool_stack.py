@@ -16,6 +16,7 @@ except ImportError:
 
 from constructs import Construct
 from .base_tool_construct import BaseToolConstruct
+from .base_tool_construct_batched import BatchedToolConstruct
 from ..shared.naming_conventions import NamingConventions
 import os
 import json
@@ -210,8 +211,8 @@ class WebResearchToolStack(Stack):
         if spec_names != declared_names:
             raise ValueError(f"Tool name mismatch! Specs: {spec_names}, Declared: {declared_names}")
         
-        # Use BaseToolConstruct for registration with secret requirements
-        BaseToolConstruct(
+        # Use BatchedToolConstruct for registration with secret requirements
+        BatchedToolConstruct(
             self,
             "WebResearchTools",
             tool_specs=tool_specs,
