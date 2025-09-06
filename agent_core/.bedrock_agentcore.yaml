@@ -1,4 +1,4 @@
-default_agent: shopping_agent
+default_agent: broadband_checker_agent
 agents:
   web_search_agent:
     name: web_search_agent
@@ -81,6 +81,34 @@ agents:
     codebuild:
       project_name: bedrock-agentcore-shopping_agent-builder
       execution_role: arn:aws:iam::672915487120:role/AmazonBedrockAgentCoreSDKCodeBuild-us-west-2-471289a137
+      source_bucket: bedrock-agentcore-codebuild-sources-672915487120-us-west-2
+    authorizer_configuration: null
+    oauth_configuration: null
+  broadband_checker_agent:
+    name: broadband_checker_agent
+    entrypoint: broadband_checker_agent.py
+    platform: linux/arm64
+    container_runtime: none
+    aws:
+      execution_role: arn:aws:iam::672915487120:role/AgentCoreRuntime-broadband-checker
+      execution_role_auto_create: true
+      account: '672915487120'
+      region: us-west-2
+      ecr_repository: 672915487120.dkr.ecr.us-west-2.amazonaws.com/bedrock-agentcore-broadband_checker_agent
+      ecr_auto_create: false
+      network_configuration:
+        network_mode: PUBLIC
+      protocol_configuration:
+        server_protocol: HTTP
+      observability:
+        enabled: true
+    bedrock_agentcore:
+      agent_id: broadband_checker_agent-KcXxkNFCkG
+      agent_arn: arn:aws:bedrock-agentcore:us-west-2:672915487120:runtime/broadband_checker_agent-KcXxkNFCkG
+      agent_session_id: null
+    codebuild:
+      project_name: bedrock-agentcore-broadband_checker_agent-builder
+      execution_role: arn:aws:iam::672915487120:role/AmazonBedrockAgentCoreSDKCodeBuild-us-west-2-49640b5348
       source_bucket: bedrock-agentcore-codebuild-sources-672915487120-us-west-2
     authorizer_configuration: null
     oauth_configuration: null

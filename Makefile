@@ -23,6 +23,7 @@ CALL_LLM_DIR := $(LAMBDA_DIR)/call_llm
 CALL_LLM_RUST_DIR := $(LAMBDA_DIR)/call_llm_rust
 TEST_DIR := tests
 UI_DIR := ui_amplify
+AGENT_CORE_DIR := agent_core
 
 # Python tools directories
 PYTHON_TOOLS := $(TOOLS_DIR)/code-interpreter $(TOOLS_DIR)/db-interface $(TOOLS_DIR)/graphql-interface $(TOOLS_DIR)/cloudwatch-queries
@@ -666,8 +667,8 @@ AGENTCORE_NAME ?= web-search-agent
 
 # Legacy Agent Commands (OLD Service - Bedrock Agents)
 # ============================================
-AGENT_CORE_DIR := scripts/agent_core
-AGENT_CORE_CONFIGS := $(AGENT_CORE_DIR)/configs
+# Note: AGENT_CORE_DIR already defined above as agent_core
+AGENT_CORE_CONFIGS := scripts/agent_core/configs
 AGENT_NAME ?= web-search-agent
 
 .PHONY: deploy-agent-core
@@ -743,6 +744,102 @@ deploy-agent-wrapper:
 		--profile $(AWS_PROFILE); \
 	rm -f /tmp/agent-wrapper-app.py; \
 	echo "✅ Wrapper deployment complete!"
+
+# ============================================
+# Agent Core - Broadband Checker Deployment
+# ============================================
+.PHONY: agentcore-broadband-build
+agentcore-broadband-build:
+	@echo "🔨 Building Broadband Checker Agent Docker image..."
+	@docker build -f $(AGENT_CORE_DIR)/Dockerfile.broadband \
+		-t broadband-checker-agent:latest \
+		$(AGENT_CORE_DIR) && \
+		echo "✅ Docker image built: broadband-checker-agent:latest"
+
+.PHONY: agentcore-broadband-test-local
+agentcore-broadband-test-local: agentcore-broadband-build
+	@echo "🧪 Testing Broadband Checker Agent locally..."
+	@docker run --rm \
+		-e AWS_REGION=$(AWS_REGION) \
+		-e BYPASS_TOOL_CONSENT=true \
+		broadband-checker-agent:latest \
+		python -c "import json; from broadband_checker_agent import handler; \
+		result = handler({'test': True}, {}); \
+		print('Test Result:'); print(json.dumps(result, indent=2)[:500])"
+
+.PHONY: agentcore-broadband-deploy-lambda
+agentcore-broadband-deploy-lambda:
+	@echo "🚀 Deploying Broadband Checker as Lambda function..."
+	@cd $(AGENT_CORE_DIR) && \
+		python3 deploy_broadband_agent.py \
+			--agent-name broadband-checker \
+			--region $(AWS_REGION) \
+			--deployment-type lambda \
+			--test
+
+.PHONY: agentcore-broadband-configure
+agentcore-broadband-configure:
+	@echo "⚙️  Configuring Broadband Checker Agent..."
+	@cd $(AGENT_CORE_DIR) && \
+		source ../venv/bin/activate && \
+		agentcore configure -e broadband_checker_agent.py && \
+		echo "✅ Agent configured successfully"
+
+.PHONY: agentcore-broadband-deploy-agentcore
+agentcore-broadband-deploy-agentcore: agentcore-broadband-configure
+	@echo "🚀 Deploying Broadband Checker to Agent Core runtime using agentcore CLI..."
+	@cd $(AGENT_CORE_DIR) && \
+		source ../venv/bin/activate && \
+		agentcore launch --agent broadband_checker_agent && \
+		echo "✅ Agent deployed successfully"
+
+.PHONY: agentcore-broadband-test-deployed
+agentcore-broadband-test-deployed:
+	@echo "🧪 Testing deployed Broadband Checker Agent..."
+	@cd $(AGENT_CORE_DIR) && \
+		source ../venv/bin/activate && \
+		agentcore invoke broadband_checker_agent '{"test": true}' && \
+		echo "✅ Test completed"
+
+.PHONY: agentcore-broadband-logs
+agentcore-broadband-logs:
+	@echo "📋 Viewing Broadband Checker Agent logs (full)..."
+	@aws logs tail /aws/bedrock-agentcore/runtimes/broadband_checker_agent-KcXxkNFCkG-DEFAULT \
+		--profile $(AWS_PROFILE) \
+		--region $(AWS_REGION) \
+		--follow
+
+.PHONY: agentcore-broadband-logs-body
+agentcore-broadband-logs-body:
+	@echo "📋 Viewing Broadband Checker Agent logs (body field only with timestamp)..."
+	@echo "📍 Log group: /aws/bedrock-agentcore/runtimes/broadband_checker_agent-KcXxkNFCkG-DEFAULT"
+	@echo "⏰ Following new logs as they arrive..."
+	@echo "----------------------------------------"
+	@aws logs tail /aws/bedrock-agentcore/runtimes/broadband_checker_agent-KcXxkNFCkG-DEFAULT --follow | \
+	awk '{ts=$$1; $$1=""; stream=$$2; $$2=""; sub(/^  */,""); print ts "|" $$0}' | \
+	while IFS="|" read -r ts json; do \
+		body=$$(printf "%s\n" "$$json" | jq -r 'try .body // empty' 2>/dev/null); \
+		if [ -n "$$body" ]; then printf "%s %s\n" "$$ts" "$$body"; fi; \
+	done
+
+.PHONY: agentcore-broadband-batch-test
+agentcore-broadband-batch-test:
+	@echo "🧪 Testing batch processing..."
+	@aws lambda invoke \
+		--function-name broadband-checker-agent-$(AWS_REGION) \
+		--payload '{"addresses":[{"postcode":"E8 4LX","building_number":"13"},{"postcode":"SW1A 1AA","building_number":"10"}],"parallel":false}' \
+		--profile $(AWS_PROFILE) \
+		--region $(AWS_REGION) \
+		/tmp/broadband-batch-response.json && \
+		echo "Batch Response:" && \
+		cat /tmp/broadband-batch-response.json | python3 -m json.tool
+
+.PHONY: agentcore-broadband-clean
+agentcore-broadband-clean:
+	@echo "🧹 Cleaning Broadband Checker build artifacts..."
+	@cd $(AGENT_CORE_DIR) && \
+		rm -f deployment-broadband-checker-*.json && \
+		docker rmi broadband-checker-agent:latest 2>/dev/null || true
 
 .PHONY: deploy-agent-full
 deploy-agent-full:
