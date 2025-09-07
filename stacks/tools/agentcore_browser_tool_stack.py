@@ -1,6 +1,6 @@
 """
 CDK Stack for Agent Core Browser Tool
-Creates a Lambda function that invokes Agent Core for browser automation
+Creates a Lambda function that routes to multiple Agent Core browser agents
 """
 
 from aws_cdk import (
@@ -19,16 +19,16 @@ import os
 
 class AgentCoreBrowserToolStack(Stack):
     """
-    Agent Core Browser Tool - Lambda function for browser automation
+    Agent Core Browser Tool - Lambda function that routes to multiple browser agents
     """
     
     def __init__(self, scope: Construct, construct_id: str, env_name: str = "prod", **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
         
         self.env_name = env_name
-        
-        # Get Agent Core runtime from deployment
-        agent_runtime_arn = "arn:aws:bedrock-agentcore:us-west-2:672915487120:runtime/shopping_agent-aw6O6r7uk5"
+        # Get account ID from env if provided, otherwise use default
+        env = kwargs.get('env')
+        self.aws_account_id = env.account if env and hasattr(env, 'account') else '672915487120'
         
         # Get the path to the Lambda function code
         lambda_path = os.path.join(
@@ -45,12 +45,12 @@ class AgentCoreBrowserToolStack(Stack):
             index="lambda_function.py",
             handler="handler",
             timeout=Duration.seconds(300),  # 5 minutes for long-running browser tasks
-            memory_size=1024,  # More memory for processing streaming responses
+            memory_size=256,  # Reduced memory for cost optimization
             environment={
-                "AGENT_RUNTIME_ARN": agent_runtime_arn,
+                "AWS_ACCOUNT_ID": str(self.aws_account_id),
                 "ENV_NAME": env_name
             },
-            description=f"Agent Core browser tool handler for {env_name}"
+            description=f"Agent Core browser tool router for {env_name}"
         )
         
         # Grant permissions to invoke Agent Core
@@ -67,6 +67,20 @@ class AgentCoreBrowserToolStack(Stack):
             )
         )
         
+        # Grant permissions to access S3 for browser recordings
+        self.agentcore_browser_lambda.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "s3:ListBucket",
+                    "s3:GetObject"
+                ],
+                resources=[
+                    "arn:aws:s3:::nova-act-browser-results-prod-672915487120",
+                    "arn:aws:s3:::nova-act-browser-results-prod-672915487120/*"
+                ]
+            )
+        )
+        
         # Store the function name and ARN for use by agents
         self.function_name = self.agentcore_browser_lambda.function_name
         self.function_arn = self.agentcore_browser_lambda.function_arn
@@ -75,47 +89,116 @@ class AgentCoreBrowserToolStack(Stack):
         self._register_tool_in_registry()
     
     def _register_tool_in_registry(self):
-        """Register the Agent Core browser tool in DynamoDB using BaseToolConstruct"""
+        """Register all browser tool variants in DynamoDB using BatchedToolConstruct"""
         
-        tool_spec = {
-            "tool_name": "agentcore_browser_search",
-            "description": "Search and extract information from web portals using Agent Core browser automation with Nova Act",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Search query or task description for browser automation"
+        # Define all three tool variants that route to different agents
+        tool_specs = [
+            {
+                "tool_name": "browser_broadband",
+                "description": "Check UK broadband availability and speeds for a given address using BT Wholesale portal",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "address": {
+                            "type": "object",
+                            "properties": {
+                                "building_number": {
+                                    "type": "string",
+                                    "description": "Building number or name"
+                                },
+                                "street": {
+                                    "type": "string",
+                                    "description": "Street name"
+                                },
+                                "town": {
+                                    "type": "string",
+                                    "description": "Town or city"
+                                },
+                                "postcode": {
+                                    "type": "string",
+                                    "description": "UK postcode (required)"
+                                }
+                            },
+                            "required": ["postcode"],
+                            "description": "UK address to check broadband availability"
+                        }
                     },
-                    "url": {
-                        "type": "string",
-                        "description": "Target URL to search (default: https://www.amazon.com)"
-                    },
-                    "action": {
-                        "type": "string",
-                        "enum": ["search", "extract", "authenticate"],
-                        "description": "Action to perform (default: search)"
-                    },
-                    "test_mode": {
-                        "type": "boolean",
-                        "description": "Use test mode for immediate execution (default: true)"
-                    }
+                    "required": ["address"]
                 },
-                "required": ["query"]
+                "language": "python",
+                "tags": ["browser", "automation", "broadband", "uk", "telecom"],
+                "author": "system",
+                "human_approval_required": False,
+                "lambda_arn": self.agentcore_browser_lambda.function_arn,
+                "lambda_function_name": self.agentcore_browser_lambda.function_name
             },
-            "language": "python",
-            "tags": ["browser", "automation", "search", "agent-core", "nova-act"],
-            "author": "system",
-            "human_approval_required": False,
-            "lambda_arn": self.agentcore_browser_lambda.function_arn,
-            "lambda_function_name": self.agentcore_browser_lambda.function_name
-        }
+            {
+                "tool_name": "browser_shopping",
+                "description": "Search for products and compare prices on e-commerce websites like Amazon and eBay",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Product search query"
+                        },
+                        "site": {
+                            "type": "string",
+                            "enum": ["amazon", "ebay", "all"],
+                            "description": "Shopping site to search (default: amazon)"
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Maximum number of results to return (default: 10)"
+                        }
+                    },
+                    "required": ["query"]
+                },
+                "language": "python",
+                "tags": ["browser", "automation", "shopping", "e-commerce", "prices"],
+                "author": "system",
+                "human_approval_required": False,
+                "lambda_arn": self.agentcore_browser_lambda.function_arn,
+                "lambda_function_name": self.agentcore_browser_lambda.function_name
+            },
+            {
+                "tool_name": "browser_search",
+                "description": "General web search and information extraction from any website",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Search query or extraction task"
+                        },
+                        "url": {
+                            "type": "string",
+                            "description": "Specific URL to search or extract from (optional)"
+                        },
+                        "extract_fields": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "Specific fields to extract from results (optional)"
+                        }
+                    },
+                    "required": ["query"]
+                },
+                "language": "python",
+                "tags": ["browser", "automation", "search", "web", "extraction"],
+                "author": "system",
+                "human_approval_required": False,
+                "lambda_arn": self.agentcore_browser_lambda.function_arn,
+                "lambda_function_name": self.agentcore_browser_lambda.function_name
+            }
+        ]
         
-        # Use BaseToolConstruct for registration
+        # Use BatchedToolConstruct for registration
         BatchedToolConstruct(
             self,
             "AgentCoreBrowserToolRegistry",
-            tool_specs=[tool_spec],
+            tool_specs=tool_specs,
             lambda_function=self.agentcore_browser_lambda,
             env_name=self.env_name
         )
@@ -136,35 +219,26 @@ class AgentCoreBrowserToolStack(Stack):
         )
         
         CfnOutput(
+            self, "RegisteredTools",
+            value=json.dumps([
+                "browser_broadband",
+                "browser_shopping",
+                "browser_search"
+            ]),
+            description="List of registered browser tool variants"
+        )
+        
+        CfnOutput(
             self, "ToolConfiguration",
             value=json.dumps({
-                "tool_name": "agentcore_browser_search",
-                "description": "Search and extract information from web portals using Agent Core browser automation",
+                "description": "Multi-tool browser automation using Agent Core",
                 "lambda_arn": self.agentcore_browser_lambda.function_arn,
                 "lambda_name": self.agentcore_browser_lambda.function_name,
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Search query or task description"
-                        },
-                        "url": {
-                            "type": "string",
-                            "description": "Target URL (default: https://www.amazon.com)"
-                        },
-                        "action": {
-                            "type": "string",
-                            "enum": ["search", "extract", "authenticate"],
-                            "description": "Action to perform (default: search)"
-                        },
-                        "test_mode": {
-                            "type": "boolean",
-                            "description": "Use test mode for immediate execution (default: true)"
-                        }
-                    },
-                    "required": ["query"]
+                "tools": {
+                    "browser_broadband": "UK broadband availability checker",
+                    "browser_shopping": "E-commerce product search and price comparison",
+                    "browser_search": "General web search and information extraction"
                 }
             }),
-            description="Tool configuration for Agent Core browser"
+            description="Tool configuration for Agent Core browser tools"
         )

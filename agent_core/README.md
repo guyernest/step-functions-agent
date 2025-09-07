@@ -5,6 +5,7 @@ This directory contains the implementation of a web search agent using the NEW A
 ## Overview
 
 Bedrock Agent Core is AWS's new container-based agent runtime service that provides:
+
 - Docker-based agent deployment
 - Built-in browser automation capabilities
 - Async task management
@@ -14,6 +15,7 @@ Bedrock Agent Core is AWS's new container-based agent runtime service that provi
 ## Architecture
 
 The web search agent uses:
+
 - **Bedrock Agent Core Runtime**: Container-based agent hosting
 - **Strands**: Multi-agent orchestration framework
 - **Nova Act**: Browser automation tool
@@ -33,22 +35,26 @@ The web search agent uses:
    - Appropriate IAM permissions for Agent Core, ECR, and Bedrock
 
 2. **Python 3.10+**
+
    ```bash
    python3 --version
    ```
 
 3. **Docker**
    - Required for building and pushing container images
+
    ```bash
    docker --version
    ```
 
 4. **AWS CLI configured**
+
    ```bash
    aws configure
    ```
 
 5. **Nova Act API Key** (if using browser automation)
+
    ```bash
    export NOVA_ACT_API_KEY="your-api-key"
    ```
@@ -56,11 +62,13 @@ The web search agent uses:
 ## Installation
 
 1. **Install Python dependencies**:
+
    ```bash
    pip install -r requirements.txt
    ```
 
 2. **Verify Agent Core SDK**:
+
    ```bash
    python -c "import bedrock_agentcore; print(bedrock_agentcore.__version__)"
    ```
@@ -70,31 +78,37 @@ The web search agent uses:
 ### Using Makefile (Recommended)
 
 1. **Deploy the agent**:
+
    ```bash
    make agentcore-deploy
    ```
 
 2. **Check deployment status**:
+
    ```bash
    make agentcore-status
    ```
 
 3. **Test the agent**:
+
    ```bash
    make agentcore-test
    ```
 
 4. **Invoke with a custom prompt**:
+
    ```bash
    make agentcore-invoke PROMPT="Search for Python programming books on Amazon"
    ```
 
 5. **View logs**:
+
    ```bash
    make agentcore-logs
    ```
 
 6. **Clean up resources**:
+
    ```bash
    make agentcore-clean
    ```
@@ -102,12 +116,14 @@ The web search agent uses:
 ### Using Python Script Directly
 
 1. **Deploy**:
+
    ```bash
    cd agent_core
    python deploy_agentcore.py --agent-name web-search-agent --region us-west-2
    ```
 
 2. **Deploy and test**:
+
    ```bash
    python deploy_agentcore.py --agent-name web-search-agent --region us-west-2 --test
    ```
@@ -115,6 +131,7 @@ The web search agent uses:
 ## Agent Capabilities
 
 The web search agent can:
+
 - Search web portals (default: Amazon.com)
 - Extract structured data from web pages
 - Handle authentication for protected portals
@@ -176,7 +193,8 @@ The agent uses Strands to coordinate three specialized agents:
 ### CloudWatch Logs
 
 Logs are available in CloudWatch under:
-```
+
+```text
 /aws/bedrock-agentcore/web-search-agent
 ```
 
@@ -207,6 +225,7 @@ Logs are available in CloudWatch under:
 ### Debug Mode
 
 Enable debug logging in the agent:
+
 ```python
 logging.basicConfig(level=logging.DEBUG)
 ```
@@ -216,12 +235,14 @@ logging.basicConfig(level=logging.DEBUG)
 ### Local Testing
 
 1. **Run agent locally**:
+
    ```bash
    cd agent_core
    python web_search_agent.py
    ```
 
 2. **Test with sample payload**:
+
    ```python
    payload = {"prompt": "test query", "test": True}
    result = handler(payload, {})
@@ -251,11 +272,13 @@ logging.basicConfig(level=logging.DEBUG)
 ## Cleanup
 
 To remove all resources:
+
 ```bash
 make agentcore-clean
 ```
 
 This will:
+
 - Delete the Agent Core runtime
 - Remove ECR repository
 - Delete IAM role and policies
@@ -276,6 +299,7 @@ This will:
 ## Support
 
 For issues or questions:
+
 1. Check CloudWatch logs
 2. Review deployment output
 3. Verify prerequisites

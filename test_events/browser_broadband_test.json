@@ -1,0 +1,12 @@
+{
+  "id": "test_broadband_001",
+  "name": "browser_broadband",
+  "input": {
+    "address": {
+      "building_number": "10",
+      "street": "Downing Street",
+      "town": "London",
+      "postcode": "SW1A 2AA"
+    }
+  }
+}

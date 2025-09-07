@@ -88,7 +88,7 @@ agents:
     name: broadband_checker_agent
     entrypoint: broadband_checker_agent.py
     platform: linux/arm64
-    container_runtime: none
+    container_runtime: docker
     aws:
       execution_role: arn:aws:iam::672915487120:role/AgentCoreRuntime-broadband-checker
       execution_role_auto_create: true

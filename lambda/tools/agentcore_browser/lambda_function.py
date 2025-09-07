@@ -1,5 +1,6 @@
 """
 Lambda handler for Agent Core Browser Tool
+Routes to different Agent Core agents based on tool name
 Handles streaming responses and long-running browser automation tasks
 """
 
@@ -8,11 +9,13 @@ import boto3
 import logging
 import os
 import uuid
-from typing import Dict, Any, Generator
+from typing import Dict, Any, Generator, Optional
 import time
+from agent_config import get_agent_config, get_agent_arn, get_transformer, generate_presigned_urls
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
 
 
 def process_event_stream(stream_response: Generator) -> Dict[str, Any]:
@@ -113,17 +116,15 @@ def process_event_stream(stream_response: Generator) -> Dict[str, Any]:
 
 def handler(event, context):
     """
-    Lambda handler that processes tool registry format and invokes Agent Core
+    Lambda handler that routes to different Agent Core agents based on tool name
     Handles streaming responses for long-running browser automation tasks
     
     Expected input format from tool registry:
     {
         "id": "toolu_xxx",
-        "name": "browser_search",
+        "name": "browser_broadband",  # or browser_shopping, browser_search
         "input": {
-            "query": "search query",
-            "url": "https://www.amazon.com",
-            "test_mode": false
+            # Tool-specific input fields
         }
     }
     """
@@ -131,10 +132,8 @@ def handler(event, context):
     
     # Get environment variables
     aws_region = os.environ.get('AWS_REGION')
-    agent_runtime_arn = os.environ.get('AGENT_RUNTIME_ARN')
+    aws_account_id = os.environ.get('AWS_ACCOUNT_ID', '672915487120')
     
-    logger.info(f"AWS Region: {aws_region}")
-    logger.info(f"Agent Runtime ARN: {agent_runtime_arn}")
     
     try:
         # Extract tool use information
@@ -142,41 +141,61 @@ def handler(event, context):
         tool_name = event.get('name', 'browser_search')
         tool_input = event.get('input', {})
         
-        # Build prompt for Agent Core based on tool input
-        # Handle common typos and variations
-        query = (
-            tool_input.get('query') or 
-            tool_input.get('prompt') or 
-            tool_input.get('promot') or  # Handle typo
-            tool_input.get('question') or 
-            tool_input.get('search') or 
-            ''
-        )
-        url = tool_input.get('url', 'https://www.amazon.com')
-        action = tool_input.get('action', 'search')
+        logger.info(f"Tool name: {tool_name}")
+        logger.info(f"Tool input: {json.dumps(tool_input)}")
         
-        # Validate we have a query
-        if not query:
-            logger.warning("No query provided in input")
+        # Get agent configuration for this tool
+        agent_config = get_agent_config(tool_name)
+        if not agent_config:
+            logger.error(f"Unknown tool name: {tool_name}")
             return {
                 'type': 'tool_result',
                 'name': tool_name,
                 'tool_use_id': tool_use_id,
-                'content': 'Error: No search query provided. Please provide a "query" field in the input.'
+                'content': f'Error: Unknown tool name "{tool_name}". Supported tools: browser_broadband, browser_shopping, browser_search'
             }
         
-        if action == 'search':
-            prompt = f"Search for {query} on {url}"
-        elif action == 'extract':
-            selectors = tool_input.get('selectors', {})
-            prompt = f"Extract data from {url} using selectors: {json.dumps(selectors)}"
-        elif action == 'authenticate':
-            prompt = f"Authenticate on {url}"
-        else:
-            prompt = query or f"Browse {url}"
+        # Get the agent ARN for this tool
+        agent_runtime_arn = get_agent_arn(tool_name, aws_region, aws_account_id)
+        logger.info(f"Using Agent Runtime ARN: {agent_runtime_arn}")
+        
+        # Transform input using tool-specific transformer
+        transform_input_func = get_transformer(agent_config['transform_input'])
+        if not transform_input_func:
+            logger.error(f"No input transformer found for {tool_name}")
+            return {
+                'type': 'tool_result',
+                'name': tool_name,
+                'tool_use_id': tool_use_id,
+                'content': f'Error: Configuration error for tool {tool_name}'
+            }
+        
+        # Transform the input to agent-specific format
+        try:
+            agent_payload = transform_input_func(tool_input)
+            logger.info(f"Transformed payload: {json.dumps(agent_payload)}")
+        except ValueError as e:
+            logger.error(f"Input validation error: {str(e)}")
+            return {
+                'type': 'tool_result',
+                'name': tool_name,
+                'tool_use_id': tool_use_id,
+                'content': f'Error: {str(e)}'
+            }
         
         # Initialize Agent Core client
-        agent_core_client = boto3.client('bedrock-agentcore', region_name=aws_region)
+        from botocore.config import Config
+        
+        # Configure extended timeouts for browser automation
+        # Lambda has 10 minute timeout, so we can wait up to 9 minutes
+        config = Config(
+            region_name=aws_region,
+            read_timeout=540,  # 9 minutes for browser automation
+            connect_timeout=30,
+            retries={'max_attempts': 0}
+        )
+        
+        agent_core_client = boto3.client('bedrock-agentcore', config=config)
         logger.info("Using bedrock-agentcore client")
         
         # Create session ID for this interaction (must be at least 33 characters)
@@ -184,25 +203,11 @@ def handler(event, context):
         logger.info(f"Using session ID: {session_id} (length: {len(session_id)})")
         
         # Prepare the payload for Agent Core
-        # Default to test mode for immediate execution (avoids background task)
-        use_test_mode = tool_input.get('test_mode', True)  # Default to True
-        
-        if use_test_mode:
-            payload_dict = {
-                "test": prompt
-            }
-            logger.info("Using test mode for direct browser execution")
-        else:
-            payload_dict = {
-                "prompt": prompt
-            }
-            logger.info("Using standard mode (may start background task)")
-        
-        payload = json.dumps(payload_dict).encode()
-        logger.info(f"Sending payload to Agent Core: {payload_dict}")
+        payload = json.dumps(agent_payload).encode()
+        logger.info(f"Sending payload to Agent Core: {agent_payload}")
         
         # Invoke Agent Core runtime - this returns a streaming response
-        logger.info(f"Invoking Agent Core with prompt: {prompt}")
+        logger.info(f"Invoking Agent Core for {tool_name}")
         start_time = time.time()
         
         response = agent_core_client.invoke_agent_runtime(
@@ -306,6 +311,7 @@ def handler(event, context):
             response_text = response_text.strip()
             
             # Try to parse as JSON if it looks like JSON
+            parsed_response = response_text
             if response_text.startswith('{') or response_text.startswith('['):
                 try:
                     response_json = json.loads(response_text)
@@ -313,31 +319,37 @@ def handler(event, context):
                     
                     # Extract result from known response formats
                     if 'result' in response_json:
-                        response_text = response_json['result']
-                        logger.info(f"Extracted 'result' field: {response_text[:500]}")
+                        parsed_response = response_json['result']
+                        logger.info(f"Extracted 'result' field: {str(parsed_response)[:500]}")
                     elif 'message' in response_json:
-                        response_text = response_json['message']
+                        parsed_response = response_json['message']
                     elif 'output' in response_json:
-                        response_text = response_json['output']
+                        parsed_response = response_json['output']
                     elif 'content' in response_json:
-                        response_text = response_json['content']
+                        parsed_response = response_json['content']
                     else:
-                        response_text = json.dumps(response_json)
-                    
-                    # If the result contains task status, handle it specially
-                    if isinstance(response_text, str) and 'shop_background.start' in response_text:
-                        logger.info("Agent started background shopping task")
-                        response_text = "I've started searching for Echo Dot prices on Amazon. This may take a moment as I browse the website to find the current pricing information. Please wait..."
+                        parsed_response = response_json
                     
                 except json.JSONDecodeError as e:
                     logger.warning(f"Failed to parse JSON: {e}")
                     # Keep as plain text
             
+            # Transform output using tool-specific transformer
+            transform_output_func = get_transformer(agent_config['transform_output'])
+            if transform_output_func:
+                try:
+                    final_content = transform_output_func(parsed_response)
+                    logger.info(f"Transformed output: {final_content[:500]}")
+                except Exception as e:
+                    logger.warning(f"Output transformation failed: {str(e)}")
+                    final_content = str(parsed_response)
+            else:
+                final_content = str(parsed_response) if parsed_response else 'Agent Core task completed'
+            
             # Log trace information if available
             if agent_response_data.get('traces'):
                 logger.info(f"Agent traces: {json.dumps(agent_response_data['traces'][:3])}")  # Log first 3 traces
             
-            final_content = response_text if response_text else 'Agent Core task completed'
         else:
             error_msg = agent_response_data.get('error', 'Unknown error')
             final_content = f"Error: {error_msg}"

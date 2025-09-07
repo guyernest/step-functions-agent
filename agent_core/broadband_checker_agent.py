@@ -345,17 +345,38 @@ def check_broadband_availability(
     app.add_async_task(task_id)
     
     try:
+        # Use a shared results container for thread communication
+        results_container = {"result": None}
+        
         # Start browser task in background
+        def run_with_result():
+            result = _run_broadband_check(addr_input, extract_fields, task_id, max_steps)
+            results_container["result"] = result
+        
         thread = threading.Thread(
-            target=_run_broadband_check,
-            args=(addr_input, extract_fields, task_id, max_steps),
+            target=run_with_result,
             daemon=True
         )
         thread.start()
         
         if wait_for_completion:
-            # Wait for thread to complete (with timeout)
-            thread.join(timeout=120)
+            # Wait for thread to complete (with longer timeout for browser automation)
+            thread.join(timeout=240)  # 4 minutes timeout
+            
+            # Return the actual results if available
+            if results_container["result"]:
+                result = results_container["result"]
+                return {
+                    "status": "completed",
+                    "task_id": task_id,
+                    "data": result.__dict__ if hasattr(result, '__dict__') else result
+                }
+            else:
+                return {
+                    "status": "timeout",
+                    "task_id": task_id,
+                    "message": "Check timed out after 240 seconds"
+                }
             
         return {
             "status": "started",
@@ -878,14 +899,24 @@ def handler(payload):
     try:
         # Handle test request
         if isinstance(payload, dict) and payload.get("test"):
-            test_address = AddressInput(
-                building_number="13",
-                street="ALBION DRIVE", 
-                town="HACKNEY, LONDON",
-                postcode="E8 4LX"
-            )
+            # Clear any stale tasks from previous runs (for test mode)
+            active_tasks.clear()
+            
+            # Use provided address or fall back to test address
+            if "address" in payload:
+                address_dict = payload["address"]
+            else:
+                # Default test address
+                test_address = AddressInput(
+                    building_number="13",
+                    street="ALBION DRIVE", 
+                    town="HACKNEY, LONDON",
+                    postcode="E8 4LX"
+                )
+                address_dict = test_address.__dict__
+            
             result = check_broadband_availability(
-                test_address.__dict__,
+                address_dict,
                 wait_for_completion=True,
                 max_steps=payload.get("max_steps", 8)  # Allow override, default to 8 for tests
             )
