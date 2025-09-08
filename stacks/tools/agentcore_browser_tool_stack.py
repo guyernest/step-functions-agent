@@ -15,6 +15,7 @@ from constructs import Construct
 from .base_tool_construct_batched import BatchedToolConstruct
 import json
 import os
+from pathlib import Path
 
 
 class AgentCoreBrowserToolStack(Stack):
@@ -91,6 +92,18 @@ class AgentCoreBrowserToolStack(Stack):
     def _register_tool_in_registry(self):
         """Register all browser tool variants in DynamoDB using BatchedToolConstruct"""
         
+        # Load tool names from Lambda's single source of truth
+        tool_names_file = Path(__file__).parent.parent.parent / 'lambda' / 'tools' / 'agentcore_browser' / 'tool-names.json'
+        with open(tool_names_file, 'r') as f:
+            tool_names = json.load(f)
+        
+        print(f"✅ Loaded {len(tool_names)} tool names from {tool_names_file.name}: {tool_names}")
+        
+        # Validate that we have the expected tools
+        expected_tools = ["browser_broadband", "browser_shopping", "browser_search"]
+        if set(tool_names) != set(expected_tools):
+            raise ValueError(f"Tool names mismatch! Expected {expected_tools}, got {tool_names}")
+        
         # Define all three tool variants that route to different agents
         tool_specs = [
             {
@@ -99,31 +112,24 @@ class AgentCoreBrowserToolStack(Stack):
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "address": {
-                            "type": "object",
-                            "properties": {
-                                "building_number": {
-                                    "type": "string",
-                                    "description": "Building number or name"
-                                },
-                                "street": {
-                                    "type": "string",
-                                    "description": "Street name"
-                                },
-                                "town": {
-                                    "type": "string",
-                                    "description": "Town or city"
-                                },
-                                "postcode": {
-                                    "type": "string",
-                                    "description": "UK postcode (required)"
-                                }
-                            },
-                            "required": ["postcode"],
-                            "description": "UK address to check broadband availability"
+                        "building_number": {
+                            "type": "string",
+                            "description": "Building number or name (e.g., '10', 'Flat 3A', 'The Manor House')"
+                        },
+                        "street": {
+                            "type": "string", 
+                            "description": "Street name without building number (e.g., 'Downing Street', 'High Street')"
+                        },
+                        "town": {
+                            "type": "string",
+                            "description": "Town or city name (e.g., 'London', 'Manchester', 'Birmingham')"
+                        },
+                        "postcode": {
+                            "type": "string",
+                            "description": "UK postcode in standard format (e.g., 'SW1A 2AA', 'E8 1GQ', 'M1 1AA')"
                         }
                     },
-                    "required": ["address"]
+                    "required": ["postcode"]
                 },
                 "language": "python",
                 "tags": ["browser", "automation", "broadband", "uk", "telecom"],

@@ -74,12 +74,20 @@ def transform_broadband_input(tool_input: Dict[str, Any]) -> Dict[str, Any]:
     """
     Transform browser_broadband input to Agent Core format
     
-    Expected input:
+    Expected input (flattened format from tool registry):
+    {
+        "building_number": "13",
+        "street": "Albion Drive", 
+        "town": "London",
+        "postcode": "E8 4LX"
+    }
+    
+    OR nested format (legacy):
     {
         "address": {
             "building_number": "13",
             "street": "Albion Drive",
-            "town": "London",
+            "town": "London", 
             "postcode": "E8 4LX"
         }
     }
@@ -95,9 +103,18 @@ def transform_broadband_input(tool_input: Dict[str, Any]) -> Dict[str, Any]:
         }
     }
     """
-    # Pass through the address structure as-is
-    # The broadband_checker_agent expects this exact format
-    address = tool_input.get('address', {})
+    # Handle both flattened and nested input formats
+    if 'address' in tool_input and isinstance(tool_input['address'], dict):
+        # Nested format (legacy)
+        address = tool_input['address']
+    else:
+        # Flattened format (new) - reconstruct address object
+        address = {
+            "building_number": tool_input.get("building_number", ""),
+            "street": tool_input.get("street", ""),
+            "town": tool_input.get("town", ""),
+            "postcode": tool_input.get("postcode", "")
+        }
     
     # Validate required field
     if not address.get('postcode'):
@@ -238,6 +255,69 @@ def generate_presigned_urls(s3_prefix: str, bucket_name: str = "nova-act-browser
     return presigned_urls
 
 
+def generate_presigned_urls_recent(s3_prefix: str, bucket_name: str = "nova-act-browser-results-prod-672915487120", max_age_hours: int = 1) -> list:
+    """
+    Generate presigned URLs for recent HTML files in S3 prefix
+    
+    Args:
+        s3_prefix: S3 prefix to search in
+        bucket_name: S3 bucket name
+        max_age_hours: Only include files from the last N hours
+        
+    Returns:
+        List of dicts with filename and presigned URL
+    """
+    import boto3
+    import datetime
+    from botocore.exceptions import ClientError
+    
+    s3_client = boto3.client('s3', region_name='us-west-2')
+    presigned_urls = []
+    cutoff_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=max_age_hours)
+    
+    try:
+        # List recent objects in the prefix
+        response = s3_client.list_objects_v2(
+            Bucket=bucket_name,
+            Prefix=s3_prefix,
+            MaxKeys=50  # Limit to avoid too many results
+        )
+        
+        if 'Contents' in response:
+            # Sort by last modified, newest first
+            recent_objects = []
+            for obj in response['Contents']:
+                if obj['LastModified'] >= cutoff_time and obj['Key'].endswith('.html'):
+                    recent_objects.append(obj)
+            
+            # Sort by modification time, newest first
+            recent_objects.sort(key=lambda x: x['LastModified'], reverse=True)
+            
+            # Generate URLs for up to 5 most recent HTML files
+            for obj in recent_objects[:5]:
+                key = obj['Key']
+                try:
+                    # Generate presigned URL valid for 1 hour
+                    url = s3_client.generate_presigned_url(
+                        'get_object',
+                        Params={'Bucket': bucket_name, 'Key': key},
+                        ExpiresIn=3600
+                    )
+                    presigned_urls.append({
+                        'filename': key.split('/')[-1],
+                        'url': url,
+                        'modified': obj['LastModified'].isoformat()
+                    })
+                    logger.info(f"Generated presigned URL for recent file {key}")
+                except ClientError as e:
+                    logger.error(f"Error generating presigned URL for {key}: {e}")
+                        
+    except ClientError as e:
+        logger.error(f"Error listing recent S3 objects: {e}")
+        
+    return presigned_urls
+
+
 def transform_broadband_output(agent_response: Any) -> str:
     """
     Transform broadband checker agent response to standard format
@@ -254,6 +334,28 @@ def transform_broadband_output(agent_response: Any) -> str:
     if isinstance(agent_response, dict):
         import json
         logger.info(f"Full agent response: {json.dumps(agent_response, default=str)}")
+        
+        # Look for any field that might contain task/session identifiers
+        potential_ids = []
+        for key, value in agent_response.items():
+            if isinstance(value, str) and (
+                'task' in key.lower() or 'session' in key.lower() or 
+                key.lower() in ['id', 'request_id', 'trace_id'] or
+                (len(value) > 10 and len(value) < 50 and '-' in value)  # UUID-like pattern
+            ):
+                potential_ids.append((key, value))
+                logger.info(f"Found potential ID field: {key}={value}")
+        
+        # If we find data nested deeper, also check that
+        if 'data' in agent_response and isinstance(agent_response['data'], dict):
+            for key, value in agent_response['data'].items():
+                if isinstance(value, str) and (
+                    'task' in key.lower() or 'session' in key.lower() or 
+                    key.lower() in ['id', 'request_id', 'trace_id'] or
+                    (len(value) > 10 and len(value) < 50 and '-' in value)
+                ):
+                    potential_ids.append((key, value))
+                    logger.info(f"Found potential ID field in data: {key}={value}")
     
     if isinstance(agent_response, dict):
         # Check if this is a task status response
@@ -317,36 +419,74 @@ def transform_broadband_output(agent_response: Any) -> str:
             
             # Recording path and presigned URLs
             recording_path = data.get('recording_path', '')
-            session_id = data.get('session_id', '')
+            session_id = data.get('session_id', '') or data.get('session', '') or data.get('id', '')
+            task_id = task_id or data.get('task_id', '') or data.get('request_id', '') or data.get('trace_id', '')
             
-            if recording_path:
+            # Use any potential IDs we found during debugging
+            if not task_id and not session_id and 'potential_ids' in locals():
+                for key, value in potential_ids:
+                    if not task_id and 'task' in key.lower():
+                        task_id = value
+                        logger.info(f"Using {key}={value} as task_id")
+                    elif not session_id and ('session' in key.lower() or key.lower() == 'id'):
+                        session_id = value
+                        logger.info(f"Using {key}={value} as session_id")
+            
+            # Always try to generate presigned URLs for browser recordings
+            # Try multiple possible S3 paths where recordings might be stored
+            possible_paths = []
+            
+            if recording_path and recording_path.startswith('s3://'):
+                possible_paths.append(recording_path)
                 result_parts.append(f"Recording: {recording_path}")
             elif task_id:
-                # If no recording_path but we have task_id, construct expected path
+                # Construct expected path based on task_id
                 expected_path = f"s3://nova-act-browser-results-prod-672915487120/broadband-checker/{task_id}/"
+                possible_paths.append(expected_path)
                 result_parts.append(f"Expected Recording: {expected_path}")
-                recording_path = expected_path
+            elif session_id:
+                # Try session_id based path
+                session_path = f"s3://nova-act-browser-results-prod-672915487120/broadband-checker/{session_id}/"
+                possible_paths.append(session_path)
+                result_parts.append(f"Session Recording: {session_path}")
             else:
-                result_parts.append("Recording: Not available")
+                # Try a general search in the broadband-checker folder for recent recordings
+                general_path = f"s3://nova-act-browser-results-prod-672915487120/broadband-checker/"
+                possible_paths.append(general_path)
+                result_parts.append("Recording: Searching for recent recordings...")
                 
             if session_id:
                 result_parts.append(f"Session ID: {session_id}")
             
             # Generate presigned URLs for HTML recordings
-            if recording_path and recording_path.startswith('s3://'):
-                # Parse S3 path: s3://bucket/prefix/
-                s3_parts = recording_path.replace('s3://', '').split('/', 1)
-                if len(s3_parts) == 2:
-                    bucket = s3_parts[0]
-                    prefix = s3_parts[1]
-                    presigned_urls = generate_presigned_urls(prefix, bucket)
-                    
-                    if presigned_urls:
-                        result_parts.append("\nBrowser Recording URLs (valid for 1 hour):")
-                        for i, url_info in enumerate(presigned_urls, 1):
-                            result_parts.append(f"  {i}. {url_info['filename']}: {url_info['url']}")
-                    else:
-                        result_parts.append("No HTML recordings found in S3 (might still be uploading)")
+            presigned_urls = []
+            for path in possible_paths:
+                if path.startswith('s3://'):
+                    # Parse S3 path: s3://bucket/prefix/
+                    s3_parts = path.replace('s3://', '').split('/', 1)
+                    if len(s3_parts) == 2:
+                        bucket = s3_parts[0]
+                        prefix = s3_parts[1]
+                        
+                        # If this is a general search, limit to recent files
+                        if not task_id and not session_id and prefix.endswith('broadband-checker/'):
+                            urls = generate_presigned_urls_recent(prefix, bucket, max_age_hours=1)
+                        else:
+                            urls = generate_presigned_urls(prefix, bucket)
+                        
+                        presigned_urls.extend(urls)
+                        if urls:
+                            break  # Found recordings in this path, no need to check others
+            
+            if presigned_urls:
+                result_parts.append("\nBrowser Recording URLs (valid for 1 hour):")
+                for i, url_info in enumerate(presigned_urls, 1):
+                    result_parts.append(f"  {i}. {url_info['filename']}: {url_info['url']}")
+            else:
+                result_parts.append("No HTML recordings found in S3 (recordings might still be uploading or check may have failed)")
+                # Still provide the S3 paths for manual verification
+                if possible_paths:
+                    result_parts.append(f"Manual check: {', '.join(possible_paths)}")
             
             if result_parts:
                 return "\n".join(result_parts)

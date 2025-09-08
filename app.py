@@ -47,6 +47,7 @@ from stacks.agents.web_research_agent_unified_llm_stack import WebResearchAgentU
 from stacks.agents.web_search_agent_unified_llm_stack import WebSearchAgentUnifiedLLMStack
 from stacks.agents.google_maps_agent_unified_llm_stack import GoogleMapsAgentUnifiedLLMStack
 from stacks.agents.test_automation_remote_agent_unified_llm_stack import TestAutomationRemoteAgentUnifiedLLMStack
+from stacks.agents.broadband_agent_unified_llm_stack import BroadbandAgentUnifiedLLMStack
 # from legacy.step_functions_agent.agent_monitoring_stack import AgentMonitoringStack  # Commented out due to missing dependency
 
 # Long content support imports
@@ -350,6 +351,16 @@ def main():
         description=f"Web search agent using Agent Core browser automation for {environment} environment"
     )
     web_search_agent_rust.add_dependency(agentcore_browser_tools)  # Depends on Agent Core browser tool
+    
+    # Broadband Agent with Unified Rust LLM - UK broadband availability checking
+    broadband_agent_rust = BroadbandAgentUnifiedLLMStack(
+        app,
+        f"BroadbandAgentUnifiedLLMStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"UK broadband availability agent using Agent Core browser automation for {environment} environment"
+    )
+    broadband_agent_rust.add_dependency(agentcore_browser_tools)  # Depends on Agent Core browser tool
     
     # Google Maps Agent with Unified Rust LLM - location services
     google_maps_agent_rust = GoogleMapsAgentUnifiedLLMStack(
