@@ -1,9 +1,0 @@
-{
-  "agent_id": "shopping_agent-aw6O6r7uk5",
-  "agent_arn": "arn:aws:bedrock-agentcore:us-west-2:672915487120:runtime/shopping_agent-aw6O6r7uk5",
-  "ecr_uri": "672915487120.dkr.ecr.us-west-2.amazonaws.com/bedrock-agentcore-shopping_agent",
-  "role_arn": "arn:aws:iam::672915487120:role/AgentCoreRuntime-web-search-agent",
-  "region": "us-west-2",
-  "status": "READY",
-  "timestamp": "2025-08-24 21:35:05"
-}

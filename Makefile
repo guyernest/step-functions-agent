@@ -667,17 +667,35 @@ AGENTCORE_NAME ?= web-search-agent
 
 # Legacy Agent Commands (OLD Service - Bedrock Agents)
 # ============================================
-# Note: AGENT_CORE_DIR already defined above as agent_core
-AGENT_CORE_CONFIGS := scripts/agent_core/configs
+# Agent Core deployment has been moved to a separate project
+# See ~/projects/nova-act for Agent Core agent implementations
 AGENT_NAME ?= web-search-agent
 
-.PHONY: deploy-agent-core
-deploy-agent-core:
-	@if [ -z "$(CONFIG)" ]; then \
-		echo "❌ Please specify CONFIG=<config-file>"; \
-		echo "Example: make deploy-agent-core CONFIG=web_search_agent.yaml"; \
-		exit 1; \
-	fi
+# ============================================
+# Agent Core targets have been moved to ~/projects/nova-act
+# The Lambda tools that call Agent Core runtime remain in this project
+# ============================================
+
+# Commented out Agent Core deployment targets - now in ~/projects/nova-act
+# All the Agent Core deployment, testing, and management targets have been removed
+# from this Makefile as they are now in the dedicated nova-act project.
+# 
+# The following targets have been removed:
+#   - deploy-agent-core
+#   - deploy-agent-wrapper  
+#   - agentcore-broadband-*
+#   - deploy-agent-full
+#   - list-agent-core
+#   - delete-agent-core
+#   - clean-agent-core
+#   - test-agent-core
+#
+# This project still maintains:
+#   - Lambda tools that call Agent Core runtime (agentcore_browser)
+#   - CDK stacks for those tools
+#   - Agent stacks that use those tools
+
+: <<'AGENT_CORE_REMOVED'
 	@echo "🚀 Deploying Agent Core agent from $(CONFIG)..."
 	@echo "📍 Using AWS Profile: $(AWS_PROFILE), Region: $(AWS_REGION)"
 	@NOVA_ACT_ARN=$$(aws cloudformation describe-stacks \
@@ -1070,6 +1088,9 @@ agentcore-full: agentcore-deploy agentcore-wrapper
 		--output text \
 		--region $(AWS_REGION)
 
+NEW_AGENTCORE_REMOVED
+
+# This target remains as it deploys the Lambda tool that calls Agent Core runtime
 .PHONY: deploy-agentcore-tool
 deploy-agentcore-tool:
 	@echo "🚀 Deploying Agent Core Browser Tool Stack..."

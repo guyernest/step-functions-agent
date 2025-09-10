@@ -1,8 +1,0 @@
-{
-  "function_name": "broadband-checker-agent-us-west-2",
-  "function_arn": "arn:aws:lambda:us-west-2:672915487120:function:broadband-checker-agent-us-west-2",
-  "role_arn": "arn:aws:iam::672915487120:role/AgentCoreRuntime-broadband-checker",
-  "region": "us-west-2",
-  "deployment_type": "lambda",
-  "timestamp": "2025-09-04 18:51:52"
-}
