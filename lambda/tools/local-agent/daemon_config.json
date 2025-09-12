@@ -1,7 +1,7 @@
 {
-    "activity_arn": "<ACTIVITY_ARN>",
-    "app_path": "uv run script_executor.py",
-    "poll_interval_ms": 5000,
-    "worker_name": "local-agent-worker",
-    "profile_name": "<PROFILE_NAME>"
+  "activity_arn": "arn:aws:states:us-west-2:672915487120:activity:local-automation-remote-activity-prod",
+  "app_path": "uv run script_executor.py",
+  "poll_interval_ms": 5000,
+  "worker_name": "local-agent-worker",
+  "profile_name": "<PROFILE_NAME>"
 }

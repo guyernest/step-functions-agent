@@ -1,0 +1,103 @@
+{
+  "name": "TextEdit Mac Automation Example with Image Detection",
+  "description": "Creates and edits a document in TextEdit on macOS, using image detection to find buttons",
+  "abort_on_error": true,
+  "actions": [
+    {
+      "type": "launch",
+      "app": "TextEdit",
+      "wait": 3.0,
+      "description": "Launch TextEdit application"
+    },
+    {
+      "type": "locateimage",
+      "image": "examples/New_Document_Button.png",
+      "confidence": 0.7,
+      "description": "Find the New Document button"
+    },
+    {
+      "type": "click",
+      "description": "Click on the New Document button"
+    },
+    {
+      "type": "wait",
+      "seconds": 1.0,
+      "description": "Wait for the new document to open"
+    },
+    {
+      "type": "type",
+      "text": "Hello, this is a document created with PyAutoGUI!\n\n",
+      "interval": 0.05,
+      "description": "Type the first line"
+    },
+    {
+      "type": "type",
+      "text": "This script demonstrates how to automate TextEdit on macOS.\n",
+      "interval": 0.05,
+      "description": "Type the second line"
+    },
+    {
+      "type": "type",
+      "text": "Features demonstrated:\n",
+      "interval": 0.05,
+      "description": "Type the features header"
+    },
+    {
+      "type": "type",
+      "text": "- Launching applications\n- Image recognition for UI elements\n- Typing text\n- Using keyboard shortcuts\n- Formatting text\n",
+      "interval": 0.05,
+      "description": "Type the features list"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["command", "a"],
+      "description": "Select all text"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["command", "b"],
+      "description": "Make text bold"
+    },
+    {
+      "type": "press",
+      "key": "escape",
+      "description": "Press escape to deselect text"
+    },
+    {
+      "type": "wait",
+      "seconds": 1.0,
+      "description": "Wait briefly"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["command", "s"],
+      "description": "Save the document"
+    },
+    {
+      "type": "wait",
+      "seconds": 2.0,
+      "description": "Wait for save dialog"
+    },
+    {
+      "type": "type",
+      "text": "PyAutoGUI_Example.txt",
+      "interval": 0.05,
+      "description": "Type filename"
+    },
+    {
+      "type": "press",
+      "key": "return",
+      "description": "Press return to save"
+    },
+    {
+      "type": "wait",
+      "seconds": 1.0,
+      "description": "Wait for save to complete"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["command", "q"],
+      "description": "Quit TextEdit"
+    }
+  ]
+}

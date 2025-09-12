@@ -1,0 +1,93 @@
+{
+  "name": "Notepad Windows Automation Example",
+  "description": "Creates and edits a document in Notepad on Windows",
+  "abort_on_error": true,
+  "actions": [
+    {
+      "type": "launch",
+      "app": "notepad",
+      "wait": 1.5,
+      "description": "Launch Notepad application"
+    },
+    {
+      "type": "wait",
+      "seconds": 1.0,
+      "description": "Wait for Notepad to open"
+    },
+    {
+      "type": "type",
+      "text": "Hello, this is a document created with PyAutoGUI on Windows!\r\n\r\n",
+      "interval": 0.05,
+      "description": "Type the first line"
+    },
+    {
+      "type": "type",
+      "text": "This script demonstrates how to automate Notepad on Windows.\r\n",
+      "interval": 0.05,
+      "description": "Type the second line"
+    },
+    {
+      "type": "type",
+      "text": "Features demonstrated:\r\n",
+      "interval": 0.05,
+      "description": "Type the features header"
+    },
+    {
+      "type": "type",
+      "text": "- Launching applications\r\n- Typing text\r\n- Using keyboard shortcuts\r\n- Saving files\r\n",
+      "interval": 0.05,
+      "description": "Type the features list"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["ctrl", "a"],
+      "description": "Select all text"
+    },
+    {
+      "type": "wait",
+      "seconds": 0.5,
+      "description": "Wait briefly"
+    },
+    {
+      "type": "press",
+      "key": "escape",
+      "description": "Press escape to deselect text"
+    },
+    {
+      "type": "wait",
+      "seconds": 0.5,
+      "description": "Wait briefly"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["ctrl", "s"],
+      "description": "Save the document"
+    },
+    {
+      "type": "wait",
+      "seconds": 1.0,
+      "description": "Wait for save dialog"
+    },
+    {
+      "type": "type",
+      "text": "PyAutoGUI_Windows_Example.txt",
+      "interval": 0.05,
+      "description": "Type filename"
+    },
+    {
+      "type": "press",
+      "key": "enter",
+      "description": "Press enter to save"
+    },
+    {
+      "type": "wait",
+      "seconds": 1.0,
+      "description": "Wait for save to complete"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["alt", "f4"],
+      "description": "Close Notepad"
+    }
+  ]
+}
