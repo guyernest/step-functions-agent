@@ -24,8 +24,13 @@ function App() {
       try {
         const pollingData = await invoke<any>('get_polling_status');
         const polling = pollingData.isPolling || false;
+        const executing = pollingData.isExecuting || false;
         setIsPolling(polling);
-        setListenStatus(polling ? 'listening' : 'idle');
+        setListenStatus(
+          executing ? 'executing' : 
+          polling ? 'listening' : 
+          'idle'
+        );
       } catch (error) {
         setIsPolling(false);
         setListenStatus('idle');

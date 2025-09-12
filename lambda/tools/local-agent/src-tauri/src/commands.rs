@@ -1,12 +1,31 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use std::io::{Write, Seek};
+use std::io::Write;
 use std::sync::Mutex;
+use tokio::task::JoinHandle;
+use chrono::Local;
 
-// Global state for polling
+// Global state for polling and logs
 lazy_static::lazy_static! {
-    static ref POLLING_STATE: Mutex<bool> = Mutex::new(false);
+    static ref POLLING_STATE: Mutex<PollingState> = Mutex::new(PollingState::default());
+    static ref LOGS: Mutex<Vec<LogEntry>> = Mutex::new(Vec::new());
+    static ref POLLING_HANDLE: Mutex<Option<JoinHandle<()>>> = Mutex::new(None);
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogEntry {
+    pub timestamp: String,
+    pub level: String, // "info", "error", "warning", "success"
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PollingState {
+    pub is_polling: bool,
+    pub is_executing: bool,
+    pub tasks_processed: u32,
+    pub last_task_time: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -201,35 +220,427 @@ pub async fn test_connection(config: AppConfig) -> Result<bool, String> {
     }
 }
 
+// Helper function to add log entries
+fn add_log(level: &str, message: String) {
+    let entry = LogEntry {
+        timestamp: Local::now().format("%H:%M:%S").to_string(),
+        level: level.to_string(),
+        message,
+    };
+    
+    eprintln!("[{}] {}: {}", entry.timestamp, entry.level.to_uppercase(), entry.message);
+    
+    let mut logs = LOGS.lock().unwrap();
+    logs.push(entry);
+    
+    // Keep only last 1000 entries
+    if logs.len() > 1000 {
+        let drain_count = logs.len() - 1000;
+        logs.drain(0..drain_count);
+    }
+}
+
 #[tauri::command]
 pub async fn get_polling_status() -> Result<serde_json::Value, String> {
-    let is_polling = *POLLING_STATE.lock().unwrap();
+    let state = POLLING_STATE.lock().unwrap();
     Ok(serde_json::json!({
-        "isPolling": is_polling,
-        "connectionStatus": if is_polling { "connected" } else { "disconnected" },
+        "isPolling": state.is_polling,
+        "isExecuting": state.is_executing,
+        "connectionStatus": if state.is_polling { "connected" } else { "disconnected" },
         "currentTask": null,
-        "tasksProcessed": 0,
-        "lastTaskTime": null,
+        "tasksProcessed": state.tasks_processed,
+        "lastTaskTime": state.last_task_time.clone(),
         "uptime": 0
     }))
 }
 
 #[tauri::command]
+pub async fn get_logs(last_n: Option<usize>) -> Result<Vec<LogEntry>, String> {
+    let logs = LOGS.lock().unwrap();
+    let n = last_n.unwrap_or(100);
+    let start = if logs.len() > n { logs.len() - n } else { 0 };
+    Ok(logs[start..].to_vec())
+}
+
+#[tauri::command]
+pub async fn clear_logs() -> Result<(), String> {
+    let mut logs = LOGS.lock().unwrap();
+    logs.clear();
+    add_log("info", "Logs cleared".to_string());
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn start_polling() -> Result<(), String> {
-    let mut state = POLLING_STATE.lock().unwrap();
-    *state = true;
-    eprintln!("Polling started");
-    // TODO: Implement actual polling logic with AWS Step Functions
+    // Check if already polling
+    {
+        let state = POLLING_STATE.lock().unwrap();
+        if state.is_polling {
+            return Err("Already polling".to_string());
+        }
+    }
+    
+    // Load configuration
+    let config = load_config().await?;
+    
+    // Update state
+    {
+        let mut state = POLLING_STATE.lock().unwrap();
+        state.is_polling = true;
+        state.is_executing = false;
+    }
+    
+    add_log("info", format!("Starting polling for activity: {}", config.activity_arn));
+    add_log("info", format!("Using AWS profile: {}", config.profile_name));
+    add_log("info", format!("Worker name: {}", config.worker_name));
+    
+    // Spawn polling task
+    let handle = tokio::spawn(async move {
+        poll_for_activities(config).await;
+    });
+    
+    // Store handle so we can cancel it later
+    {
+        let mut handle_guard = POLLING_HANDLE.lock().unwrap();
+        *handle_guard = Some(handle);
+    }
+    
     Ok(())
 }
 
 #[tauri::command]
 pub async fn stop_polling() -> Result<(), String> {
-    let mut state = POLLING_STATE.lock().unwrap();
-    *state = false;
-    eprintln!("Polling stopped");
-    // TODO: Stop the actual polling task
+    // Cancel the polling task if running
+    {
+        let mut handle_guard = POLLING_HANDLE.lock().unwrap();
+        if let Some(handle) = handle_guard.take() {
+            handle.abort();
+        }
+    }
+    
+    // Update state
+    {
+        let mut state = POLLING_STATE.lock().unwrap();
+        state.is_polling = false;
+        state.is_executing = false;
+    }
+    
+    add_log("info", "Polling stopped".to_string());
     Ok(())
+}
+
+// Actual polling implementation
+async fn poll_for_activities(config: AppConfig) {
+    let sdk_config = if config.profile_name == "default" || config.profile_name == "<PROFILE_NAME>" {
+        aws_config::load_from_env().await
+    } else {
+        aws_config::from_env()
+            .profile_name(&config.profile_name)
+            .load()
+            .await
+    };
+    
+    let client = aws_sdk_sfn::Client::new(&sdk_config);
+    let poll_interval = std::time::Duration::from_millis(config.poll_interval_ms);
+    
+    loop {
+        // Check if we should stop polling
+        {
+            let state = POLLING_STATE.lock().unwrap();
+            if !state.is_polling {
+                break;
+            }
+        }
+        
+        // Poll for activity task
+        add_log("info", "Polling for new task...".to_string());
+        
+        match client
+            .get_activity_task()
+            .activity_arn(&config.activity_arn)
+            .worker_name(&config.worker_name)
+            .send()
+            .await
+        {
+            Ok(task) => {
+                if let Some(token) = task.task_token() {
+                    if !token.is_empty() {
+                        add_log("success", "Received new task!".to_string());
+                        
+                        // Update state to executing
+                        {
+                            let mut state = POLLING_STATE.lock().unwrap();
+                            state.is_executing = true;
+                            state.last_task_time = Some(Local::now().format("%H:%M:%S").to_string());
+                        }
+                        
+                        // Execute the task
+                        if let Some(input) = task.input() {
+                            add_log("info", format!("Task input: {}", input));
+                            execute_activity_task(&client, token, input).await;
+                        }
+                        
+                        // Update state after execution
+                        {
+                            let mut state = POLLING_STATE.lock().unwrap();
+                            state.is_executing = false;
+                            state.tasks_processed += 1;
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                add_log("error", format!("Failed to poll: {}", e));
+            }
+        }
+        
+        // Wait before next poll
+        tokio::time::sleep(poll_interval).await;
+    }
+    
+    add_log("info", "Polling loop ended".to_string());
+}
+
+// Execute the activity task (run the script)
+async fn execute_activity_task(client: &aws_sdk_sfn::Client, token: &str, input: &str) {
+    use std::process::Command;
+    use tempfile::NamedTempFile;
+    
+    add_log("info", "Executing automation script...".to_string());
+    
+    // Parse input to extract script
+    let parsed: serde_json::Value = match serde_json::from_str(input) {
+        Ok(val) => val,
+        Err(e) => {
+            add_log("error", format!("Failed to parse task input: {}", e));
+            let _ = client
+                .send_task_failure()
+                .task_token(token)
+                .error("InvalidInput")
+                .cause(&format!("Failed to parse input: {}", e))
+                .send()
+                .await;
+            return;
+        }
+    };
+    
+    // Extract script from input - handle multiple possible structures
+    let script = if let Some(tool_input) = parsed.get("tool_input") {
+        // New structure: tool_input.script (script is a JSON string)
+        if let Some(script_str) = tool_input.get("script") {
+            if let Some(script_json_str) = script_str.as_str() {
+                // Parse the script JSON string
+                match serde_json::from_str(script_json_str) {
+                    Ok(script_val) => script_val,
+                    Err(e) => {
+                        add_log("error", format!("Failed to parse script JSON string: {}", e));
+                        let _ = client
+                            .send_task_failure()
+                            .task_token(token)
+                            .error("InvalidScriptJSON")
+                            .cause(&format!("Failed to parse script JSON: {}", e))
+                            .send()
+                            .await;
+                        return;
+                    }
+                }
+            } else {
+                // Script is already a JSON object
+                script_str.clone()
+            }
+        } else {
+            add_log("error", "No script field in tool_input".to_string());
+            let _ = client
+                .send_task_failure()
+                .task_token(token)
+                .error("NoScript")
+                .cause("No script field in tool_input")
+                .send()
+                .await;
+            return;
+        }
+    } else if let Some(input_obj) = parsed.get("input") {
+        // Legacy structure: input.script
+        if let Some(script_val) = input_obj.get("script") {
+            script_val.clone()
+        } else {
+            add_log("error", "No script field in input object".to_string());
+            let _ = client
+                .send_task_failure()
+                .task_token(token)
+                .error("NoScript")
+                .cause("No script field in input object")
+                .send()
+                .await;
+            return;
+        }
+    } else if let Some(script_val) = parsed.get("script") {
+        // Direct structure: script at root
+        script_val.clone()
+    } else {
+        add_log("error", "No script found in task input (checked tool_input.script, input.script, and root)".to_string());
+        let _ = client
+            .send_task_failure()
+            .task_token(token)
+            .error("NoScript")
+            .cause("No script field found in any expected location")
+            .send()
+            .await;
+        return;
+    };
+    
+    // Save script to temp file and execute
+    match NamedTempFile::new() {
+        Ok(mut temp_file) => {
+            let script_json = serde_json::to_string_pretty(&script).unwrap();
+            if let Err(e) = temp_file.write_all(script_json.as_bytes()) {
+                add_log("error", format!("Failed to write script: {}", e));
+                let _ = client
+                    .send_task_failure()
+                    .task_token(token)
+                    .error("ScriptWriteError")
+                    .cause(&format!("Failed to write script: {}", e))
+                    .send()
+                    .await;
+                return;
+            }
+            
+            let script_path = temp_file.path().to_string_lossy().to_string();
+            
+            // Find script executor
+            let executor_path = if PathBuf::from("../script_executor.py").exists() {
+                "../script_executor.py"
+            } else if PathBuf::from("script_executor.py").exists() {
+                "script_executor.py"
+            } else {
+                add_log("error", "Script executor not found".to_string());
+                let _ = client
+                    .send_task_failure()
+                    .task_token(token)
+                    .error("ExecutorNotFound")
+                    .cause("script_executor.py not found")
+                    .send()
+                    .await;
+                return;
+            };
+            
+            // Execute script
+            add_log("info", format!("Running script: {}", script_path));
+            
+            let output = Command::new("python3")
+                .arg(executor_path)
+                .arg(&script_path)
+                .output();
+            
+            match output {
+                Ok(output) => {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    
+                    if !stdout.is_empty() {
+                        for line in stdout.lines() {
+                            add_log("info", format!("Script: {}", line));
+                        }
+                    }
+                    
+                    if !stderr.is_empty() {
+                        for line in stderr.lines() {
+                            add_log("warning", format!("Script: {}", line));
+                        }
+                    }
+                    
+                    if output.status.success() {
+                        add_log("success", "Script executed successfully!".to_string());
+                        
+                        // Create response that mirrors input structure with script_output
+                        let mut response = parsed.clone();
+                        
+                        // Parse stdout as JSON if possible for script output
+                        let script_output = if !stdout.is_empty() {
+                            match serde_json::from_str::<serde_json::Value>(&stdout) {
+                                Ok(val) => val,
+                                Err(_) => serde_json::json!({
+                                    "success": true,
+                                    "output": stdout.to_string()
+                                })
+                            }
+                        } else {
+                            serde_json::json!({
+                                "success": true,
+                                "message": "Script executed successfully"
+                            })
+                        };
+                        
+                        // Replace script with script_output in the appropriate location
+                        if let Some(tool_input) = response.get_mut("tool_input") {
+                            if let Some(tool_input_obj) = tool_input.as_object_mut() {
+                                tool_input_obj.remove("script");
+                                tool_input_obj.insert("script_output".to_string(), script_output);
+                            }
+                        } else if let Some(input_obj) = response.get_mut("input") {
+                            if let Some(input_map) = input_obj.as_object_mut() {
+                                input_map.remove("script");
+                                input_map.insert("script_output".to_string(), script_output);
+                            }
+                        } else {
+                            // Direct structure
+                            if let Some(response_obj) = response.as_object_mut() {
+                                response_obj.remove("script");
+                                response_obj.insert("script_output".to_string(), script_output);
+                            }
+                        }
+                        
+                        // Add approved field at root level
+                        if let Some(response_obj) = response.as_object_mut() {
+                            response_obj.insert("approved".to_string(), serde_json::json!(true));
+                        }
+                        
+                        let response_str = serde_json::to_string(&response)
+                            .unwrap_or_else(|_| r#"{"approved": true, "success": true}"#.to_string());
+                        
+                        let _ = client
+                            .send_task_success()
+                            .task_token(token)
+                            .output(response_str)
+                            .send()
+                            .await;
+                    } else {
+                        add_log("error", "Script execution failed".to_string());
+                        
+                        let _ = client
+                            .send_task_failure()
+                            .task_token(token)
+                            .error("ScriptFailed")
+                            .cause("Script execution returned non-zero exit code")
+                            .send()
+                            .await;
+                    }
+                }
+                Err(e) => {
+                    add_log("error", format!("Failed to execute script: {}", e));
+                    
+                    let _ = client
+                        .send_task_failure()
+                        .task_token(token)
+                        .error("ExecutionError")
+                        .cause(&format!("Failed to execute: {}", e))
+                        .send()
+                        .await;
+                }
+            }
+        }
+        Err(e) => {
+            add_log("error", format!("Failed to create temp file: {}", e));
+            
+            let _ = client
+                .send_task_failure()
+                .task_token(token)
+                .error("TempFileError")
+                .cause(&format!("Failed to create temp file: {}", e))
+                .send()
+                .await;
+        }
+    }
 }
 
 #[tauri::command]

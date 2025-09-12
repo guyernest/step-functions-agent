@@ -30,6 +30,9 @@ tokio = { version = "1.28.0", features = ["full"] }
 # State management
 lazy_static = "1.4.0"
 
+# Date/time
+chrono = "0.4"
+
 # Configuration
 config = "0.15.8"
 

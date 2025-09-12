@@ -15,6 +15,8 @@ fn main() {
             list_aws_profiles,
             test_connection,
             get_polling_status,
+            get_logs,
+            clear_logs,
             start_polling,
             stop_polling,
             list_example_scripts,
