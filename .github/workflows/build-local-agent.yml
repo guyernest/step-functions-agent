@@ -49,10 +49,18 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       
-      # Windows needs MSVC
+      # Windows needs MSVC - setup proper environment
       - name: Setup MSVC (Windows)
         if: matrix.os == 'windows-latest'
         uses: ilammy/msvc-dev-cmd@v1
+      
+      # Ensure MSVC's link.exe is used instead of Git's link
+      - name: Configure Rust for MSVC (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          # Set RUSTFLAGS to use lld-link instead of link.exe to avoid conflicts
+          echo "RUSTFLAGS=-C link-arg=/SUBSYSTEM:CONSOLE -C target-feature=+crt-static" >> $env:GITHUB_ENV
+        shell: pwsh
       
       # Linux needs X11/Wayland dev libraries
       - name: Install Linux Dependencies
