@@ -85,9 +85,13 @@ choco install -y vscode
 ### 3.2 Clone and Build Local Agent
 
 ```powershell
-# Clone repository
-git clone https://github.com/your-org/step-functions-agent.git
-cd step-functions-agent/lambda/tools/local-agent
+# Use sparse checkout to clone only the local-agent folder (recommended)
+git clone --filter=blob:none --sparse https://github.com/guyernest/step-functions-agent.git
+cd step-functions-agent
+git sparse-checkout set lambda/tools/local-agent
+
+# Navigate to local-agent
+cd lambda/tools/local-agent
 
 # Install Python dependencies (for Python executor)
 pip install pyautogui pillow opencv-python
@@ -100,6 +104,8 @@ cargo build --release
 cd ..
 npm install
 ```
+
+**Note**: This uses Git's sparse checkout feature to download only the `local-agent` folder, saving bandwidth and time. The full repository is over 100MB, but this approach downloads only what's needed (~10MB).
 
 ### 3.3 Configure AWS Credentials
 
