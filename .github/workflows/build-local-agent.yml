@@ -1,4 +1,4 @@
-name: Build Local Agent
+name: Build Local Agent Executors
 
 on:
   push:
@@ -11,33 +11,29 @@ on:
     paths:
       - 'lambda/tools/local-agent/**'
   workflow_dispatch:
-    inputs:
-      create_release:
-        description: 'Create a release'
-        required: false
-        default: 'false'
 
 jobs:
   build:
+    name: Build for ${{ matrix.os }}
     strategy:
       matrix:
         include:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            binary: local-agent-gui.exe
-            script_executor: rust-executor.exe
+            binary_name: rust-executor.exe
+            asset_name: rust-executor-windows-x64.exe
           - os: macos-latest
             target: x86_64-apple-darwin
-            binary: local-agent-gui
-            script_executor: rust-executor
+            binary_name: rust-executor
+            asset_name: rust-executor-macos-x64
           - os: macos-latest
-            target: aarch64-apple-darwin
-            binary: local-agent-gui
-            script_executor: rust-executor
+            target: aarch64-apple-darwin  
+            binary_name: rust-executor
+            asset_name: rust-executor-macos-arm64
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            binary: local-agent-gui
-            script_executor: rust-executor
+            binary_name: rust-executor
+            asset_name: rust-executor-linux-x64
 
     runs-on: ${{ matrix.os }}
     
@@ -52,107 +48,47 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       
-      # Windows-specific setup
-      - name: Install MSVC Build Tools (Windows)
+      # Windows needs MSVC
+      - name: Setup MSVC (Windows)
         if: matrix.os == 'windows-latest'
         uses: ilammy/msvc-dev-cmd@v1
       
-      - name: Install Windows Dependencies
-        if: matrix.os == 'windows-latest'
+      # Build standalone executor  
+      - name: Build Rust Executor
+        working-directory: lambda/tools/local-agent/rust-executor-standalone
         run: |
-          choco install cmake -y
-          choco install nasm -y
-        shell: pwsh
-      
-      # macOS-specific setup
-      - name: Install macOS Dependencies
-        if: matrix.os == 'macos-latest'
-        run: |
-          brew install cmake
-          brew install nasm
-      
-      # Linux-specific setup
-      - name: Install Linux Dependencies
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev \
-            libappindicator3-dev librsvg2-dev patchelf \
-            cmake nasm
-      
-      # Build Tauri GUI application
-      - name: Build Local Agent GUI
-        working-directory: lambda/tools/local-agent/src-tauri
-        run: |
+          # Copy the rust_automation module
+          mkdir -p src
+          cp ../src-tauri/src/rust_automation.rs src/
+          # Build
           cargo build --release --target ${{ matrix.target }}
-        env:
-          RUST_BACKTRACE: 1
+        shell: bash
       
-      # Build standalone Rust executor (CLI only)
-      - name: Create Standalone Rust Executor
-        working-directory: lambda/tools/local-agent
+      # Create release package
+      - name: Package Release
         run: |
-          cargo new --bin rust-executor
-          cp src-tauri/src/rust_automation.rs rust-executor/src/
-          echo '[package]
-          name = "rust-executor"
-          version = "0.2.0"
-          edition = "2021"
-          
-          [dependencies]
-          enigo = "0.2.0"
-          serde = { version = "1.0", features = ["derive"] }
-          serde_json = "1.0"
-          xcap = "0.7"
-          image = "0.24"
-          imageproc = "0.23"
-          
-          [[bin]]
-          name = "rust-executor"
-          path = "src/main.rs"' > rust-executor/Cargo.toml
-          
-          echo 'use std::env;
-          use std::fs;
-          
-          mod rust_automation;
-          use rust_automation::RustScriptExecutor;
-          
-          fn main() {
-              let args: Vec<String> = env::args().collect();
-              if args.len() < 2 {
-                  eprintln!("Usage: {} <script.json>", args[0]);
-                  std::process::exit(1);
-              }
-              
-              let script = fs::read_to_string(&args[1])
-                  .expect("Failed to read script file");
-              
-              let mut executor = RustScriptExecutor::new();
-              let result = executor.execute_script(&script);
-              
-              if result.success {
-                  println!("Script executed successfully");
-              } else {
-                  eprintln!("Script execution failed");
-                  if let Some(error) = result.error {
-                      eprintln!("Error: {}", error);
-                  }
-                  std::process::exit(1);
-              }
-          }' > rust-executor/src/main.rs
-          
-          cd rust-executor
-          cargo build --release --target ${{ matrix.target }}
-      
-      # Create artifacts directory
-      - name: Prepare Artifacts
-        run: |
-          mkdir -p artifacts
-          cp lambda/tools/local-agent/src-tauri/target/${{ matrix.target }}/release/${{ matrix.binary }} artifacts/
-          cp lambda/tools/local-agent/rust-executor/target/${{ matrix.target }}/release/${{ matrix.script_executor }} artifacts/
-          cp lambda/tools/local-agent/script_executor.py artifacts/
-          cp lambda/tools/local-agent/pyproject.toml artifacts/
-          cp -r lambda/tools/local-agent/examples artifacts/
+          mkdir -p release
+          # Copy executor binary
+          cp lambda/tools/local-agent/rust-executor-standalone/target/${{ matrix.target }}/release/${{ matrix.binary_name }} release/${{ matrix.asset_name }}
+          # Copy Python files
+          cp lambda/tools/local-agent/script_executor.py release/
+          cp lambda/tools/local-agent/pyproject.toml release/
+          # Copy examples
+          cp -r lambda/tools/local-agent/examples release/
+          # Create README
+          echo "# Local Agent Automation Executor" > release/README.md
+          echo "" >> release/README.md
+          echo "## Quick Start" >> release/README.md
+          echo "" >> release/README.md
+          echo "### Rust Executor (No dependencies):" >> release/README.md
+          echo "\`\`\`bash" >> release/README.md
+          echo "./${{ matrix.asset_name }} examples/windows_simple_test.json" >> release/README.md
+          echo "\`\`\`" >> release/README.md
+          echo "" >> release/README.md
+          echo "### Python Executor (Requires uv/pip):" >> release/README.md
+          echo "\`\`\`bash" >> release/README.md
+          echo "uvx --with pyautogui --with pillow --with opencv-python python script_executor.py examples/windows_simple_test.json" >> release/README.md
+          echo "\`\`\`" >> release/README.md
         shell: bash
       
       # Upload artifacts
@@ -160,13 +96,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: local-agent-${{ matrix.target }}
-          path: artifacts/
+          path: release/
           retention-days: 30
   
   release:
     needs: build
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
     
     steps:
       - uses: actions/checkout@v4
@@ -174,57 +112,61 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: release-artifacts
+          path: artifacts
       
-      - name: Create Release Package
+      - name: Create Release Archives
         run: |
-          cd release-artifacts
+          cd artifacts
           for dir in */; do
-            target=${dir%/}
-            zip -r "${target}.zip" "$dir"
+            base=$(basename "$dir")
+            zip -r "${base}.zip" "$dir"
           done
       
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "release-artifacts/*.zip"
-          tag: "local-agent-v0.2.${{ github.run_number }}"
+          artifacts: "artifacts/*.zip"
+          tag: "v0.2.${{ github.run_number }}"
           name: "Local Agent v0.2.${{ github.run_number }}"
           body: |
-            ## Local Agent Automation Tool
+            ## 🚀 Local Agent Automation Executors
             
-            Pre-built binaries for Windows, macOS, and Linux.
+            Pre-built binaries for Windows, macOS, and Linux - **NO BUILD TOOLS REQUIRED!**
             
-            ### Usage
+            ### 📦 Download for your platform:
             
-            1. Download the appropriate ZIP for your platform
-            2. Extract the contents
-            3. Run automation scripts:
+            - **Windows x64**: `local-agent-x86_64-pc-windows-msvc.zip`
+            - **macOS Intel**: `local-agent-x86_64-apple-darwin.zip`
+            - **macOS Apple Silicon**: `local-agent-aarch64-apple-darwin.zip`
+            - **Linux x64**: `local-agent-x86_64-unknown-linux-gnu.zip`
             
-            #### Python Executor (all platforms):
+            ### 🎯 Quick Start
+            
+            1. Download and extract the ZIP for your platform
+            2. Run automation scripts:
+            
             ```bash
-            # Install uv first: https://docs.astral.sh/uv/
+            # Rust Executor (zero dependencies!)
+            ./rust-executor examples/windows_simple_test.json
+            
+            # Python Executor (needs uv/pip)
             uvx --with pyautogui --with pillow --with opencv-python \
                 python script_executor.py examples/windows_simple_test.json
             ```
             
-            #### Rust Executor (standalone):
-            ```bash
-            ./rust-executor examples/windows_simple_test.json
-            ```
+            ### ✨ Features
             
-            #### GUI Application:
-            ```bash
-            ./local-agent-gui
-            ```
+            - **Zero dependencies** for Rust executor
+            - **Cross-platform** support
+            - **No compilation** needed
+            - **Python fallback** available
             
-            ### Platform Notes
+            ### 📝 Notes
             
-            - **Windows**: No build tools required! Just download and run
-            - **macOS**: May need to allow in Security & Privacy settings
-            - **Linux**: Requires GTK3 runtime libraries
+            - Windows: May need to allow in Windows Defender
+            - macOS: May need to allow in Security & Privacy settings
+            - Linux: Requires X11/Wayland display server
             
           allowUpdates: true
-          draft: false
-          prerelease: false
+          makeLatest: true
           token: ${{ secrets.GITHUB_TOKEN }}
