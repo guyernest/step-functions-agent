@@ -1,0 +1,98 @@
+{
+  "name": "Mouse Automation Rust Demo",
+  "description": "Demonstrates mouse control capabilities of the Rust executor",
+  "executor": "rust",
+  "abort_on_error": false,
+  "actions": [
+    {
+      "type": "wait",
+      "seconds": 2.0,
+      "description": "Initial delay before starting"
+    },
+    {
+      "type": "moveto",
+      "x": 200,
+      "y": 200,
+      "wait": 0.5,
+      "description": "Move mouse to starting position (200, 200)"
+    },
+    {
+      "type": "moveto",
+      "x": 400,
+      "y": 200,
+      "wait": 0.5,
+      "description": "Move horizontally to (400, 200)"
+    },
+    {
+      "type": "moveto",
+      "x": 400,
+      "y": 400,
+      "wait": 0.5,
+      "description": "Move vertically to (400, 400)"
+    },
+    {
+      "type": "moveto",
+      "x": 200,
+      "y": 400,
+      "wait": 0.5,
+      "description": "Move horizontally to (200, 400)"
+    },
+    {
+      "type": "moveto",
+      "x": 200,
+      "y": 200,
+      "wait": 0.5,
+      "description": "Complete the square back to (200, 200)"
+    },
+    {
+      "type": "moveto",
+      "x": 500,
+      "y": 300,
+      "wait": 1.0,
+      "description": "Move to center area (500, 300)"
+    },
+    {
+      "type": "click",
+      "description": "Single click at current position"
+    },
+    {
+      "type": "wait",
+      "seconds": 0.5,
+      "description": "Brief pause"
+    },
+    {
+      "type": "doubleclick",
+      "x": 600,
+      "y": 300,
+      "wait": 0.5,
+      "description": "Double-click at (600, 300)"
+    },
+    {
+      "type": "rightclick",
+      "x": 550,
+      "y": 350,
+      "wait": 0.5,
+      "description": "Right-click at (550, 350)"
+    },
+    {
+      "type": "press",
+      "key": "escape",
+      "wait": 0.5,
+      "description": "Close any context menu"
+    },
+    {
+      "type": "dragto",
+      "x": 700,
+      "y": 400,
+      "duration": 1.0,
+      "wait": 1.0,
+      "description": "Drag from current position to (700, 400)"
+    },
+    {
+      "type": "moveto",
+      "x": 300,
+      "y": 300,
+      "description": "Return to center area"
+    }
+  ]
+}

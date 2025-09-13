@@ -1,0 +1,109 @@
+{
+  "name": "TextEdit Rust Executor Example",
+  "description": "Demonstrates Rust executor capabilities with TextEdit on macOS",
+  "executor": "rust",
+  "abort_on_error": true,
+  "actions": [
+    {
+      "type": "launch",
+      "app": "TextEdit",
+      "wait": 2.0,
+      "description": "Launch TextEdit application"
+    },
+    {
+      "type": "wait",
+      "seconds": 1.5,
+      "description": "Wait for TextEdit to fully load"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["cmd", "n"],
+      "wait": 0.5,
+      "description": "Create new document"
+    },
+    {
+      "type": "type",
+      "text": "Hello from the Rust Executor!\n\n",
+      "description": "Type greeting message"
+    },
+    {
+      "type": "type",
+      "text": "This automation is running without Python, PyAutoGUI, or OpenCV.",
+      "interval": 0.03,
+      "description": "Type with typing effect (30ms between chars)"
+    },
+    {
+      "type": "press",
+      "key": "enter",
+      "wait": 0.5,
+      "description": "Press Enter for new line"
+    },
+    {
+      "type": "type",
+      "text": "The Rust executor provides native performance and no dependency issues!",
+      "description": "Type additional text"
+    },
+    {
+      "type": "wait",
+      "seconds": 1.0,
+      "description": "Pause to show the text"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["cmd", "a"],
+      "wait": 0.5,
+      "description": "Select all text (Cmd+A)"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["cmd", "b"],
+      "wait": 0.5,
+      "description": "Make text bold (Cmd+B)"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["cmd", "i"],
+      "wait": 0.5,
+      "description": "Make text italic (Cmd+I)"
+    },
+    {
+      "type": "press",
+      "key": "escape",
+      "wait": 0.5,
+      "description": "Deselect text"
+    },
+    {
+      "type": "press",
+      "key": "end",
+      "wait": 0.3,
+      "description": "Move to end of document"
+    },
+    {
+      "type": "type",
+      "text": "\n\n✨ Automation complete!",
+      "description": "Add completion message"
+    },
+    {
+      "type": "wait",
+      "seconds": 2.0,
+      "description": "Display final result"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["cmd", "n"],
+      "wait": 1.0,
+      "description": "Create new document (triggers save dialog)"
+    },
+    {
+      "type": "press",
+      "key": "escape",
+      "wait": 0.5,
+      "description": "Cancel save dialog"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["cmd", "q"],
+      "description": "Quit TextEdit (Cmd+Q)"
+    }
+  ]
+}

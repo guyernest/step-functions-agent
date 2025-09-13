@@ -1,6 +1,7 @@
 {
   "name": "TextEdit Mac Automation Example with Image Detection",
   "description": "Creates and edits a document in TextEdit on macOS, using image detection to find buttons",
+  "executor": "python",
   "abort_on_error": true,
   "actions": [
     {
@@ -10,14 +11,10 @@
       "description": "Launch TextEdit application"
     },
     {
-      "type": "locateimage",
-      "image": "examples/New_Document_Button.png",
-      "confidence": 0.7,
-      "description": "Find the New Document button"
-    },
-    {
-      "type": "click",
-      "description": "Click on the New Document button"
+      "type": "hotkey",
+      "keys": ["cmd", "n"],
+      "wait": 0.5,
+      "description": "Create new document"
     },
     {
       "type": "wait",

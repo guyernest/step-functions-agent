@@ -1,0 +1,138 @@
+{
+  "name": "Keyboard Input Rust Demo",
+  "description": "Demonstrates keyboard input capabilities of the Rust executor",
+  "executor": "rust",
+  "abort_on_error": false,
+  "actions": [
+    {
+      "type": "launch",
+      "app": "TextEdit",
+      "wait": 2.0,
+      "description": "Open TextEdit for keyboard demo"
+    },
+    {
+      "type": "wait",
+      "seconds": 1.0,
+      "description": "Wait for TextEdit to load"
+    },
+    {
+      "type": "type",
+      "text": "Keyboard Demo - Rust Executor\n",
+      "description": "Type title"
+    },
+    {
+      "type": "type",
+      "text": "================================\n\n",
+      "description": "Type separator"
+    },
+    {
+      "type": "type",
+      "text": "Testing individual key presses:\n",
+      "description": "Type header"
+    },
+    {
+      "type": "press",
+      "key": "tab",
+      "wait": 0.3,
+      "description": "Press Tab key"
+    },
+    {
+      "type": "type",
+      "text": "- Tab pressed\n",
+      "description": "Type confirmation"
+    },
+    {
+      "type": "press",
+      "key": "space",
+      "wait": 0.3,
+      "description": "Press Space key"
+    },
+    {
+      "type": "type",
+      "text": " - Space pressed\n",
+      "description": "Type confirmation"
+    },
+    {
+      "type": "type",
+      "text": "\nTesting special characters:\n",
+      "description": "Type header"
+    },
+    {
+      "type": "type",
+      "text": "!@#$%^&*()_+-=[]{}|;':\",./<>?\n",
+      "description": "Type special characters"
+    },
+    {
+      "type": "type",
+      "text": "\nTesting numbers:\n",
+      "description": "Type header"
+    },
+    {
+      "type": "type",
+      "text": "0123456789\n",
+      "description": "Type numbers"
+    },
+    {
+      "type": "type",
+      "text": "\nTesting typing with interval:\n",
+      "description": "Type header"
+    },
+    {
+      "type": "type",
+      "text": "S-l-o-w-l-y   t-y-p-i-n-g...",
+      "interval": 0.1,
+      "wait": 0.5,
+      "description": "Type slowly with 100ms between characters"
+    },
+    {
+      "type": "type",
+      "text": "\n\nTesting keyboard shortcuts:\n",
+      "description": "Type header"
+    },
+    {
+      "type": "type",
+      "text": "This text will be selected",
+      "wait": 0.5,
+      "description": "Type text to select"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["shift", "left", "left", "left", "left", "left", "left", "left", "left"],
+      "wait": 0.5,
+      "description": "Select 'selected' using Shift+Arrow"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["cmd", "b"],
+      "wait": 0.5,
+      "description": "Make selection bold"
+    },
+    {
+      "type": "press",
+      "key": "end",
+      "wait": 0.5,
+      "description": "Move to end of line"
+    },
+    {
+      "type": "type",
+      "text": "\n\n✅ Keyboard demo complete!\n",
+      "description": "Type completion message"
+    },
+    {
+      "type": "wait",
+      "seconds": 3.0,
+      "description": "Display final result"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["cmd", "q"],
+      "wait": 0.5,
+      "description": "Quit TextEdit"
+    },
+    {
+      "type": "press",
+      "key": "cmd+d",
+      "description": "Don't save (Cmd+D)"
+    }
+  ]
+}

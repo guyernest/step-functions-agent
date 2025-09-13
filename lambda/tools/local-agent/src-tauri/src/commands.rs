@@ -5,6 +5,7 @@ use std::io::Write;
 use std::sync::Mutex;
 use tokio::task::JoinHandle;
 use chrono::Local;
+use crate::rust_automation::{RustScriptExecutor, can_execute_with_rust, ScriptResult};
 
 // Global state for polling and logs
 lazy_static::lazy_static! {
@@ -401,6 +402,54 @@ async fn poll_for_activities(config: AppConfig) {
     add_log("info", "Polling loop ended".to_string());
 }
 
+// Helper function to execute Rust script outside of async context
+async fn execute_rust_script(script_json: &str) -> ScriptResult {
+    eprintln!("🔍 [DEBUG] execute_rust_script: Starting");
+    
+    // We need to use a channel to communicate between async and sync contexts
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let script_clone = script_json.to_string();
+    
+    eprintln!("🔍 [DEBUG] execute_rust_script: Spawning thread");
+    
+    // Execute the Rust automation on a dedicated thread (not thread pool)
+    // This ensures it runs on a consistent thread for macOS compatibility
+    let handle = std::thread::spawn(move || {
+        eprintln!("🔍 [DEBUG] Thread: Starting execution");
+        let mut executor = RustScriptExecutor::new();
+        let result = executor.execute_script(&script_clone);
+        eprintln!("🔍 [DEBUG] Thread: Execution complete, sending result");
+        match tx.send(result) {
+            Ok(_) => eprintln!("🔍 [DEBUG] Thread: Result sent successfully"),
+            Err(_) => eprintln!("🔍 [DEBUG] Thread: Failed to send result - receiver dropped"),
+        }
+        eprintln!("🔍 [DEBUG] Thread: Exiting");
+    });
+    
+    eprintln!("🔍 [DEBUG] execute_rust_script: Waiting for result");
+    
+    // Wait for the result
+    let result = rx.await.unwrap_or_else(|e| {
+        eprintln!("🔍 [DEBUG] execute_rust_script: Failed to receive result: {:?}", e);
+        ScriptResult {
+            success: false,
+            results: vec![],
+            error: Some("Failed to execute Rust script".to_string()),
+        }
+    });
+    
+    eprintln!("🔍 [DEBUG] execute_rust_script: Got result, waiting for thread to finish");
+    
+    // Make sure the thread finishes cleanly
+    match handle.join() {
+        Ok(_) => eprintln!("🔍 [DEBUG] execute_rust_script: Thread joined successfully"),
+        Err(e) => eprintln!("🔍 [DEBUG] execute_rust_script: Thread panicked: {:?}", e),
+    }
+    
+    eprintln!("🔍 [DEBUG] execute_rust_script: Returning result");
+    result
+}
+
 // Execute the activity task (run the script)
 async fn execute_activity_task(client: &aws_sdk_sfn::Client, token: &str, input: &str) {
     use std::process::Command;
@@ -524,8 +573,79 @@ async fn execute_activity_task(client: &aws_sdk_sfn::Client, token: &str, input:
                 return;
             };
             
-            // Execute script
-            add_log("info", format!("Running script: {}", script_path));
+            // Check if we can use Rust executor instead
+            if can_execute_with_rust(&script_json) {
+                add_log("info", "Using Rust native executor for automation".to_string());
+                
+                // Execute Rust automation in a separate function to handle async context
+                let result = execute_rust_script(&script_json).await;
+                
+                // Process results
+                let success = result.success;
+                
+                for action_result in &result.results {
+                    let level = if action_result.status == "success" { "info" } else { "error" };
+                    add_log(level, format!("Script: {}", action_result.details));
+                }
+                
+                if success {
+                    add_log("success", "Script executed successfully!".to_string());
+                    
+                    // Create response that mirrors input structure with script_output
+                    let mut response = parsed.clone();
+                    
+                    let script_output = serde_json::to_value(result).unwrap();
+                    
+                    // Replace script with script_output in the appropriate location
+                    if let Some(tool_input) = response.get_mut("tool_input") {
+                        if let Some(tool_input_obj) = tool_input.as_object_mut() {
+                            tool_input_obj.remove("script");
+                            tool_input_obj.insert("script_output".to_string(), script_output);
+                        }
+                    } else if let Some(input_obj) = response.get_mut("input") {
+                        if let Some(input_map) = input_obj.as_object_mut() {
+                            input_map.remove("script");
+                            input_map.insert("script_output".to_string(), script_output);
+                        }
+                    } else {
+                        // Direct structure
+                        if let Some(response_obj) = response.as_object_mut() {
+                            response_obj.remove("script");
+                            response_obj.insert("script_output".to_string(), script_output);
+                        }
+                    }
+                    
+                    // Add approved field at root level
+                    if let Some(response_obj) = response.as_object_mut() {
+                        response_obj.insert("approved".to_string(), serde_json::json!(true));
+                    }
+                    
+                    let response_str = serde_json::to_string(&response)
+                        .unwrap_or_else(|_| r#"{"approved": true, "success": true}"#.to_string());
+                    
+                    let _ = client
+                        .send_task_success()
+                        .task_token(token)
+                        .output(response_str)
+                        .send()
+                        .await;
+                } else {
+                    add_log("error", "Script execution failed".to_string());
+                    
+                    let _ = client
+                        .send_task_failure()
+                        .task_token(token)
+                        .error("ScriptFailed")
+                        .cause(&result.error.unwrap_or_else(|| "Unknown error".to_string()))
+                        .send()
+                        .await;
+                }
+                
+                return; // Exit early, we've handled it with Rust
+            }
+            
+            // Fall back to Python executor
+            add_log("info", format!("Using Python executor: {}", script_path));
             
             let output = Command::new("python3")
                 .arg(executor_path)
@@ -777,7 +897,7 @@ pub async fn validate_script(script: String) -> Result<serde_json::Value, String
 pub async fn execute_test_script(script: String, dry_run: bool) -> Result<serde_json::Value, String> {
     use std::process::Command;
     use tempfile::NamedTempFile;
-    use std::io::{Write, Seek};
+    use std::io::Write;
     
     // For dry run, just validate and return success
     if dry_run {
@@ -799,6 +919,25 @@ pub async fn execute_test_script(script: String, dry_run: bool) -> Result<serde_
             }));
         }
     }
+    
+    // Check if we can use Rust executor
+    if can_execute_with_rust(&script) {
+        add_log("info", "Using Rust native executor for script execution".to_string());
+        
+        // Execute Rust automation in a separate function to handle async context
+        let result = execute_rust_script(&script).await;
+        
+        // Log the results
+        for action_result in &result.results {
+            let level = if action_result.status == "success" { "info" } else { "error" };
+            add_log(level, format!("{}: {}", action_result.action, action_result.details));
+        }
+        
+        return Ok(serde_json::to_value(result).unwrap());
+    }
+    
+    // Fall back to Python executor for scripts with image recognition
+    add_log("info", "Using Python executor (script contains image recognition)".to_string());
     
     // For actual execution, we'll use the Python script executor
     // First, save the script to a temporary file

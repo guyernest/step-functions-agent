@@ -1,0 +1,53 @@
+{
+  "name": "Windows Simple Test",
+  "description": "Simple test to validate basic Windows automation",
+  "executor": "rust",
+  "abort_on_error": true,
+  "actions": [
+    {
+      "type": "launch",
+      "app": "notepad.exe",
+      "description": "Launch Notepad"
+    },
+    {
+      "type": "wait",
+      "seconds": 2,
+      "description": "Wait for Notepad"
+    },
+    {
+      "type": "type",
+      "text": "Hello Windows!",
+      "description": "Type greeting"
+    },
+    {
+      "type": "wait",
+      "seconds": 1,
+      "description": "Pause to show text"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["ctrl", "a"],
+      "description": "Select all"
+    },
+    {
+      "type": "wait",
+      "seconds": 1,
+      "description": "Show selection"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["alt", "f4"],
+      "description": "Close Notepad"
+    },
+    {
+      "type": "wait",
+      "seconds": 0.5,
+      "description": "Wait for dialog"
+    },
+    {
+      "type": "press",
+      "key": "n",
+      "description": "Don't save"
+    }
+  ]
+}

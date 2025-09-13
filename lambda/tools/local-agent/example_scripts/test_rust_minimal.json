@@ -1,0 +1,53 @@
+{
+  "executor": "rust",
+  "name": "Minimal Rust Executor Test",
+  "description": "Minimal safe test that only moves the mouse",
+  "abort_on_error": false,
+  "actions": [
+    {
+      "type": "wait",
+      "seconds": 1,
+      "description": "Initial wait"
+    },
+    {
+      "type": "moveto",
+      "x": 200,
+      "y": 200,
+      "wait": 0.5,
+      "description": "Move mouse to (200, 200)"
+    },
+    {
+      "type": "moveto",
+      "x": 400,
+      "y": 200,
+      "wait": 0.5,
+      "description": "Move mouse to (400, 200)"
+    },
+    {
+      "type": "moveto",
+      "x": 400,
+      "y": 400,
+      "wait": 0.5,
+      "description": "Move mouse to (400, 400)"
+    },
+    {
+      "type": "moveto",
+      "x": 200,
+      "y": 400,
+      "wait": 0.5,
+      "description": "Move mouse to (200, 400)"
+    },
+    {
+      "type": "moveto",
+      "x": 200,
+      "y": 200,
+      "wait": 0.5,
+      "description": "Move mouse back to (200, 200)"
+    },
+    {
+      "type": "wait",
+      "seconds": 1,
+      "description": "Final wait"
+    }
+  ]
+}

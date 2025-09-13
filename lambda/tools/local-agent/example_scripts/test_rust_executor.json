@@ -1,0 +1,62 @@
+{
+  "executor": "rust",
+  "name": "Test Rust Executor - Safe",
+  "description": "Safe test of Rust-based automation with TextEdit",
+  "abort_on_error": false,
+  "actions": [
+    {
+      "type": "launch",
+      "app": "TextEdit",
+      "wait": 2.0,
+      "description": "Open TextEdit to receive input"
+    },
+    {
+      "type": "wait",
+      "seconds": 1,
+      "description": "Wait for TextEdit to fully load"
+    },
+    {
+      "type": "type",
+      "text": "Hello from Rust Executor!",
+      "description": "Type test text in TextEdit"
+    },
+    {
+      "type": "wait",
+      "seconds": 0.5,
+      "description": "Brief pause"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["cmd", "a"],
+      "wait": 0.5,
+      "description": "Select all text"
+    },
+    {
+      "type": "press",
+      "key": "delete",
+      "wait": 0.5,
+      "description": "Delete selected text"
+    },
+    {
+      "type": "type",
+      "text": "Test completed successfully!",
+      "description": "Type completion message"
+    },
+    {
+      "type": "wait",
+      "seconds": 2,
+      "description": "Show result"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["cmd", "q"],
+      "wait": 0.5,
+      "description": "Quit TextEdit"
+    },
+    {
+      "type": "press",
+      "key": "cmd+d",
+      "description": "Don't save (Cmd+D)"
+    }
+  ]
+}

@@ -1,7 +1,9 @@
 # Script Executor Alternatives for Local Agent
 
 ## Current State: PyAutoGUI (Python)
+
 The current implementation uses Python with PyAutoGUI library, which requires:
+
 - Python runtime on target machine
 - Dependency management (pip/uv)
 - Subprocess execution from Rust
@@ -9,9 +11,11 @@ The current implementation uses Python with PyAutoGUI library, which requires:
 ## Alternative Options for Rust Implementation
 
 ### Option A: RsAutoGUI (Direct PyAutoGUI Port)
+
 **Library**: `rsautogui` - A Rust port of PyAutoGUI with similar API
 
 #### Advantages
+
 - **Direct API compatibility** with existing PyAutoGUI scripts
 - **Minimal script format changes** required
 - **Feature parity** with Python implementation
@@ -19,6 +23,7 @@ The current implementation uses Python with PyAutoGUI library, which requires:
 - **Familiar API** for users already using PyAutoGUI
 
 #### Implementation Example
+
 ```rust
 use rsautogui::{mouse, keyboard, screen};
 use std::time::Duration;
@@ -85,12 +90,15 @@ impl RsAutoGuiExecutor {
 ```
 
 ### Option B: Native Rust Libraries (Enigo + Screenshots)
-**Libraries**: 
+
+**Libraries**:
+
 - `enigo` - Cross-platform input simulation
 - `screenshots` - Screen capture
 - `image` + `imageproc` - Image processing and template matching
 
 #### Advantages
+
 - **No Python-like dependencies**
 - **Better performance** and lower latency
 - **Smaller binary size**
@@ -98,6 +106,7 @@ impl RsAutoGuiExecutor {
 - **Native OS integration** possibilities
 
 #### Implementation Example
+
 ```rust
 use enigo::{Enigo, Key, KeyboardControllable, MouseButton, MouseControllable};
 use screenshots::Screen;
@@ -147,9 +156,11 @@ impl NativeExecutor {
 ```
 
 ### Option C: Hybrid Approach
+
 **Strategy**: Support both executors and choose based on script requirements
 
-#### Advantages
+#### Hybrid Advantages
+
 - **Backwards compatibility** with existing scripts
 - **Performance optimization** where possible
 - **Gradual migration** path
@@ -232,18 +243,21 @@ winit = "0.29"  # Window management
 ## Migration Strategy
 
 ### Phase 1: Immediate (Week 1-2)
+
 - Implement **RsAutoGUI** as drop-in replacement
 - Maintain 100% script compatibility
 - Remove Python dependency
 - Focus on GUI implementation
 
 ### Phase 2: Optimization (Week 3-4)
+
 - Profile performance bottlenecks
 - Implement native alternatives for critical paths
 - Add execution mode selection in GUI
 - Benchmark both approaches
 
 ### Phase 3: Enhancement (Week 5+)
+
 - Add features beyond PyAutoGUI:
   - OCR text recognition
   - Advanced image matching algorithms

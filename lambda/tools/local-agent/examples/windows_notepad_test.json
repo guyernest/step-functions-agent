@@ -1,0 +1,179 @@
+{
+  "name": "Windows Notepad Test",
+  "description": "Comprehensive test of Windows automation with Notepad",
+  "executor": "rust",
+  "abort_on_error": true,
+  "actions": [
+    {
+      "type": "launch",
+      "app": "notepad.exe",
+      "description": "Launch Notepad application"
+    },
+    {
+      "type": "wait",
+      "seconds": 2,
+      "description": "Wait for Notepad to fully load"
+    },
+    {
+      "type": "type",
+      "text": "Windows Automation Test with Rust Executor\n",
+      "description": "Type title"
+    },
+    {
+      "type": "type",
+      "text": "=====================================\n\n",
+      "description": "Type separator"
+    },
+    {
+      "type": "type",
+      "text": "Testing various features:\n",
+      "description": "Type intro"
+    },
+    {
+      "type": "type",
+      "text": "1. Basic text input - ",
+      "interval": 0.03,
+      "description": "Type with typing effect"
+    },
+    {
+      "type": "type",
+      "text": "SUCCESS\n",
+      "description": "Complete line"
+    },
+    {
+      "type": "type",
+      "text": "2. Special characters: !@#$%^&*()_+-=[]{}|;':\",./<>?\n",
+      "description": "Test special characters"
+    },
+    {
+      "type": "type",
+      "text": "3. Numbers: 0123456789\n",
+      "description": "Test numbers"
+    },
+    {
+      "type": "type",
+      "text": "4. Tab spacing:\t\tTabbed text\n",
+      "description": "Test tab character"
+    },
+    {
+      "type": "type",
+      "text": "\n--- Testing Hotkeys ---\n\n",
+      "description": "Section header"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["ctrl", "a"],
+      "description": "Select all text (Ctrl+A)"
+    },
+    {
+      "type": "wait",
+      "seconds": 0.5,
+      "description": "Brief pause to show selection"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["ctrl", "c"],
+      "description": "Copy selected text (Ctrl+C)"
+    },
+    {
+      "type": "press",
+      "key": "end",
+      "description": "Move to end of document"
+    },
+    {
+      "type": "type",
+      "text": "\nPasted content below:\n",
+      "description": "Add paste header"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["ctrl", "v"],
+      "description": "Paste copied text (Ctrl+V)"
+    },
+    {
+      "type": "wait",
+      "seconds": 1,
+      "description": "Show pasted content"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["ctrl", "home"],
+      "description": "Go to beginning (Ctrl+Home)"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["ctrl", "f"],
+      "description": "Open Find dialog (Ctrl+F)"
+    },
+    {
+      "type": "wait",
+      "seconds": 0.5,
+      "description": "Wait for Find dialog"
+    },
+    {
+      "type": "type",
+      "text": "SUCCESS",
+      "description": "Type search term"
+    },
+    {
+      "type": "press",
+      "key": "escape",
+      "description": "Close Find dialog"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["ctrl", "end"],
+      "description": "Go to end (Ctrl+End)"
+    },
+    {
+      "type": "type",
+      "text": "\n\n✓ All tests completed successfully!",
+      "description": "Final message"
+    },
+    {
+      "type": "wait",
+      "seconds": 2,
+      "description": "Display final result"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["ctrl", "s"],
+      "description": "Open Save dialog (Ctrl+S)"
+    },
+    {
+      "type": "wait",
+      "seconds": 0.5,
+      "description": "Wait for Save dialog"
+    },
+    {
+      "type": "type",
+      "text": "test_automation_result.txt",
+      "description": "Type filename"
+    },
+    {
+      "type": "press",
+      "key": "escape",
+      "description": "Cancel save dialog"
+    },
+    {
+      "type": "wait",
+      "seconds": 0.5,
+      "description": "Brief pause"
+    },
+    {
+      "type": "hotkey",
+      "keys": ["alt", "f4"],
+      "description": "Close Notepad (Alt+F4)"
+    },
+    {
+      "type": "wait",
+      "seconds": 0.5,
+      "description": "Wait for save prompt"
+    },
+    {
+      "type": "press",
+      "key": "n",
+      "description": "Don't save changes"
+    }
+  ]
+}
