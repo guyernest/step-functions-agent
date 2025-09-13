@@ -1,0 +1,24 @@
+[package]
+name = "rust-executor"
+version = "0.2.0"
+edition = "2021"
+authors = ["Local Agent Team"]
+description = "Standalone GUI automation executor"
+
+[dependencies]
+enigo = "0.2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+xcap = "0.7"
+image = "0.24"
+imageproc = "0.23"
+
+[[bin]]
+name = "rust-executor"
+path = "src/main.rs"
+
+[profile.release]
+strip = true
+opt-level = "z"
+lto = true
+codegen-units = 1

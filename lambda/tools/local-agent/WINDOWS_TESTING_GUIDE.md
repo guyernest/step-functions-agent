@@ -4,6 +4,46 @@
 
 This guide explains how to test the Local Agent GUI automation tool on Windows using AWS EC2 instances with Remote Desktop Protocol (RDP) connection.
 
+## Quick Start (Minimal Setup)
+
+### Option A: Use Pre-built Binaries (Easiest - No Build Required!)
+
+```powershell
+# 1. Download latest release
+$release = Invoke-RestMethod -Uri "https://api.github.com/repos/guyernest/step-functions-agent/releases/latest"
+$windowsAsset = $release.assets | Where-Object { $_.name -like "*windows*" }
+Invoke-WebRequest -Uri $windowsAsset.browser_download_url -OutFile "local-agent-windows.zip"
+
+# 2. Extract
+Expand-Archive -Path "local-agent-windows.zip" -DestinationPath "local-agent"
+cd local-agent
+
+# 3. Run with Rust executor (no dependencies!)
+.\rust-executor.exe examples\windows_simple_test.json
+
+# Or use GUI
+.\local-agent-gui.exe
+```
+
+### Option B: Python with uvx (No Compilation)
+
+```powershell
+# 1. Install uv (one-time setup)
+irm https://astral.sh/uv/install.ps1 | iex
+
+# 2. Clone just the local-agent folder
+git clone --filter=blob:none --sparse https://github.com/guyernest/step-functions-agent.git
+cd step-functions-agent
+git sparse-checkout set lambda/tools/local-agent
+cd lambda/tools/local-agent
+
+# 3. Run automation directly with uvx (no installation needed)
+uvx --with pyautogui --with pillow --with opencv-python \
+    python script_executor.py examples/windows_simple_test.json
+```
+
+Both approaches work immediately without any build tools! Continue reading for development setup.
+
 ## Prerequisites
 
 - AWS Account with EC2 access
@@ -74,12 +114,28 @@ iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocola
 
 # Install required tools
 choco install -y git
-choco install -y rust
-choco install -y python3
 choco install -y nodejs
 choco install -y vscode
 
-# Restart PowerShell after installations
+# Install Rust with MSVC toolchain (includes dlltool)
+# Option A: Install Visual Studio Build Tools (recommended)
+choco install -y visualstudio2022buildtools
+choco install -y visualstudio2022-workload-vctools
+
+# Option B: Install MinGW (alternative, lighter weight)
+# choco install -y mingw
+
+# Install Rust after build tools
+choco install -y rust-ms
+
+# Install uv (fast Python package manager)
+# Option 1: Using PowerShell
+irm https://astral.sh/uv/install.ps1 | iex
+
+# Option 2: Using winget (if available)
+# winget install --id=astral.uv -e
+
+# Restart PowerShell after installations to refresh PATH
 ```
 
 ### 3.2 Clone and Build Local Agent
@@ -93,14 +149,15 @@ git sparse-checkout set lambda/tools/local-agent
 # Navigate to local-agent
 cd lambda/tools/local-agent
 
-# Install Python dependencies (for Python executor)
-pip install pyautogui pillow opencv-python
+# Install Python dependencies using uv (fast and reliable)
+uv venv
+uv pip install pyautogui pillow opencv-python numpy
 
-# Build Rust components
+# Build Rust components (optional - only if using Rust executor)
 cd src-tauri
 cargo build --release
 
-# Install Node dependencies for UI
+# Install Node dependencies for UI (optional - only if using GUI)
 cd ..
 npm install
 ```
@@ -204,13 +261,39 @@ npm run tauri build
 
 ### 4.3 Test via Command Line
 
+#### Quick Test with uvx (No Installation Required)
+
 ```powershell
+# Run directly with uvx - downloads dependencies on the fly
+uvx --from . local-agent examples/windows_simple_test.json
+
+# Or with inline dependencies (if pyproject.toml not present)
+uvx --with pyautogui --with pillow --with opencv-python \
+    python script_executor.py examples/windows_simple_test.json
+```
+
+#### Standard Test with uv
+
+```powershell
+# Activate virtual environment
+.\.venv\Scripts\activate
+
 # Test Python executor
-python script_executor.py examples/windows_notepad_test.json
+uv run python script_executor.py examples/windows_notepad_test.json
+
+# Or without activation
+uv run script_executor.py examples/windows_notepad_test.json
 
 # Test Rust executor directly
 cd src-tauri
 cargo run --release -- --script ../examples/windows_notepad_test.json
+```
+
+#### Direct Python Execution (Traditional)
+
+```powershell
+# If using activated venv
+python script_executor.py examples/windows_notepad_test.json
 ```
 
 ## Step 5: Windows-Specific Considerations
@@ -381,6 +464,51 @@ shutdown /a
 - Good for long-term testing
 
 ## Troubleshooting
+
+### Rust Build Errors
+
+#### Error: "dlltool.exe not found"
+
+This error occurs when building Rust crates with native dependencies. Solutions:
+
+**Solution 1: Install Visual Studio Build Tools (Recommended)**
+```powershell
+# Install MSVC toolchain
+choco install -y visualstudio2022buildtools
+choco install -y visualstudio2022-workload-vctools
+
+# Or install full Visual Studio Community
+winget install Microsoft.VisualStudio.2022.Community
+
+# Restart PowerShell and retry build
+cargo build --release
+```
+
+**Solution 2: Use MinGW Toolchain**
+```powershell
+# Install MinGW
+choco install -y mingw
+
+# Set Rust to use GNU toolchain
+rustup default stable-x86_64-pc-windows-gnu
+
+# Retry build
+cargo build --release
+```
+
+**Solution 3: Install Rust via rustup (includes toolchain setup)**
+```powershell
+# Uninstall existing Rust
+choco uninstall rust
+
+# Install via rustup (will prompt for MSVC installation)
+Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
+.\rustup-init.exe
+
+# Follow prompts to install MSVC toolchain
+# Restart PowerShell
+cargo build --release
+```
 
 ### Connection Issues
 
