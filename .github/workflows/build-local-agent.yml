@@ -53,6 +53,13 @@ jobs:
         if: matrix.os == 'windows-latest'
         uses: ilammy/msvc-dev-cmd@v1
       
+      # Linux needs X11/Wayland dev libraries
+      - name: Install Linux Dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxdo-dev libxcb1-dev libxcb-randr0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxcb-xkb-dev libwayland-dev
+      
       # Build standalone executor  
       - name: Build Rust Executor
         working-directory: lambda/tools/local-agent/rust-executor-standalone
