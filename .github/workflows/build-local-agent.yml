@@ -64,6 +64,14 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       
+      # Install Node.js for building Tauri GUI
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: lambda/tools/local-agent/package-lock.json
+      
       # Configure cargo to explicitly use MSVC's linker on Windows
       - name: Configure cargo linker (Windows)
         if: matrix.win
@@ -93,6 +101,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libxdo-dev libxcb1-dev libxcb-randr0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxcb-xkb-dev libwayland-dev libpipewire-0.3-dev
       
+      # Install npm dependencies for GUI
+      - name: Install npm dependencies
+        working-directory: lambda/tools/local-agent
+        run: npm ci
+        shell: bash
+      
       # Build standalone executor - Windows
       - name: Build Rust Executor (Windows)
         if: matrix.win
@@ -115,27 +129,53 @@ jobs:
           cp ../src-tauri/src/rust_automation.rs src/
           cargo build --release --target "${{ matrix.target }}"
       
+      # Build Tauri GUI app
+      - name: Build Tauri GUI
+        working-directory: lambda/tools/local-agent
+        run: npm run tauri build -- --target ${{ matrix.target }}
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ""
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+      
       # Package Release - Windows
       - name: Package Release (Windows)
         if: matrix.win
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force release | Out-Null
+          # Copy standalone executor
           Copy-Item "lambda/tools/local-agent/rust-executor-standalone/target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "release/${{ matrix.asset_name }}"
+          # Copy Tauri GUI app
+          Copy-Item "lambda/tools/local-agent/src-tauri/target/${{ matrix.target }}/release/local-agent-gui.exe" "release/local-agent-gui.exe"
+          # Copy Python files
           Copy-Item "lambda/tools/local-agent/script_executor.py" release/
           Copy-Item "lambda/tools/local-agent/pyproject.toml" release/
+          # Copy examples
           Copy-Item -Recurse "lambda/tools/local-agent/examples" release/
           @"
-          # Local Agent Automation Executor
+          # Local Agent - Step Functions Activity Poller & Automation Executor
+
+          ## Components
+
+          1. **local-agent-gui.exe** - GUI app for polling Step Functions activities and running automations
+          2. **${{ matrix.asset_name }}** - Standalone CLI automation executor (no GUI)
+          3. **script_executor.py** - Python automation executor
 
           ## Quick Start
 
-          ### Rust Executor (No dependencies):
+          ### GUI App (Step Functions Integration):
+          ``````bash
+          # Run the GUI app to poll activities and execute automations
+          ./local-agent-gui.exe
+          ``````
+
+          ### Standalone Executor (No dependencies):
           ``````bash
           ./${{ matrix.asset_name }} examples/windows_simple_test.json
           ``````
 
-          ### Python Executor (Requires uv/pip):
+          ### Python Executor (Requires Python):
           ``````bash
           uvx --with pyautogui --with pillow --with opencv-python python script_executor.py examples/windows_simple_test.json
           ``````
@@ -147,21 +187,45 @@ jobs:
         shell: bash
         run: |
           mkdir -p release
+          # Copy standalone executor
           cp "lambda/tools/local-agent/rust-executor-standalone/target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "release/${{ matrix.asset_name }}"
+          # Copy Tauri GUI app (macOS creates .app bundle)
+          if [ -d "lambda/tools/local-agent/src-tauri/target/${{ matrix.target }}/release/bundle/macos/local-agent-gui.app" ]; then
+            cp -r "lambda/tools/local-agent/src-tauri/target/${{ matrix.target }}/release/bundle/macos/local-agent-gui.app" release/
+          elif [ -f "lambda/tools/local-agent/src-tauri/target/${{ matrix.target }}/release/local-agent-gui" ]; then
+            cp "lambda/tools/local-agent/src-tauri/target/${{ matrix.target }}/release/local-agent-gui" release/
+          fi
+          # Copy Python files
           cp lambda/tools/local-agent/script_executor.py release/
           cp lambda/tools/local-agent/pyproject.toml release/
+          # Copy examples
           cp -r lambda/tools/local-agent/examples release/
           cat > release/README.md <<'EOF'
-          # Local Agent Automation Executor
+          # Local Agent - Step Functions Activity Poller & Automation Executor
+
+          ## Components
+
+          1. **local-agent-gui.app** (macOS) or **local-agent-gui** (Linux) - GUI app for polling Step Functions activities
+          2. **${{ matrix.asset_name }}** - Standalone CLI automation executor (no GUI)
+          3. **script_executor.py** - Python automation executor
 
           ## Quick Start
 
-          ### Rust Executor (No dependencies):
+          ### GUI App (Step Functions Integration):
+          ```bash
+          # macOS: Run the app bundle
+          open local-agent-gui.app
+          
+          # Linux: Run the executable
+          ./local-agent-gui
+          ```
+
+          ### Standalone Executor (No dependencies):
           ```bash
           ./${{ matrix.asset_name }} examples/windows_simple_test.json
           ```
 
-          ### Python Executor (Requires uv/pip):
+          ### Python Executor (Requires Python):
           ```bash
           uvx --with pyautogui --with pillow --with opencv-python python script_executor.py examples/windows_simple_test.json
           ```

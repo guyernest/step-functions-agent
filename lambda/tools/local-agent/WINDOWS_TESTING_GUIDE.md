@@ -8,8 +8,15 @@ This guide explains how to test the Local Agent GUI automation tool on Windows u
 
 ### Option A: Use Pre-built Binaries (Easiest - No Build Required!)
 
+The pre-built binaries are automatically created by GitHub Actions for each push to main branch.
+
 ```powershell
-# 1. Download latest release
+# 1. Download latest Windows build artifact
+# Go to: https://github.com/guyernest/step-functions-agent/actions/workflows/build-local-agent.yml
+# Click on the latest successful run
+# Download "local-agent-x86_64-pc-windows-msvc" artifact
+
+# Alternative: Direct download from releases (when available)
 $release = Invoke-RestMethod -Uri "https://api.github.com/repos/guyernest/step-functions-agent/releases/latest"
 $windowsAsset = $release.assets | Where-Object { $_.name -like "*windows*" }
 Invoke-WebRequest -Uri $windowsAsset.browser_download_url -OutFile "local-agent-windows.zip"
@@ -18,11 +25,10 @@ Invoke-WebRequest -Uri $windowsAsset.browser_download_url -OutFile "local-agent-
 Expand-Archive -Path "local-agent-windows.zip" -DestinationPath "local-agent"
 cd local-agent
 
-# 3. Run with Rust executor (no dependencies!)
-.\rust-executor.exe examples\windows_simple_test.json
+# 3. Run the standalone Rust executor (ZERO dependencies!)
+.\rust-executor-windows-x64.exe examples\windows_simple_test.json
 
-# Or use GUI
-.\local-agent-gui.exe
+# That's it! No Python, no build tools, no dependencies needed!
 ```
 
 ### Option B: Python with uvx (No Compilation)
@@ -100,89 +106,97 @@ Username: Administrator
 Password: [decrypted password from step 2.1]
 ```
 
-## Step 3: Setup Development Environment on Windows
+## Step 3: Download and Run Pre-built Binaries (Recommended)
 
-### 3.1 Install Prerequisites
+### 3.1 Download Latest Build
 
 ```powershell
 # Run PowerShell as Administrator
 
-# Install Chocolatey (Windows package manager)
-Set-ExecutionPolicy Bypass -Scope Process -Force
-[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+# Method 1: Manual download from GitHub Actions
+# 1. Go to: https://github.com/guyernest/step-functions-agent/actions/workflows/build-local-agent.yml
+# 2. Click on the latest successful workflow run
+# 3. Scroll down to "Artifacts" section
+# 4. Download "local-agent-x86_64-pc-windows-msvc.zip"
 
-# Install required tools
-choco install -y git
-choco install -y nodejs
-choco install -y vscode
+# Method 2: Using PowerShell to download artifacts (requires GitHub token for artifacts)
+# Note: GitHub Actions artifacts require authentication, so manual download is easier
 
-# Install Rust with MSVC toolchain (includes dlltool)
-# Option A: Install Visual Studio Build Tools (recommended)
-choco install -y visualstudio2022buildtools
-choco install -y visualstudio2022-workload-vctools
-
-# Option B: Install MinGW (alternative, lighter weight)
-# choco install -y mingw
-
-# Install Rust after build tools
-choco install -y rust-ms
-
-# Install uv (fast Python package manager)
-# Option 1: Using PowerShell
-irm https://astral.sh/uv/install.ps1 | iex
-
-# Option 2: Using winget (if available)
-# winget install --id=astral.uv -e
-
-# Restart PowerShell after installations to refresh PATH
+# Method 3: Download from releases page (when tagged releases are available)
+# Go to: https://github.com/guyernest/step-functions-agent/releases
 ```
 
-### 3.2 Clone and Build Local Agent
+### 3.2 Extract and Run
 
 ```powershell
-# Use sparse checkout to clone only the local-agent folder (recommended)
+# Extract the downloaded ZIP file
+Expand-Archive -Path "local-agent-x86_64-pc-windows-msvc.zip" -DestinationPath "C:\local-agent"
+cd C:\local-agent
+
+# List available files
+dir
+
+# You should see:
+# - rust-executor-windows-x64.exe  (Standalone automation executor)
+# - script_executor.py              (Python executor)
+# - pyproject.toml                  (Python dependencies)
+# - examples/                       (Sample automation scripts)
+# - README.md                       (Quick start guide)
+
+# Run a test automation
+.\rust-executor-windows-x64.exe examples\windows_simple_test.json
+```
+
+### 3.3 No Build Tools Required!
+
+The pre-built binary approach requires **ZERO** additional installations:
+- ✅ No Visual Studio
+- ✅ No Rust toolchain
+- ✅ No Python installation
+- ✅ No Node.js
+- ✅ No compilation wait time
+
+Just download, extract, and run!
+
+## Step 4: Development Setup (Optional - Only for Contributors)
+
+If you need to modify the code or build from source:
+
+### 4.1 Install Development Tools
+
+```powershell
+# Install Git for cloning the repository
+choco install -y git
+
+# For Python executor development
+irm https://astral.sh/uv/install.ps1 | iex
+
+# For Rust executor development (requires build tools)
+choco install -y visualstudio2022buildtools
+choco install -y visualstudio2022-workload-vctools
+choco install -y rust-ms
+```
+
+### 4.2 Clone and Build from Source
+
+```powershell
+# Clone repository
 git clone --filter=blob:none --sparse https://github.com/guyernest/step-functions-agent.git
 cd step-functions-agent
 git sparse-checkout set lambda/tools/local-agent
-
-# Navigate to local-agent
 cd lambda/tools/local-agent
 
-# Install Python dependencies using uv (fast and reliable)
-uv venv
-uv pip install pyautogui pillow opencv-python numpy
-
-# Build Rust components (optional - only if using Rust executor)
-cd src-tauri
+# Build Rust executor
+cd rust-executor-standalone
 cargo build --release
-
-# Install Node dependencies for UI (optional - only if using GUI)
-cd ..
-npm install
+# Output: target/release/rust-executor.exe
 ```
 
 **Note**: This uses Git's sparse checkout feature to download only the `local-agent` folder, saving bandwidth and time. The full repository is over 100MB, but this approach downloads only what's needed (~10MB).
 
-### 3.3 Configure AWS Credentials
+## Step 5: Test Automation Scripts (Using Pre-built Binary)
 
-```powershell
-# Create AWS credentials directory
-mkdir $env:USERPROFILE\.aws
-
-# Create credentials file
-notepad $env:USERPROFILE\.aws\credentials
-
-# Add your credentials:
-[default]
-aws_access_key_id = YOUR_ACCESS_KEY
-aws_secret_access_key = YOUR_SECRET_KEY
-region = us-east-1
-```
-
-## Step 4: Test Automation Scripts
-
-### 4.1 Create Windows Test Script
+### 5.1 Test Included Examples
 
 Create `examples/windows_notepad_test.json`:
 
@@ -248,57 +262,38 @@ Create `examples/windows_notepad_test.json`:
 }
 ```
 
-### 4.2 Run Local Agent GUI
+### 5.2 Run Tests with Pre-built Binary
 
 ```powershell
-# From local-agent directory
-npm run tauri dev
+# Test the included example
+.\rust-executor-windows-x64.exe examples\windows_simple_test.json
 
-# Or for production build
-npm run tauri build
-# Run: src-tauri\target\release\local-agent-gui.exe
+# Test the Notepad example (if you created it)
+.\rust-executor-windows-x64.exe examples\windows_notepad_test.json
+
+# The executor will:
+# 1. Parse the JSON automation script
+# 2. Execute each action in sequence
+# 3. Display results with timing information
+# 4. Exit with status code (0 = success)
 ```
 
-### 4.3 Test via Command Line
+### 5.3 Alternative: Python Executor (Requires Python)
 
-#### Quick Test with uvx (No Installation Required)
+If you prefer Python or need to modify the script executor:
 
 ```powershell
-# Run directly with uvx - downloads dependencies on the fly
-uvx --from . local-agent examples/windows_simple_test.json
+# Install uv first (one-time)
+irm https://astral.sh/uv/install.ps1 | iex
 
-# Or with inline dependencies (if pyproject.toml not present)
+# Run with uvx (no installation needed)
 uvx --with pyautogui --with pillow --with opencv-python \
-    python script_executor.py examples/windows_simple_test.json
+    python script_executor.py examples\windows_simple_test.json
 ```
 
-#### Standard Test with uv
+## Step 6: Windows-Specific Considerations
 
-```powershell
-# Activate virtual environment
-.\.venv\Scripts\activate
-
-# Test Python executor
-uv run python script_executor.py examples/windows_notepad_test.json
-
-# Or without activation
-uv run script_executor.py examples/windows_notepad_test.json
-
-# Test Rust executor directly
-cd src-tauri
-cargo run --release -- --script ../examples/windows_notepad_test.json
-```
-
-#### Direct Python Execution (Traditional)
-
-```powershell
-# If using activated venv
-python script_executor.py examples/windows_notepad_test.json
-```
-
-## Step 5: Windows-Specific Considerations
-
-### 5.1 UAC and Elevation
+### 6.1 UAC and Elevation
 
 - Some applications run elevated (as Administrator)
 - Non-elevated automation tools cannot send input to elevated windows
@@ -310,7 +305,7 @@ python script_executor.py examples/windows_notepad_test.json
 Start-Process "local-agent-gui.exe" -Verb RunAs
 ```
 
-### 5.2 Windows Defender
+### 6.2 Windows Defender
 
 - May flag automation tools as suspicious
 - Add exclusion for development folder:
@@ -319,7 +314,7 @@ Start-Process "local-agent-gui.exe" -Verb RunAs
 Add-MpPreference -ExclusionPath "C:\path\to\step-functions-agent"
 ```
 
-### 5.3 Screen Resolution
+### 6.3 Screen Resolution
 
 - RDP may use different resolution than expected
 - Set consistent resolution for testing:
@@ -330,9 +325,9 @@ Add-MpPreference -ExclusionPath "C:\path\to\step-functions-agent"
 Set-DisplayResolution -Width 1920 -Height 1080
 ```
 
-## Step 6: Debugging Tips
+## Step 7: Debugging Tips
 
-### 6.1 Enable Debug Logging
+### 7.1 Enable Debug Logging
 
 ```powershell
 # Set environment variable for Rust logging
