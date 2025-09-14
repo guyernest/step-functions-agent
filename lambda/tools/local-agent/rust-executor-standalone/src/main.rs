@@ -41,7 +41,7 @@ fn main() {
             status_symbol,
             action_result.action,
             action_result.details,
-            action_result.duration_ms.unwrap_or(0)
+            action_result.duration.unwrap_or(0)
         );
     }
     

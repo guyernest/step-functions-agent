@@ -12,6 +12,7 @@ serde_json = "1.0"
 xcap = "0.7"
 image = "0.24"
 imageproc = "0.23"
+lazy_static = "1.4"
 
 [[bin]]
 name = "rust-executor"
