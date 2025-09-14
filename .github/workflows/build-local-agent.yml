@@ -161,8 +161,10 @@ jobs:
           New-Item -ItemType Directory -Force release | Out-Null
           # Copy standalone executor
           Copy-Item "lambda/tools/local-agent/rust-executor-standalone/target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "release/${{ matrix.asset_name }}"
-          # Copy Tauri GUI app (from shortened path on Windows)
-          Copy-Item "D:\t\${{ matrix.target }}\release\local-agent-gui.exe" "release\local-agent-gui.exe"
+          # Copy Tauri GUI installer (NSIS setup exe)
+          Copy-Item "D:\t\${{ matrix.target }}\release\bundle\nsis\*.exe" "release\"
+          # Also copy MSI installer as alternative
+          Copy-Item "D:\t\${{ matrix.target }}\release\bundle\msi\*.msi" "release\"
           # Copy Python files
           Copy-Item "lambda/tools/local-agent/script_executor.py" release/
           Copy-Item "lambda/tools/local-agent/pyproject.toml" release/
@@ -173,20 +175,28 @@ jobs:
 
           ## Components
 
-          1. **local-agent-gui.exe** - GUI app for polling Step Functions activities and running automations
-          2. **${{ matrix.asset_name }}** - Standalone CLI automation executor (no GUI)
-          3. **script_executor.py** - Python automation executor
+          1. **Local Agent_*_x64-setup.exe** - Installer for GUI app (Step Functions integration)
+          2. **Local Agent_*_x64_en-US.msi** - MSI installer for GUI app (alternative)
+          3. **${{ matrix.asset_name }}** - Standalone CLI automation executor (no installation needed)
+          4. **script_executor.py** - Python automation executor
 
-          ## Quick Start
+          ## Installation & Usage
 
           ### GUI App (Step Functions Integration):
           ``````bash
-          # Run the GUI app to poll activities and execute automations
-          ./local-agent-gui.exe
+          # Install using either installer:
+          # Option 1: Run the NSIS installer (recommended)
+          "Local Agent_0.2.0_x64-setup.exe"
+          
+          # Option 2: Run the MSI installer
+          msiexec /i "Local Agent_0.2.0_x64_en-US.msi"
+          
+          # After installation, find "Local Agent" in Start Menu
           ``````
 
-          ### Standalone Executor (No dependencies):
+          ### Standalone Executor (No installation required):
           ``````bash
+          # Just run directly - no dependencies needed!
           ./${{ matrix.asset_name }} examples/windows_simple_test.json
           ``````
 
@@ -194,6 +204,12 @@ jobs:
           ``````bash
           uvx --with pyautogui --with pillow --with opencv-python python script_executor.py examples/windows_simple_test.json
           ``````
+          
+          ## What to Use When
+          
+          - **GUI App Installer**: Full-featured app with UI for Step Functions polling
+          - **Standalone Executor**: Quick automation testing without installation
+          - **Python Script**: When you need to modify the automation logic
           "@ | Set-Content release/README.md -Encoding UTF8
       
       # Package Release - Unix
