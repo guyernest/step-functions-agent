@@ -1374,11 +1374,17 @@ pub fn can_execute_with_rust(script_json: &str) -> bool {
         Err(_) => return false,
     };
     
-    // Check if executor is specified
+    // Check if executor is explicitly specified
     if let Some(executor) = script["executor"].as_str() {
-        return executor == "rust" || executor == "native";
+        match executor.to_lowercase().as_str() {
+            "rust" | "native" => return true,
+            "python" => return false,
+            _ => {} // Unknown executor, fall through to default logic
+        }
     }
     
-    // For now, we support all actions including image recognition
+    // Default behavior: Use Rust for scripts without explicit executor
+    // The Rust executor now supports all common automation features
+    // including basic image recognition, so we default to it for better performance
     true
 }

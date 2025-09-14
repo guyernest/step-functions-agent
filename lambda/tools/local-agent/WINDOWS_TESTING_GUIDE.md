@@ -2,9 +2,90 @@
 
 ## Overview
 
-This guide explains how to test the Local Agent GUI automation tool on Windows using AWS EC2 instances with Remote Desktop Protocol (RDP) connection.
+This guide explains how to set up and test the Local Agent GUI automation tool on Windows, which polls AWS Step Functions activities and executes automation scripts.
 
-## Quick Start (Minimal Setup)
+## Dual Executor Architecture
+
+The Local Agent supports two script execution engines:
+
+### 1. **Rust Executor** (Built-in, Default)
+- **Technology**: Native Rust using `enigo` library
+- **Location**: Embedded directly in the GUI application
+- **Best for**: Windows automation, fast execution, zero dependencies
+- **Features**: Mouse/keyboard control, window management, screenshots, basic image recognition
+- **How to use**: Set `"executor": "rust"` in script JSON (or omit for default)
+
+### 2. **Python Executor** (External, Fallback)
+- **Technology**: Python with PyAutoGUI
+- **Location**: `script_executor.py` (must be bundled or in working directory)
+- **Best for**: macOS compatibility, advanced image recognition, legacy scripts
+- **Features**: Full PyAutoGUI capabilities, OpenCV image matching
+- **How to use**: Set `"executor": "python"` in script JSON
+
+### Executor Selection Logic
+
+```json
+{
+  "name": "My Script",
+  "executor": "rust",    // Options: "rust", "native", "python" (defaults to "rust" if omitted)
+  "actions": [...]
+}
+```
+
+**Decision flow:**
+1. If `"executor": "rust"` or `"native"` → Use Rust executor
+2. If `"executor": "python"` → Use Python executor (requires script_executor.py)
+3. If no executor specified → Default to Rust executor
+4. If Rust executor fails → Does NOT fall back to Python (explicit choice)
+
+### When to Use Which Executor
+
+| Use Case | Recommended Executor | Reason |
+|----------|---------------------|---------|
+| Windows automation | Rust | Better performance, no dependencies |
+| macOS automation | Python | Better compatibility with macOS |
+| Simple clicks/typing | Rust | Faster, built-in |
+| Complex image recognition | Python | OpenCV support |
+| CI/CD environments | Rust | No Python dependencies needed |
+| Legacy scripts | Python | Maintain compatibility |
+
+## Quick Start Guide (5 Minutes)
+
+### For Testing Teams - Get Running Quickly:
+
+1. **Download the Latest Build**
+   - Go to [GitHub Actions](https://github.com/guyernest/step-functions-agent/actions/workflows/build-local-agent.yml)
+   - Download `local-agent-x86_64-pc-windows-msvc.zip` from latest run
+
+2. **Install the Application**
+   ```powershell
+   # Extract and install
+   Expand-Archive -Path "local-agent-*.zip" -DestinationPath "C:\local-agent"
+   cd C:\local-agent
+   msiexec /i "Local Agent_0.2.0_x64_en-US.msi"
+   ```
+
+3. **Set Up AWS Credentials**
+   ```powershell
+   # Install AWS CLI (if not already installed)
+   msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi
+   
+   # Configure credentials properly
+   aws configure
+   # Enter when prompted:
+   # AWS Access Key ID: YOUR_KEY_HERE
+   # AWS Secret Access Key: YOUR_SECRET_HERE
+   # Default region name: us-east-1
+   # Default output format: json
+   ```
+
+4. **Launch and Configure**
+   - Start "Local Agent" from Start Menu
+   - Go to Config tab → Enter Activity ARN
+   - Click "Start Polling" in Listen tab
+   - Done! The agent is now waiting for tasks
+
+### For Quick Testing Without Installation:
 
 ### Option A: Use Pre-built Binaries (Easiest - No Build Required!)
 
@@ -106,27 +187,24 @@ Username: Administrator
 Password: [decrypted password from step 2.1]
 ```
 
-## Step 3: Download and Run Pre-built Binaries (Recommended)
+## Step 3: Download and Install Pre-built Binaries (Recommended)
 
 ### 3.1 Download Latest Build
 
 ```powershell
 # Run PowerShell as Administrator
 
-# Method 1: Manual download from GitHub Actions
+# Download from GitHub Actions artifacts
 # 1. Go to: https://github.com/guyernest/step-functions-agent/actions/workflows/build-local-agent.yml
 # 2. Click on the latest successful workflow run
 # 3. Scroll down to "Artifacts" section
 # 4. Download "local-agent-x86_64-pc-windows-msvc.zip"
 
-# Method 2: Using PowerShell to download artifacts (requires GitHub token for artifacts)
-# Note: GitHub Actions artifacts require authentication, so manual download is easier
-
-# Method 3: Download from releases page (when tagged releases are available)
-# Go to: https://github.com/guyernest/step-functions-agent/releases
+# Or download from releases page (if available)
+# https://github.com/guyernest/step-functions-agent/releases/latest
 ```
 
-### 3.2 Extract and Run
+### 3.2 Extract and Install
 
 ```powershell
 # Extract the downloaded ZIP file
@@ -137,26 +215,137 @@ cd C:\local-agent
 dir
 
 # You should see:
-# - rust-executor-windows-x64.exe  (Standalone automation executor)
-# - script_executor.py              (Python executor)
-# - pyproject.toml                  (Python dependencies)
-# - examples/                       (Sample automation scripts)
-# - README.md                       (Quick start guide)
+# - Local Agent_0.2.0_x64-setup.exe    (GUI installer - recommended)
+# - Local Agent_0.2.0_x64_en-US.msi    (MSI installer - alternative)
+# - rust-executor-windows-x64.exe      (Standalone CLI executor)
+# - script_executor.py                 (Python executor)
+# - examples/                          (Sample automation scripts)
+```
 
-# Run a test automation
+### 3.3 Install the GUI Application
+
+```powershell
+# Option 1: Run the NSIS installer (recommended)
+& ".\Local Agent_0.2.0_x64-setup.exe"
+
+# Option 2: Use MSI installer (for enterprise deployments)
+msiexec /i "Local Agent_0.2.0_x64_en-US.msi"
+
+# The installer will:
+# - Install the application to Program Files
+# - Create Start Menu shortcuts
+# - Register the application for uninstall
+```
+
+### 3.4 Configure AWS Credentials
+
+Before running the Local Agent GUI, you need to set up AWS credentials:
+
+#### Option A: Create IAM User (Simplest)
+
+1. **Create IAM User in AWS Console:**
+```bash
+# Go to AWS IAM Console
+# Create new user: local-agent-user
+# Enable "Programmatic access"
+# Save the Access Key ID and Secret Access Key
+```
+
+2. **Create IAM Policy:**
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "states:GetActivityTask",
+                "states:SendTaskSuccess",
+                "states:SendTaskFailure",
+                "states:SendTaskHeartbeat",
+                "states:DescribeActivity"
+            ],
+            "Resource": "arn:aws:states:*:*:activity/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "states:ListActivities"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+```
+
+3. **Attach Policy to User:**
+- Name the policy: `LocalAgentStepFunctionsPolicy`
+- Attach to the `local-agent-user`
+
+4. **Configure Credentials on Windows:**
+```powershell
+# Install AWS CLI first (if not already installed)
+msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi
+
+# Configure using AWS CLI (ensures correct format)
+aws configure
+# Enter when prompted:
+# AWS Access Key ID: [your access key]
+# AWS Secret Access Key: [your secret key]  
+# Default region name: us-east-1
+# Default output format: json
+
+# Verify credentials are working
+aws sts get-caller-identity
+```
+
+#### Option B: Use AWS SSO (For Corporate Environments)
+
+```powershell
+# Install AWS CLI first
+msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi
+
+# Configure SSO
+aws configure sso
+# Follow prompts to set up SSO profile
+
+# Export credentials for the application
+aws sso login --profile your-sso-profile
+$env:AWS_PROFILE = "your-sso-profile"
+```
+
+#### Option C: Use EC2 Instance Role (When Running on EC2)
+
+If running on an EC2 instance, attach an IAM role with the required permissions:
+```bash
+# No configuration needed - credentials are automatic
+# Just ensure the EC2 instance has a role with the LocalAgentStepFunctionsPolicy
+```
+
+### 3.5 Launch the Application
+
+```powershell
+# Start from the Start Menu
+# Look for "Local Agent" in the Start Menu
+
+# Or run the standalone executor for testing
 .\rust-executor-windows-x64.exe examples\windows_simple_test.json
 ```
 
-### 3.3 No Build Tools Required!
+### 3.6 First-Time Setup in GUI
 
-The pre-built binary approach requires **ZERO** additional installations:
-- ✅ No Visual Studio
-- ✅ No Rust toolchain
-- ✅ No Python installation
-- ✅ No Node.js
-- ✅ No compilation wait time
+1. **Launch Local Agent** from Start Menu
+2. **Go to Config tab**
+3. **Enter AWS Settings:**
+   - Region: `us-east-1` (or your region)
+   - Activity ARN: `arn:aws:states:region:account:activity/YourActivityName`
+   - Access Key ID: (if not using default credentials)
+   - Secret Access Key: (if not using default credentials)
+4. **Click "Save Configuration"**
+5. **Go to Listen tab**
+6. **Click "Start Polling"**
 
-Just download, extract, and run!
+The agent will now poll for activities and execute automation scripts!
 
 ## Step 4: Development Setup (Optional - Only for Contributors)
 
@@ -325,9 +514,108 @@ Add-MpPreference -ExclusionPath "C:\path\to\step-functions-agent"
 Set-DisplayResolution -Width 1920 -Height 1080
 ```
 
-## Step 7: Debugging Tips
+## Step 7: Troubleshooting Common Issues
 
-### 7.1 Enable Debug Logging
+### 7.1 AWS Credentials Issues
+
+**Problem: "No credentials found" or "Invalid credentials"**
+```powershell
+# Check if credentials file exists
+Test-Path $env:USERPROFILE\.aws\credentials
+
+# Verify credentials are valid
+aws sts get-caller-identity
+
+# If using SSO, ensure you're logged in
+aws sso login --profile your-profile
+```
+
+**Problem: "Access Denied" when polling activities**
+```powershell
+# Verify IAM permissions - should have these actions:
+# - states:GetActivityTask
+# - states:SendTaskSuccess
+# - states:SendTaskFailure
+# - states:SendTaskHeartbeat
+# - states:ListActivities
+
+# Test with AWS CLI
+aws stepfunctions get-activity-task --activity-arn "your-activity-arn"
+```
+
+### 7.2 Installation Issues
+
+**Problem: "Windows protected your PC" warning**
+- Click "More info"
+- Click "Run anyway"
+- This is normal for unsigned executables
+
+**Problem: MSI installer fails**
+```powershell
+# Run with logging for debugging
+msiexec /i "Local Agent_0.2.0_x64_en-US.msi" /l*v install.log
+
+# Check Windows Event Viewer for errors
+eventvwr.msc
+```
+
+### 7.3 Application Won't Start
+
+**Problem: Missing Visual C++ Redistributables**
+```powershell
+# Install Visual C++ Redistributables
+# Download from: https://aka.ms/vs/17/release/vc_redist.x64.exe
+```
+
+**Problem: Antivirus blocking the application**
+- Add exception for Local Agent in your antivirus
+- Windows Defender: Settings → Virus & threat protection → Exclusions
+
+### 7.4 Activity Polling Issues
+
+**Problem: "No tasks received" continuously**
+- Verify Activity ARN is correct
+- Check if State Machine is actually sending tasks to the activity
+- Ensure the activity exists in the correct region
+
+**Problem: "Heartbeat timeout"**
+- The script is taking too long to execute
+- Add heartbeat calls in long-running scripts
+- Increase timeout in State Machine definition
+
+### 7.5 Automation Execution Issues
+
+**Problem: "Cannot find window" or "Element not found"**
+- Ensure target application is running and visible
+- Check if running with correct permissions (may need Administrator)
+- Verify screen resolution matches script expectations
+
+**Problem: Clicks/typing not working**
+```powershell
+# Run as Administrator
+Start-Process "Local Agent.exe" -Verb RunAs
+
+# Disable UAC temporarily for testing
+# Control Panel → User Accounts → Change User Account Control settings
+```
+
+### 7.6 Network/Firewall Issues
+
+**Problem: Cannot connect to AWS**
+```powershell
+# Test connectivity
+Test-NetConnection -ComputerName states.us-east-1.amazonaws.com -Port 443
+
+# Check proxy settings
+[System.Net.WebRequest]::DefaultWebProxy.GetProxy("https://states.us-east-1.amazonaws.com")
+
+# Set proxy if needed
+$env:HTTPS_PROXY = "http://your-proxy:8080"
+```
+
+## Step 8: Debugging Tips
+
+### 8.1 Enable Debug Logging
 
 ```powershell
 # Set environment variable for Rust logging
@@ -459,6 +747,61 @@ shutdown /a
 - Good for long-term testing
 
 ## Troubleshooting
+
+### Script Executor Errors
+
+#### Error: "Script executor not found"
+
+This error occurs when the Python executor is needed but not available.
+
+**Common Causes:**
+1. Script explicitly requests Python executor (`"executor": "python"`)
+2. Python executor file (`script_executor.py`) not in installation directory
+3. MSI installer didn't bundle the Python executor
+
+**Solutions:**
+
+1. **Use Rust executor instead** (Recommended for Windows):
+   ```json
+   {
+     "executor": "rust",  // Or just omit this field
+     "actions": [...]
+   }
+   ```
+
+2. **Copy Python executor to installation directory**:
+   ```powershell
+   # Find where Local Agent is installed
+   $installPath = "C:\Program Files\Local Agent"
+   
+   # Copy script_executor.py to installation directory
+   Copy-Item "script_executor.py" -Destination $installPath
+   ```
+
+3. **Run from development directory**:
+   ```powershell
+   # Run from the source directory where script_executor.py exists
+   cd C:\path\to\lambda\tools\local-agent
+   "C:\Program Files\Local Agent\Local Agent.exe"
+   ```
+
+#### Error: "Python executor failed"
+
+**Common Causes:**
+- Python not installed
+- PyAutoGUI dependencies missing
+- Display/permission issues
+
+**Solution:**
+```powershell
+# Install Python and dependencies
+winget install Python.Python.3.12
+pip install pyautogui pillow opencv-python
+
+# Or use uv for isolated execution
+pip install uv
+uvx --with pyautogui --with pillow --with opencv-python python script_executor.py
+```
 
 ### Rust Build Errors
 

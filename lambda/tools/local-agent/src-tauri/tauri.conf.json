@@ -46,7 +46,7 @@
         "providerShortName": null,
         "signingIdentity": null
       },
-      "resources": [],
+      "resources": ["../script_executor.py", "../examples/*"],
       "shortDescription": "",
       "targets": "all",
       "windows": {

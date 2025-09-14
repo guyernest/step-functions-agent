@@ -1,0 +1,25 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "StepFunctionsActivityPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "states:GetActivityTask",
+        "states:SendTaskSuccess",
+        "states:SendTaskFailure",
+        "states:SendTaskHeartbeat",
+        "states:DescribeActivity"
+      ],
+      "Resource": "arn:aws:states:*:*:activity/*"
+    },
+    {
+      "Sid": "StepFunctionsListPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "states:ListActivities"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

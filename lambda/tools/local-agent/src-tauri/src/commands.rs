@@ -450,6 +450,45 @@ async fn execute_rust_script(script_json: &str) -> ScriptResult {
     result
 }
 
+// Helper function to find the script executor in various locations
+fn find_script_executor() -> Option<PathBuf> {
+    // Try multiple locations in order of preference
+    let locations = vec![
+        // 1. Resource directory (when bundled with installer on Windows)
+        #[cfg(target_os = "windows")]
+        {
+            if let Ok(exe_path) = std::env::current_exe() {
+                exe_path.parent().map(|p| p.join("script_executor.py"))
+            } else {
+                None
+            }
+        },
+        #[cfg(not(target_os = "windows"))]
+        None,
+        // 2. Parent directory (development mode)
+        Some(PathBuf::from("../script_executor.py")),
+        // 3. Current directory
+        Some(PathBuf::from("script_executor.py")),
+        // 4. Common installation directories on Windows
+        #[cfg(target_os = "windows")]
+        Some(PathBuf::from("C:/Program Files/Local Agent/script_executor.py")),
+        #[cfg(target_os = "windows")]
+        Some(PathBuf::from("C:/Program Files (x86)/Local Agent/script_executor.py")),
+        #[cfg(not(target_os = "windows"))]
+        None,
+        #[cfg(not(target_os = "windows"))]
+        None,
+    ];
+    
+    for location in locations.into_iter().flatten() {
+        if location.exists() {
+            return Some(location);
+        }
+    }
+    
+    None
+}
+
 // Execute the activity task (run the script)
 async fn execute_activity_task(client: &aws_sdk_sfn::Client, token: &str, input: &str) {
     use std::process::Command;
@@ -556,24 +595,7 @@ async fn execute_activity_task(client: &aws_sdk_sfn::Client, token: &str, input:
             
             let script_path = temp_file.path().to_string_lossy().to_string();
             
-            // Find script executor
-            let executor_path = if PathBuf::from("../script_executor.py").exists() {
-                "../script_executor.py"
-            } else if PathBuf::from("script_executor.py").exists() {
-                "script_executor.py"
-            } else {
-                add_log("error", "Script executor not found".to_string());
-                let _ = client
-                    .send_task_failure()
-                    .task_token(token)
-                    .error("ExecutorNotFound")
-                    .cause("script_executor.py not found")
-                    .send()
-                    .await;
-                return;
-            };
-            
-            // Check if we can use Rust executor instead
+            // Check if we should use Rust executor first
             if can_execute_with_rust(&script_json) {
                 add_log("info", "Using Rust native executor for automation".to_string());
                 
@@ -645,10 +667,29 @@ async fn execute_activity_task(client: &aws_sdk_sfn::Client, token: &str, input:
             }
             
             // Fall back to Python executor
-            add_log("info", format!("Using Python executor: {}", script_path));
+            add_log("info", "Script requires Python executor (not suitable for Rust)".to_string());
+            
+            // Now find the Python script executor
+            let executor_path = match find_script_executor() {
+                Some(path) => path,
+                None => {
+                    add_log("error", "Python script executor not found in any expected location".to_string());
+                    add_log("error", "Searched: ../script_executor.py, ./script_executor.py, installation directory".to_string());
+                    let _ = client
+                        .send_task_failure()
+                        .task_token(token)
+                        .error("PythonExecutorNotFound")
+                        .cause("script_executor.py not found - required for scripts with Python-specific features")
+                        .send()
+                        .await;
+                    return;
+                }
+            };
+            
+            add_log("info", format!("Using Python executor at: {}", executor_path.display()));
             
             let output = Command::new("python3")
-                .arg(executor_path)
+                .arg(executor_path.to_string_lossy().to_string())
                 .arg(&script_path)
                 .output();
             
@@ -894,7 +935,7 @@ pub async fn validate_script(script: String) -> Result<serde_json::Value, String
 }
 
 #[tauri::command]
-pub async fn execute_test_script(script: String, dry_run: bool) -> Result<serde_json::Value, String> {
+pub async fn execute_test_script(app: tauri::AppHandle, script: String, dry_run: bool) -> Result<serde_json::Value, String> {
     use std::process::Command;
     use tempfile::NamedTempFile;
     use std::io::Write;
@@ -949,20 +990,36 @@ pub async fn execute_test_script(script: String, dry_run: bool) -> Result<serde_
     
     let script_path = temp_file.path().to_string_lossy().to_string();
     
-    // Check if script_executor.py exists - try parent directory first (main project dir)
-    let parent_executor = PathBuf::from("../script_executor.py");
-    let executor_path = if parent_executor.exists() {
-        parent_executor
-    } else {
-        let current_executor = PathBuf::from("script_executor.py");
-        if current_executor.exists() {
-            current_executor
+    // Check if script_executor.py exists - try multiple locations
+    // First try Tauri's resource resolver
+    let executor_path = if let Some(resource_path) = app.path_resolver()
+        .resolve_resource("script_executor.py") {
+        if resource_path.exists() {
+            resource_path
         } else {
-            return Ok(serde_json::json!({
-                "success": false,
-                "error": "Script executor not found. Please ensure script_executor.py is in the project directory.",
-                "results": []
-            }));
+            // Fall back to the common helper function
+            match find_script_executor() {
+                Some(path) => path,
+                None => {
+                    return Ok(serde_json::json!({
+                        "success": false,
+                        "error": "Script executor not found. Please ensure script_executor.py is installed with the application or available in the project directory.",
+                        "results": []
+                    }));
+                }
+            }
+        }
+    } else {
+        // Fall back to the common helper function
+        match find_script_executor() {
+            Some(path) => path,
+            None => {
+                return Ok(serde_json::json!({
+                    "success": false,
+                    "error": "Script executor not found. Please ensure script_executor.py is installed with the application or available in the project directory.",
+                    "results": []
+                }));
+            }
         }
     };
     
