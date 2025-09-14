@@ -517,19 +517,41 @@ async fn execute_activity_task(client: &aws_sdk_sfn::Client, token: &str, input:
         // New structure: tool_input.script (script is a JSON string)
         if let Some(script_str) = tool_input.get("script") {
             if let Some(script_json_str) = script_str.as_str() {
+                // Log the raw script for debugging
+                add_log("debug", format!("Raw script string length: {}", script_json_str.len()));
+                
+                // First, try to fix common JSON escaping issues
+                // Replace problematic escape sequences
+                let cleaned_json = script_json_str
+                    .replace(r#"\'","#, r#"'","#)  // Remove unnecessary escaping of single quotes
+                    .replace(r#"\":"#, r#":"#);     // Remove unnecessary escaping of colons
+                
                 // Parse the script JSON string
-                match serde_json::from_str(script_json_str) {
+                match serde_json::from_str(&cleaned_json) {
                     Ok(script_val) => script_val,
                     Err(e) => {
-                        add_log("error", format!("Failed to parse script JSON string: {}", e));
-                        let _ = client
-                            .send_task_failure()
-                            .task_token(token)
-                            .error("InvalidScriptJSON")
-                            .cause(&format!("Failed to parse script JSON: {}", e))
-                            .send()
-                            .await;
-                        return;
+                        // Try original string if cleaning didn't help
+                        match serde_json::from_str(script_json_str) {
+                            Ok(script_val) => script_val,
+                            Err(e) => {
+                                add_log("error", format!("Failed to parse script JSON string: {}", e));
+                                // Log a snippet of the problematic area
+                                let col = e.column();
+                                let start = col.saturating_sub(50);
+                                let end = (col + 50).min(script_json_str.len());
+                                if end > start {
+                                    add_log("error", format!("Error near position {}: ...{}...", col, &script_json_str[start..end]));
+                                }
+                                let _ = client
+                                    .send_task_failure()
+                                    .task_token(token)
+                                    .error("InvalidScriptJSON")
+                                    .cause(&format!("Failed to parse script JSON: {}", e))
+                                    .send()
+                                    .await;
+                                return;
+                            }
+                        }
                     }
                 }
             } else {
