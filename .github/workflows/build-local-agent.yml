@@ -54,12 +54,12 @@ jobs:
         if: matrix.os == 'windows-latest'
         uses: ilammy/msvc-dev-cmd@v1
       
-      # Ensure MSVC's link.exe is used instead of Git's link
-      - name: Configure Rust for MSVC (Windows)
+      # Remove Git's usr/bin from PATH to avoid link.exe conflict
+      - name: Remove Git usr/bin from PATH (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          # Set RUSTFLAGS to use lld-link instead of link.exe to avoid conflicts
-          echo "RUSTFLAGS=-C link-arg=/SUBSYSTEM:CONSOLE -C target-feature=+crt-static" >> $env:GITHUB_ENV
+          $env:PATH = ($env:PATH -split ';' | Where-Object {$_ -notmatch 'Git\\usr\\bin'} ) -join ';'
+          echo "PATH=$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
         shell: pwsh
       
       # Linux needs X11/Wayland dev libraries
