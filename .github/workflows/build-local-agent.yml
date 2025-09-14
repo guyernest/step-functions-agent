@@ -101,7 +101,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libxdo-dev libxcb1-dev libxcb-randr0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxcb-xkb-dev libwayland-dev libpipewire-0.3-dev
       
-      # Install npm dependencies for GUI
+      # Install npm dependencies for GUI (includes Tauri CLI)
       - name: Install npm dependencies
         working-directory: lambda/tools/local-agent
         run: npm ci
