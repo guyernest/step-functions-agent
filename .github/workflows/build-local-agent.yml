@@ -134,10 +134,14 @@ jobs:
         if: matrix.win
         working-directory: lambda/tools/local-agent
         shell: pwsh
-        run: npm run tauri build -- --target ${{ matrix.target }}
+        run: |
+          # Use shorter path to avoid Windows path length issues
+          $env:CARGO_TARGET_DIR = "D:\t"
+          npm run tauri build -- --target ${{ matrix.target }}
         env:
           TAURI_SIGNING_PRIVATE_KEY: ""
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+          CARGO_INCREMENTAL: "0"
       
       # Build Tauri GUI app - Unix
       - name: Build Tauri GUI (Unix)
@@ -157,8 +161,8 @@ jobs:
           New-Item -ItemType Directory -Force release | Out-Null
           # Copy standalone executor
           Copy-Item "lambda/tools/local-agent/rust-executor-standalone/target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "release/${{ matrix.asset_name }}"
-          # Copy Tauri GUI app
-          Copy-Item "lambda/tools/local-agent/src-tauri/target/${{ matrix.target }}/release/local-agent-gui.exe" "release/local-agent-gui.exe"
+          # Copy Tauri GUI app (from shortened path on Windows)
+          Copy-Item "D:\t\${{ matrix.target }}\release\local-agent-gui.exe" "release\local-agent-gui.exe"
           # Copy Python files
           Copy-Item "lambda/tools/local-agent/script_executor.py" release/
           Copy-Item "lambda/tools/local-agent/pyproject.toml" release/
