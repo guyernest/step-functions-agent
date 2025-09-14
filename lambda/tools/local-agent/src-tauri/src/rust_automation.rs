@@ -1217,77 +1217,43 @@ impl RustScriptExecutor {
             "shift" => Some(Key::Shift),
             "win" | "windows" | "meta" | "cmd" | "command" => Some(Key::Meta),
             
-            // Letters - use VK codes for reliability with modifiers
-            "a" => Some(Key::Raw(0x41)), // VK_A
-            "b" => Some(Key::Raw(0x42)), // VK_B
-            "c" => Some(Key::Raw(0x43)), // VK_C
-            "d" => Some(Key::Raw(0x44)), // VK_D
-            "e" => Some(Key::Raw(0x45)), // VK_E
-            "f" => Some(Key::Raw(0x46)), // VK_F
-            "g" => Some(Key::Raw(0x47)), // VK_G
-            "h" => Some(Key::Raw(0x48)), // VK_H
-            "i" => Some(Key::Raw(0x49)), // VK_I
-            "j" => Some(Key::Raw(0x4A)), // VK_J
-            "k" => Some(Key::Raw(0x4B)), // VK_K
-            "l" => Some(Key::Raw(0x4C)), // VK_L
-            "m" => Some(Key::Raw(0x4D)), // VK_M
-            "n" => Some(Key::Raw(0x4E)), // VK_N
-            "o" => Some(Key::Raw(0x4F)), // VK_O
-            "p" => Some(Key::Raw(0x50)), // VK_P
-            "q" => Some(Key::Raw(0x51)), // VK_Q
-            "r" => Some(Key::Raw(0x52)), // VK_R
-            "s" => Some(Key::Raw(0x53)), // VK_S
-            "t" => Some(Key::Raw(0x54)), // VK_T
-            "u" => Some(Key::Raw(0x55)), // VK_U
-            "v" => Some(Key::Raw(0x56)), // VK_V
-            "w" => Some(Key::Raw(0x57)), // VK_W
-            "x" => Some(Key::Raw(0x58)), // VK_X
-            "y" => Some(Key::Raw(0x59)), // VK_Y
-            "z" => Some(Key::Raw(0x5A)), // VK_Z
+            // Letters - use standard Key enum which works with enigo 0.6.1
+            // Note: These now use the cross-platform Key enum values
+            // For single letters, parse_key will handle them as Layout variants
             
-            // Numbers
-            "0" => Some(Key::Raw(0x30)), // VK_0
-            "1" => Some(Key::Raw(0x31)), // VK_1
-            "2" => Some(Key::Raw(0x32)), // VK_2
-            "3" => Some(Key::Raw(0x33)), // VK_3
-            "4" => Some(Key::Raw(0x34)), // VK_4
-            "5" => Some(Key::Raw(0x35)), // VK_5
-            "6" => Some(Key::Raw(0x36)), // VK_6
-            "7" => Some(Key::Raw(0x37)), // VK_7
-            "8" => Some(Key::Raw(0x38)), // VK_8
-            "9" => Some(Key::Raw(0x39)), // VK_9
+            // Numbers - handled by parse_key as Layout variants
             
-            // Special keys - use VK codes
-            "space" => Some(Key::Raw(0x20)), // VK_SPACE
-            "return" | "enter" => Some(Key::Raw(0x0D)), // VK_RETURN
-            "tab" => Some(Key::Raw(0x09)), // VK_TAB
-            "escape" | "esc" => Some(Key::Raw(0x1B)), // VK_ESCAPE
-            "backspace" => Some(Key::Raw(0x08)), // VK_BACK
-            "delete" | "del" => Some(Key::Raw(0x2E)), // VK_DELETE
-            "home" => Some(Key::Raw(0x24)), // VK_HOME
-            "end" => Some(Key::Raw(0x23)), // VK_END
-            "pageup" | "pgup" => Some(Key::Raw(0x21)), // VK_PRIOR
-            "pagedown" | "pgdn" => Some(Key::Raw(0x22)), // VK_NEXT
-            "up" | "uparrow" => Some(Key::Raw(0x26)), // VK_UP
-            "down" | "downarrow" => Some(Key::Raw(0x28)), // VK_DOWN
-            "left" | "leftarrow" => Some(Key::Raw(0x25)), // VK_LEFT
-            "right" | "rightarrow" => Some(Key::Raw(0x27)), // VK_RIGHT
+            // Special keys - use standard Key enum
+            "space" => Some(Key::Space),
+            "return" | "enter" => Some(Key::Return),
+            "tab" => Some(Key::Tab),
+            "escape" | "esc" => Some(Key::Escape),
+            "backspace" => Some(Key::Backspace),
+            "delete" | "del" => Some(Key::Delete),
+            "home" => Some(Key::Home),
+            "end" => Some(Key::End),
+            "pageup" | "pgup" => Some(Key::PageUp),
+            "pagedown" | "pgdn" => Some(Key::PageDown),
+            "up" | "uparrow" => Some(Key::UpArrow),
+            "down" | "downarrow" => Some(Key::DownArrow),
+            "left" | "leftarrow" => Some(Key::LeftArrow),
+            "right" | "rightarrow" => Some(Key::RightArrow),
             
             // Function keys
-            "f1" => Some(Key::Raw(0x70)), // VK_F1
-            "f2" => Some(Key::Raw(0x71)), // VK_F2
-            "f3" => Some(Key::Raw(0x72)), // VK_F3
-            "f4" => Some(Key::Raw(0x73)), // VK_F4
-            "f5" => Some(Key::Raw(0x74)), // VK_F5
-            "f6" => Some(Key::Raw(0x75)), // VK_F6
-            "f7" => Some(Key::Raw(0x76)), // VK_F7
-            "f8" => Some(Key::Raw(0x77)), // VK_F8
-            "f9" => Some(Key::Raw(0x78)), // VK_F9
-            "f10" => Some(Key::Raw(0x79)), // VK_F10
-            "f11" => Some(Key::Raw(0x7A)), // VK_F11
-            "f12" => Some(Key::Raw(0x7B)), // VK_F12
+            "f1" => Some(Key::F1),
+            "f2" => Some(Key::F2),
+            "f3" => Some(Key::F3),
+            "f4" => Some(Key::F4),
+            "f5" => Some(Key::F5),
+            "f6" => Some(Key::F6),
+            "f7" => Some(Key::F7),
+            "f8" => Some(Key::F8),
+            "f9" => Some(Key::F9),
+            "f10" => Some(Key::F10),
+            "f11" => Some(Key::F11),
+            "f12" => Some(Key::F12),
             
-            _ => None, // Fall back to generic parsing
+            _ => None // Fall back to generic parsing
         }
     }
     
