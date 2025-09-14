@@ -93,12 +93,9 @@ impl RustScriptExecutor {
         // Use custom settings for macOS to avoid crashes
         let mut settings = Settings::default();
         
-        #[cfg(target_os = "macos")]
-        {
-            eprintln!("🔍 [DEBUG] Setting macOS-specific delay to 50ms");
-            // Increase delay for macOS to prevent crashes
-            settings.mac_delay = 50;  // Increased delay for stability
-        }
+        // Configure settings for better compatibility
+        settings.release_keys_when_dropped = true;
+        settings.independent_of_keyboard_state = true;
         
         eprintln!("🔍 [DEBUG] About to call Enigo::new()");
         

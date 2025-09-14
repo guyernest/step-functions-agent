@@ -48,7 +48,7 @@ tempfile = "3.8"
 
 # GUI automation (to replace PyAutoGUI)
 # GUI Automation - using specific version known to work with macOS
-enigo = "0.2.0"
+enigo = "0.6.1"
 xcap = "0.7"  # Cross-platform screen capture
 image = "0.24"  # For screenshot/image handling
 imageproc = "0.23"  # For image processing/matching
