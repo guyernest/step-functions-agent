@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/tauri';
 import { open } from '@tauri-apps/api/dialog';
 import { readTextFile } from '@tauri-apps/api/fs';
@@ -27,10 +27,10 @@ export default function TestScreen() {
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
-  const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null);
+  const [_executionResult, setExecutionResult] = useState<ExecutionResult | null>(null);
   const [executionLog, setExecutionLog] = useState<string[]>([]);
   const [exampleScripts, setExampleScripts] = useState<string[]>([]);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  // const abortControllerRef = useRef<AbortController | null>(null); // TODO: Implement abort functionality
 
   useEffect(() => {
     // Load list of example scripts

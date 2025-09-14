@@ -88,7 +88,7 @@ function App() {
     <div className="flex flex-col h-screen">
       <div className="flex flex-1 overflow-hidden">
         {!isMinimized && (
-          <Sidebar activeScreen={activeScreen} onNavigate={setActiveScreen} />
+          <Sidebar activeScreen={activeScreen} onNavigate={(screen) => setActiveScreen(screen as Screen)} />
         )}
         <main className="flex-1 overflow-auto bg-gray-50">
           {renderScreen()}
