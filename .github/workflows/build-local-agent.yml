@@ -22,6 +22,7 @@ jobs:
             target: x86_64-pc-windows-msvc
             binary_name: rust-executor.exe
             asset_name: rust-executor-windows-x64.exe
+            win: true
           - os: macos-latest
             target: x86_64-apple-darwin
             binary_name: rust-executor
@@ -44,17 +45,17 @@ jobs:
           sparse-checkout: |
             lambda/tools/local-agent
       
-      # Remove Git's usr/bin from PATH FIRST to avoid link.exe conflict
+      # Remove Git usr/bin from PATH FIRST to avoid link.exe conflict
       - name: Remove Git usr/bin from PATH (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.win
+        shell: pwsh
         run: |
           $env:PATH = ($env:PATH -split ';' | Where-Object {$_ -notmatch 'Git\\usr\\bin'} ) -join ';'
-          echo "PATH=$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
-        shell: pwsh
+          "PATH=$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       
       # Windows needs MSVC - setup proper environment AFTER removing Git from PATH
       - name: Setup MSVC (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.win
         uses: ilammy/msvc-dev-cmd@v1
       
       # Install Rust AFTER setting up MSVC environment
@@ -63,15 +64,27 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       
+      # Configure cargo to explicitly use MSVC's linker on Windows
+      - name: Configure cargo linker (Windows)
+        if: matrix.win
+        shell: pwsh
+        working-directory: lambda/tools/local-agent/rust-executor-standalone
+        run: |
+          New-Item -ItemType Directory -Force .cargo | Out-Null
+          @"
+          [target.x86_64-pc-windows-msvc]
+          linker = "link.exe"
+          "@ | Set-Content .cargo/config.toml -Encoding UTF8
+      
       # Verify the correct linker is being used
       - name: Check linker (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          echo "Checking which link.exe will be used:"
-          where link
-          echo "First link.exe in PATH:"
-          (Get-Command link).Source
+        if: matrix.win
         shell: pwsh
+        run: |
+          Write-Host "where link:"
+          where link
+          Write-Host "Get-Command link:"
+          (Get-Command link).Source
       
       # Linux needs X11/Wayland dev libraries
       - name: Install Linux Dependencies
@@ -80,43 +93,79 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libxdo-dev libxcb1-dev libxcb-randr0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxcb-xkb-dev libwayland-dev libpipewire-0.3-dev
       
-      # Build standalone executor  
-      - name: Build Rust Executor
+      # Build standalone executor - Windows
+      - name: Build Rust Executor (Windows)
+        if: matrix.win
+        shell: pwsh
         working-directory: lambda/tools/local-agent/rust-executor-standalone
         run: |
-          # Copy the rust_automation module
+          New-Item -ItemType Directory -Force src | Out-Null
+          Copy-Item ../src-tauri/src/rust_automation.rs src/
+          cargo build --release --target $env:TARGET
+        env:
+          TARGET: ${{ matrix.target }}
+      
+      # Build standalone executor - Unix
+      - name: Build Rust Executor (Unix)
+        if: matrix.win != true
+        shell: bash
+        working-directory: lambda/tools/local-agent/rust-executor-standalone
+        run: |
           mkdir -p src
           cp ../src-tauri/src/rust_automation.rs src/
-          # Build
-          cargo build --release --target ${{ matrix.target }}
-        shell: bash
+          cargo build --release --target "${{ matrix.target }}"
       
-      # Create release package
-      - name: Package Release
+      # Package Release - Windows
+      - name: Package Release (Windows)
+        if: matrix.win
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item "lambda/tools/local-agent/rust-executor-standalone/target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "release/${{ matrix.asset_name }}"
+          Copy-Item "lambda/tools/local-agent/script_executor.py" release/
+          Copy-Item "lambda/tools/local-agent/pyproject.toml" release/
+          Copy-Item -Recurse "lambda/tools/local-agent/examples" release/
+          @"
+          # Local Agent Automation Executor
+
+          ## Quick Start
+
+          ### Rust Executor (No dependencies):
+          ``````bash
+          ./${{ matrix.asset_name }} examples/windows_simple_test.json
+          ``````
+
+          ### Python Executor (Requires uv/pip):
+          ``````bash
+          uvx --with pyautogui --with pillow --with opencv-python python script_executor.py examples/windows_simple_test.json
+          ``````
+          "@ | Set-Content release/README.md -Encoding UTF8
+      
+      # Package Release - Unix
+      - name: Package Release (Unix)
+        if: matrix.win != true
+        shell: bash
         run: |
           mkdir -p release
-          # Copy executor binary
-          cp lambda/tools/local-agent/rust-executor-standalone/target/${{ matrix.target }}/release/${{ matrix.binary_name }} release/${{ matrix.asset_name }}
-          # Copy Python files
+          cp "lambda/tools/local-agent/rust-executor-standalone/target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "release/${{ matrix.asset_name }}"
           cp lambda/tools/local-agent/script_executor.py release/
           cp lambda/tools/local-agent/pyproject.toml release/
-          # Copy examples
           cp -r lambda/tools/local-agent/examples release/
-          # Create README
-          echo "# Local Agent Automation Executor" > release/README.md
-          echo "" >> release/README.md
-          echo "## Quick Start" >> release/README.md
-          echo "" >> release/README.md
-          echo "### Rust Executor (No dependencies):" >> release/README.md
-          echo "\`\`\`bash" >> release/README.md
-          echo "./${{ matrix.asset_name }} examples/windows_simple_test.json" >> release/README.md
-          echo "\`\`\`" >> release/README.md
-          echo "" >> release/README.md
-          echo "### Python Executor (Requires uv/pip):" >> release/README.md
-          echo "\`\`\`bash" >> release/README.md
-          echo "uvx --with pyautogui --with pillow --with opencv-python python script_executor.py examples/windows_simple_test.json" >> release/README.md
-          echo "\`\`\`" >> release/README.md
-        shell: bash
+          cat > release/README.md <<'EOF'
+          # Local Agent Automation Executor
+
+          ## Quick Start
+
+          ### Rust Executor (No dependencies):
+          ```bash
+          ./${{ matrix.asset_name }} examples/windows_simple_test.json
+          ```
+
+          ### Python Executor (Requires uv/pip):
+          ```bash
+          uvx --with pyautogui --with pillow --with opencv-python python script_executor.py examples/windows_simple_test.json
+          ```
+          EOF
       
       # Upload artifacts
       - name: Upload Artifacts
