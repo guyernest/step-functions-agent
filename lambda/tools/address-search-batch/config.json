@@ -1,0 +1,94 @@
+{
+  "tool_name": "address_search_batch",
+  "description": "Process CSV files containing UK addresses and search for property information using web search",
+  "target_agent": {
+    "name": "web-search-agent-unified",
+    "type": "agent",
+    "arn_pattern": "arn:aws:states:{region}:{account}:stateMachine:web-search-agent-unified-{env}"
+  },
+  "default_mappings": {
+    "input_mapping": {
+      "column_mappings": {
+        "address": "query"
+      },
+      "transformations": {
+        "query": {
+          "type": "template",
+          "config": {
+            "template": "Can you please search for UK property information including council tax band, bedrooms, property type, floor area, and recent sale prices for the property at {address}, {postcode}? Also check if there's any information about ADSL availability or broadband speeds for this address.",
+            "variables": {
+              "address": "address",
+              "postcode": "postcode"
+            }
+          }
+        }
+      },
+      "static_values": {
+        "search_type": "property",
+        "region": "UK"
+      }
+    },
+    "output_mapping": {
+      "columns": [
+        {
+          "name": "property_type",
+          "source": "$.property_info.type",
+          "default": "N/A"
+        },
+        {
+          "name": "bedrooms",
+          "source": "$.property_info.bedrooms",
+          "type": "number",
+          "default": "0"
+        },
+        {
+          "name": "estimated_value",
+          "source": "$.property_info.estimated_value",
+          "default": "N/A"
+        },
+        {
+          "name": "council_tax_band",
+          "source": "$.property_info.council_tax_band",
+          "default": "N/A"
+        },
+        {
+          "name": "search_results",
+          "source": "$.raw_results",
+          "type": "json_string"
+        }
+      ],
+      "include_original": true,
+      "add_metadata": true
+    }
+  },
+  "execution_defaults": {
+    "max_concurrency": 5,
+    "timeout_seconds": 60,
+    "retry_policy": {
+      "max_attempts": 3,
+      "backoff_rate": 2.0
+    },
+    "continue_on_error": true
+  },
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "csv_s3_uri": {
+        "type": "string",
+        "description": "S3 URI of the CSV file containing addresses (e.g., s3://bucket/addresses.csv)"
+      },
+      "output_bucket": {
+        "type": "string",
+        "description": "S3 bucket for output results",
+        "default": "batch-processor-results"
+      },
+      "custom_mappings": {
+        "type": "object",
+        "description": "Override default input/output mappings",
+        "optional": true
+      }
+    },
+    "required": ["csv_s3_uri"]
+  },
+  "tags": ["batch", "csv", "addresses", "uk", "property", "web-search"]
+}

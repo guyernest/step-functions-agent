@@ -1,0 +1,166 @@
+{
+  "Comment": "Batch Processor with INLINE Map - Supports .sync for agents",
+  "StartAt": "LoadCSV",
+  "States": {
+    "LoadCSV": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${CSVLoaderFunctionArn}",
+        "Payload": {
+          "input_bucket.$": "$.input_bucket",
+          "input_key.$": "$.input_key"
+        }
+      },
+      "ResultPath": "$.csv_data",
+      "Next": "ProcessRows"
+    },
+    "ProcessRows": {
+      "Type": "Map",
+      "ItemProcessor": {
+        "ProcessorConfig": {
+          "Mode": "INLINE"
+        },
+        "StartAt": "TransformInput",
+        "States": {
+          "TransformInput": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "${InputMapperFunctionArn}",
+              "Payload": {
+                "row.$": "$",
+                "mapping_config.$": "$$.Execution.Input.input_mapping",
+                "target.$": "$$.Execution.Input.target"
+              }
+            },
+            "ResultPath": "$.mapped_input",
+            "Next": "RouteToTarget"
+          },
+          "RouteToTarget": {
+            "Type": "Choice",
+            "Choices": [
+              {
+                "Variable": "$$.Execution.Input.target.type",
+                "StringEquals": "agent",
+                "Next": "InvokeAgent"
+              },
+              {
+                "Variable": "$$.Execution.Input.target.type",
+                "StringEquals": "tool",
+                "Next": "InvokeTool"
+              }
+            ],
+            "Default": "InvokeTool"
+          },
+          "InvokeAgent": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::states:startExecution.sync:2",
+            "Parameters": {
+              "StateMachineArn.$": "$$.Execution.Input.target.arn",
+              "Input.$": "$.mapped_input.Payload"
+            },
+            "ResultPath": "$.execution_result",
+            "TimeoutSeconds": 300,
+            "Retry": [
+              {
+                "ErrorEquals": ["States.TaskFailed"],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 3,
+                "BackoffRate": 2.0
+              }
+            ],
+            "Next": "TransformOutput",
+            "Catch": [
+              {
+                "ErrorEquals": ["States.ALL"],
+                "Next": "HandleError",
+                "ResultPath": "$.error"
+              }
+            ]
+          },
+          "InvokeTool": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName.$": "$$.Execution.Input.target.arn",
+              "Payload.$": "$.mapped_input.Payload"
+            },
+            "ResultPath": "$.execution_result",
+            "TimeoutSeconds": 300,
+            "Retry": [
+              {
+                "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 3,
+                "BackoffRate": 2.0
+              }
+            ],
+            "Next": "TransformOutput",
+            "Catch": [
+              {
+                "ErrorEquals": ["States.ALL"],
+                "Next": "HandleError",
+                "ResultPath": "$.error"
+              }
+            ]
+          },
+          "TransformOutput": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "${OutputMapperFunctionArn}",
+              "Payload": {
+                "original_row.$": "$",
+                "execution_result.$": "$.execution_result",
+                "output_mapping.$": "$$.Execution.Input.output_mapping",
+                "execution_metadata": {
+                  "status": "SUCCESS"
+                }
+              }
+            },
+            "OutputPath": "$.Payload",
+            "End": true
+          },
+          "HandleError": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "${OutputMapperFunctionArn}",
+              "Payload": {
+                "original_row.$": "$",
+                "execution_result": {},
+                "output_mapping.$": "$$.Execution.Input.output_mapping",
+                "execution_metadata": {
+                  "status": "FAILED",
+                  "error_message.$": "$.error.Cause"
+                }
+              }
+            },
+            "OutputPath": "$.Payload",
+            "End": true
+          }
+        }
+      },
+      "ItemsPath": "$.csv_data.Payload.rows",
+      "MaxConcurrency": 10,
+      "ResultPath": "$.processed_rows",
+      "Next": "ConvertToCSV"
+    },
+    "ConvertToCSV": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${JsonToCsvFunctionArn}",
+        "Payload": {
+          "rows.$": "$.processed_rows",
+          "output_bucket.$": "$.output_bucket",
+          "execution_name.$": "$$.Execution.Name"
+        }
+      },
+      "ResultPath": "$.csv_result",
+      "OutputPath": "$.csv_result.Payload",
+      "End": true
+    }
+  }
+}

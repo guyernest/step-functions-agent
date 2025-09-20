@@ -1,0 +1,187 @@
+{
+  "Comment": "Simplified Batch Processor - Direct JSON to CSV conversion",
+  "StartAt": "ProcessCSVBatch",
+  "States": {
+    "ProcessCSVBatch": {
+      "Type": "Map",
+      "ItemProcessor": {
+        "ProcessorConfig": {
+          "Mode": "INLINE"
+        },
+        "StartAt": "TransformInput",
+        "States": {
+          "TransformInput": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "${InputMapperFunctionArn}",
+              "Payload": {
+                "row.$": "$",
+                "mapping_config.$": "$.mapping_config",
+                "target.$": "$.target"
+              }
+            },
+            "ResultPath": "$.mapped_input",
+            "Next": "RouteToTarget",
+            "Catch": [
+              {
+                "ErrorEquals": ["States.ALL"],
+                "Next": "HandleError",
+                "ResultPath": "$.error"
+              }
+            ]
+          },
+          "RouteToTarget": {
+            "Type": "Choice",
+            "Choices": [
+              {
+                "Variable": "$.target.type",
+                "StringEquals": "agent",
+                "Next": "InvokeAgent"
+              },
+              {
+                "Variable": "$.target.type",
+                "StringEquals": "tool",
+                "Next": "InvokeTool"
+              }
+            ],
+            "Default": "InvokeTool"
+          },
+          "InvokeAgent": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::states:startExecution.sync:2",
+            "Parameters": {
+              "StateMachineArn.$": "$.target.arn",
+              "Input.$": "$.mapped_input.Payload"
+            },
+            "ResultPath": "$.execution_result",
+            "TimeoutSeconds": 300,
+            "Retry": [
+              {
+                "ErrorEquals": ["States.TaskFailed"],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 3,
+                "BackoffRate": 2.0
+              }
+            ],
+            "Next": "TransformOutput",
+            "Catch": [
+              {
+                "ErrorEquals": ["States.ALL"],
+                "Next": "HandleError",
+                "ResultPath": "$.error"
+              }
+            ]
+          },
+          "InvokeTool": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName.$": "$.target.arn",
+              "Payload.$": "$.mapped_input.Payload"
+            },
+            "ResultPath": "$.execution_result",
+            "TimeoutSeconds": 300,
+            "Retry": [
+              {
+                "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException"],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 3,
+                "BackoffRate": 2.0
+              }
+            ],
+            "Next": "TransformOutput",
+            "Catch": [
+              {
+                "ErrorEquals": ["States.ALL"],
+                "Next": "HandleError",
+                "ResultPath": "$.error"
+              }
+            ]
+          },
+          "TransformOutput": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "${OutputMapperFunctionArn}",
+              "Payload": {
+                "original_row.$": "$",
+                "execution_result.$": "$.execution_result",
+                "output_mapping.$": "$.output_mapping",
+                "execution_metadata": {
+                  "status": "SUCCESS",
+                  "start_time.$": "$$.Execution.StartTime",
+                  "end_time.$": "$$.State.EnteredTime"
+                }
+              }
+            },
+            "OutputPath": "$.Payload",
+            "End": true
+          },
+          "HandleError": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "${OutputMapperFunctionArn}",
+              "Payload": {
+                "original_row.$": "$",
+                "execution_result": {},
+                "output_mapping.$": "$.output_mapping",
+                "execution_metadata": {
+                  "status": "FAILED",
+                  "error_message.$": "$.error.Cause",
+                  "start_time.$": "$$.Execution.StartTime",
+                  "end_time.$": "$$.State.EnteredTime"
+                }
+              }
+            },
+            "OutputPath": "$.Payload",
+            "End": true
+          }
+        }
+      },
+      "Label": "ProcessCSVBatch",
+      "MaxConcurrency": 10,
+      "ItemReader": {
+        "Resource": "arn:aws:states:::s3:getObject",
+        "ReaderConfig": {
+          "InputType": "CSV",
+          "CSVHeaderLocation": "FIRST_ROW"
+        },
+        "Parameters": {
+          "Bucket.$": "$.input_bucket",
+          "Key.$": "$.input_key"
+        }
+      },
+      "ItemSelector": {
+        "row.$": "$$.Map.Item.Value",
+        "mapping_config.$": "$$.Execution.Input.input_mapping",
+        "target.$": "$$.Execution.Input.target",
+        "output_mapping.$": "$$.Execution.Input.output_mapping"
+      },
+      "ResultWriter": {
+        "Resource": "arn:aws:states:::s3:putObject",
+        "Parameters": {
+          "Bucket.$": "$.output_bucket",
+          "Prefix.$": "States.Format('batch-results/{}/json/', $$.Execution.Name)"
+        }
+      },
+      "ResultPath": "$.processing_results",
+      "Next": "ConvertToCSV"
+    },
+    "ConvertToCSV": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${JsonToCsvFunctionArn}",
+        "Payload": {
+          "input_location.$": "States.Format('s3://{}/batch-results/{}/json/', $.output_bucket, $$.Execution.Name)",
+          "output_location.$": "States.Format('s3://{}/batch-results/{}/final/output.csv', $.output_bucket, $$.Execution.Name)"
+        }
+      },
+      "ResultPath": "$.csv_result",
+      "OutputPath": "$",
+      "End": true
+    }
+  }
+}
