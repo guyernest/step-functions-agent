@@ -1,32 +1,34 @@
 from aws_cdk import Stack, Fn
 from constructs import Construct
-from .modular_base_agent_stack import ModularBaseAgentStack
+from .modular_base_agent_unified_llm_stack import ModularBaseAgentUnifiedLLMStack
 import json
 from pathlib import Path
 
 
-class GraphQLAgentStack(ModularBaseAgentStack):
+class GraphQLAgentStack(ModularBaseAgentUnifiedLLMStack):
     """
-    GraphQL Agent Stack - Uses BaseAgentStack for simplified deployment
-    
-    This stack demonstrates the clean new architecture using the base stack:
+    GraphQL Agent Stack - Uses Unified Rust LLM for simplified deployment
+
+    This stack demonstrates the clean new architecture using the unified LLM:
     - Minimal code (~20 lines vs ~340 lines)
-    - Uses BaseAgentStack for common patterns
+    - Uses ModularBaseAgentUnifiedLLMStack for common patterns
     - Configurable tool list per agent
-    - Uses Amazon Nova (Bedrock) LLM for GraphQL tasks
+    - Uses Unified Rust LLM for GraphQL tasks
     """
 
     def __init__(self, scope: Construct, construct_id: str, env_name: str = "prod", **kwargs) -> None:
 
         # Set agent-specific properties for registry
-        self.agent_description = "GraphQL API specialist for schema analysis and query generation"
-        self.llm_provider = "bedrock"
-        self.llm_model = "amazon.nova-pro"
+        self.agent_description = "GraphQL API specialist for schema analysis and query generation (Rust LLM)"
+        self.llm_provider = "anthropic"
+        self.llm_model = "claude-3-5-sonnet-20241022"
         self.agent_metadata = {
-            "tags": ['graphql', 'api', 'queries', 'mutations', 'schemas']
+            "tags": ['graphql', 'api', 'queries', 'mutations', 'schemas', 'rust-llm'],
+            "llm_type": "unified-rust",
+            "capabilities": ["schema_introspection", "query_generation", "dynamic_endpoints"]
         }
-        # Import Bedrock (Nova) LLM ARN from shared stack
-        bedrock_lambda_arn = Fn.import_value(f"SharedBedrockLambdaArn-{env_name}")
+        # Import Unified Rust LLM ARN from shared stack
+        unified_llm_arn = Fn.import_value(f"SharedUnifiedRustLLMLambdaArn-{env_name}")
         
         # Import GraphQL interface Lambda ARN
         graphql_lambda_arn = Fn.import_value(f"GraphQLInterfaceLambdaArn-{env_name}")
@@ -49,25 +51,34 @@ class GraphQLAgentStack(ModularBaseAgentStack):
         ]
         
                 
-        # Call ModularBaseAgentStack constructor
+        # Call ModularBaseAgentUnifiedLLMStack constructor
         super().__init__(
             scope,
             construct_id,
-            agent_name="graphql-agent",
-            llm_arn=bedrock_lambda_arn,
+            agent_name="graphql-agent-rust",
+            unified_llm_arn=unified_llm_arn,
             tool_configs=tool_configs,
             env_name=env_name,
-            system_prompt="You are an expert GraphQL assistant with deep knowledge of GraphQL schemas, queries, mutations, and subscriptions. Help users interact with GraphQL APIs by analyzing schemas, generating queries, and executing GraphQL operations. Always use the execute_graphql_query tool to execute queries against GraphQL endpoints and generate_query_prompt tool to help construct complex queries.",
+            default_provider="anthropic",
+            default_model="claude-3-5-sonnet-20241022",
+            system_prompt="""You are an expert GraphQL assistant with deep knowledge of GraphQL schemas, queries, mutations, and subscriptions.
+
+You have access to multiple GraphQL endpoints through dynamic endpoint selection. Each endpoint is identified by a unique ID (e.g., 'LogisticZ', 'CustomerService').
+
+When working with GraphQL:
+1. First use get_graphql_schema to fetch the schema for the specific GraphQL endpoint using its ID
+2. Use generate_query_prompt to help construct complex queries based on the schema
+3. Use execute_graphql_query to execute queries against the specific endpoint
+
+Important: Always specify the graphql_id parameter to identify which GraphQL endpoint to connect to. Ask the user for the endpoint ID if not provided.
+
+Available tools:
+- get_graphql_schema: Fetch schema for a specific endpoint
+- generate_query_prompt: Generate query prompts with schema awareness
+- execute_graphql_query: Execute GraphQL queries on a specific endpoint""",
             **kwargs
         )
         
-        
-        
-        # Set agent-specific properties for registry
-        self.agent_description = "GraphQL API specialist for schema analysis and query generation"
-        self.llm_provider = "bedrock"
-        self.llm_model = "amazon.nova-pro"
-        self.agent_metadata = {
-            "tags": ['graphql', 'api', 'queries', 'mutations', 'schemas']
-        }# Store env_name for registration
+
+        # Store env_name for registration
         self.env_name = env_name

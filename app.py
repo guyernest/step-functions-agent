@@ -49,7 +49,6 @@ from stacks.agents.web_search_agent_unified_llm_stack import WebSearchAgentUnifi
 from stacks.agents.google_maps_agent_unified_llm_stack import GoogleMapsAgentUnifiedLLMStack
 from stacks.agents.test_automation_remote_agent_unified_llm_stack import TestAutomationRemoteAgentUnifiedLLMStack
 from stacks.agents.broadband_agent_unified_llm_stack import BroadbandAgentUnifiedLLMStack
-from stacks.agents.broadband_checker_structured_stack import BroadbandCheckerStructuredStack
 from stacks.agents.broadband_checker_structured_v2_stack import BroadbandCheckerStructuredV2Stack
 from stacks.shared.structured_output_infrastructure_stack import StructuredOutputInfrastructureStack
 # from legacy.step_functions_agent.agent_monitoring_stack import AgentMonitoringStack  # Commented out due to missing dependency
@@ -387,18 +386,6 @@ def main():
     )
     broadband_agent_rust.add_dependency(agentcore_browser_tools)  # Depends on Agent Core browser tool
 
-    # Broadband Checker with Structured Output - extracts structured broadband data
-    broadband_checker_structured = BroadbandCheckerStructuredStack(
-        app,
-        f"BroadbandCheckerStructuredStack-{environment}",
-        env_name=environment,
-        env=env,
-        description=f"Broadband checker with structured output extraction for {environment} environment"
-    )
-    broadband_checker_structured.add_dependency(structured_output_infrastructure)
-    broadband_checker_structured.add_dependency(shared_llm_stack)
-    broadband_checker_structured.add_dependency(agent_registry_stack)
-
     # Broadband Checker V2 with Structured Output - simplified version using unified LLM pattern
     broadband_checker_v2 = BroadbandCheckerStructuredV2Stack(
         app,
@@ -656,7 +643,7 @@ def main():
                   image_analysis_tools, nova_act_browser_tools, agentcore_browser_tools, sql_agent, google_maps_agent, research_agent,
                   cloudwatch_agent, graphql_agent, image_analysis_agent,
                   test_sql_approval_agent, test_automation_remote_agent, web_search_agent_rust,
-                  broadband_checker_structured, broadband_checker_v2,
+                  broadband_checker_v2,
                   long_content_infrastructure, microsoft_graph_long_content,
                   test_automation_remote_agent_rust_long]:
         for key, value in tags.items():
