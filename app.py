@@ -34,6 +34,7 @@ from stacks.tools.graphql_interface_tool_stack import GraphQLInterfaceToolStack
 from stacks.tools.image_analysis_tool_stack import ImageAnalysisToolStack
 from stacks.tools.nova_act_browser_tool_stack import NovaActBrowserToolStack
 from stacks.tools.agentcore_browser_tool_stack import AgentCoreBrowserToolStack
+from stacks.tools.address_search_batch_tool_stack import AddressSearchBatchToolStack
 from stacks.agents.sql_agent_with_base_construct import SQLAgentStack
 from stacks.agents.google_maps_agent_stack import GoogleMapsAgentStack
 from stacks.agents.research_agent_stack import ResearchAgentStack
@@ -48,6 +49,9 @@ from stacks.agents.web_search_agent_unified_llm_stack import WebSearchAgentUnifi
 from stacks.agents.google_maps_agent_unified_llm_stack import GoogleMapsAgentUnifiedLLMStack
 from stacks.agents.test_automation_remote_agent_unified_llm_stack import TestAutomationRemoteAgentUnifiedLLMStack
 from stacks.agents.broadband_agent_unified_llm_stack import BroadbandAgentUnifiedLLMStack
+from stacks.agents.broadband_checker_structured_stack import BroadbandCheckerStructuredStack
+from stacks.agents.broadband_checker_structured_v2_stack import BroadbandCheckerStructuredV2Stack
+from stacks.shared.structured_output_infrastructure_stack import StructuredOutputInfrastructureStack
 # from legacy.step_functions_agent.agent_monitoring_stack import AgentMonitoringStack  # Commented out due to missing dependency
 
 # Long content support imports
@@ -103,7 +107,18 @@ def main():
         env=env,
         description=f"Agent Registry for dynamic configurations in {environment} environment"
     )
-    
+
+    # Deploy Structured Output Infrastructure stack
+    # This creates Lambda functions for structured output handling
+    structured_output_infrastructure = StructuredOutputInfrastructureStack(
+        app,
+        f"StructuredOutputInfrastructureStack-{environment}",
+        agent_registry_table=agent_registry_stack.agent_registry_table,
+        env=env,
+        description=f"Structured output infrastructure for {environment} environment"
+    )
+    structured_output_infrastructure.add_dependency(agent_registry_stack)
+
     # Get MCP endpoint URL from context or environment
     # This will be set by the UI Amplify deployment
     mcp_endpoint_url = os.environ.get('MCP_ENDPOINT_URL', 'https://api.example.com/mcp')
@@ -312,6 +327,16 @@ def main():
     )
     agentcore_browser_tools.add_dependency(shared_infrastructure_stack)
     
+    # Address Search Batch Tool - First Step Functions-based tool for batch processing
+    address_search_batch = AddressSearchBatchToolStack(
+        app,
+        f"AddressSearchBatchToolStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Address search batch processor (Step Functions tool) for {environment} environment"
+    )
+    address_search_batch.add_dependency(shared_infrastructure_stack)
+    
     # Deploy agent stacks that reference shared resources
     # These are lightweight and focus only on Step Functions workflows
     
@@ -361,7 +386,32 @@ def main():
         description=f"UK broadband availability agent using Agent Core browser automation for {environment} environment"
     )
     broadband_agent_rust.add_dependency(agentcore_browser_tools)  # Depends on Agent Core browser tool
-    
+
+    # Broadband Checker with Structured Output - extracts structured broadband data
+    broadband_checker_structured = BroadbandCheckerStructuredStack(
+        app,
+        f"BroadbandCheckerStructuredStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Broadband checker with structured output extraction for {environment} environment"
+    )
+    broadband_checker_structured.add_dependency(structured_output_infrastructure)
+    broadband_checker_structured.add_dependency(shared_llm_stack)
+    broadband_checker_structured.add_dependency(agent_registry_stack)
+
+    # Broadband Checker V2 with Structured Output - simplified version using unified LLM pattern
+    broadband_checker_v2 = BroadbandCheckerStructuredV2Stack(
+        app,
+        f"BroadbandCheckerStructuredV2Stack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Broadband checker V2 with structured output using unified LLM pattern for {environment} environment"
+    )
+    broadband_checker_v2.add_dependency(shared_llm_stack)
+    broadband_checker_v2.add_dependency(agent_registry_stack)
+    broadband_checker_v2.add_dependency(shared_infrastructure_stack)  # For ToolRegistry
+    broadband_checker_v2.add_dependency(agentcore_browser_tools)  # For browser tool
+
     # Google Maps Agent with Unified Rust LLM - location services
     google_maps_agent_rust = GoogleMapsAgentUnifiedLLMStack(
         app,
@@ -598,15 +648,16 @@ def main():
         "Architecture": "Refactored"
     }
     
-    for stack in [shared_infrastructure_stack, shared_llm_stack, agent_registry_stack, 
-                  db_interface_tool, e2b_tool, google_maps_tool, financial_tools, 
+    for stack in [shared_infrastructure_stack, shared_llm_stack, agent_registry_stack,
+                  structured_output_infrastructure, db_interface_tool, e2b_tool, google_maps_tool, financial_tools,
                   web_research_tools, cloudwatch_tools, clustering_tools, stock_analysis_tools,
                   earthquake_monitoring_tools, book_recommendation_tools, local_automation_tools,
                   microsoft_graph_tools, web_automation_tools, graphql_interface_tools,
-                  image_analysis_tools, nova_act_browser_tools, agentcore_browser_tools, sql_agent, google_maps_agent, research_agent, 
-                  cloudwatch_agent, graphql_agent, image_analysis_agent, 
+                  image_analysis_tools, nova_act_browser_tools, agentcore_browser_tools, sql_agent, google_maps_agent, research_agent,
+                  cloudwatch_agent, graphql_agent, image_analysis_agent,
                   test_sql_approval_agent, test_automation_remote_agent, web_search_agent_rust,
-                  long_content_infrastructure, microsoft_graph_long_content, 
+                  broadband_checker_structured, broadband_checker_v2,
+                  long_content_infrastructure, microsoft_graph_long_content,
                   test_automation_remote_agent_rust_long]:
         for key, value in tags.items():
             cdk.Tags.of(stack).add(key, value)
