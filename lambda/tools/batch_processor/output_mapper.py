@@ -15,30 +15,30 @@ logger.setLevel(logging.INFO)
 
 def lambda_handler(event, context):
     """
-    Map agent/tool output to enriched row format
-    
+    Extract structured output from agent response and map to CSV columns
+
     Event structure:
     {
-        "original_row": {
-            "column1": "value1",
-            "column2": "value2",
-            ...
-        },
-        "execution_result": {
-            ...agent/tool output...
+        "action": "extract",  # Main action
+        "agent_output": {
+            # Full agent output including structured_output field
         },
         "output_mapping": {
-            "columns": [...],
+            "structured_output_fields": [...],  # Required fields to extract
             "include_original": true,
             "add_metadata": true
         },
-        "execution_metadata": {
-            "start_time": "...",
-            "end_time": "...",
-            "status": "SUCCESS | FAILED"
+        "original_row": {
+            # Original CSV row data
         }
     }
     """
+    action = event.get('action', 'extract')
+
+    if action == 'extract':
+        return extract_structured_output(event, context)
+
+    # Legacy behavior for backward compatibility
     try:
         original_row = event.get('original_row', {})
         result = event.get('execution_result', {})
@@ -150,6 +150,124 @@ def extract_value(data: Any, path: str) -> Any:
                 return None
     
     return current
+
+def extract_structured_output(event: Dict[str, Any], context) -> Dict[str, Any]:
+    """
+    Extract structured output from agent response
+
+    This function specifically looks for the 'structured_output' field
+    in the agent's response, which is REQUIRED for batch processing.
+    """
+    try:
+        agent_output = event.get('agent_output', {})
+        output_mapping = event.get('output_mapping', {})
+        original_row = event.get('original_row', {})
+
+        # Start with original row if requested
+        result_row = {}
+        if output_mapping.get('include_original', True):
+            result_row = original_row.copy()
+
+        # CRITICAL: Extract structured output from agent response
+        # The agent MUST return a 'structured_output' field
+        structured_data = None
+
+        # First check if agent_output itself is a string that needs parsing
+        if isinstance(agent_output, str):
+            logger.info("Agent output is a string, attempting to parse as JSON")
+            try:
+                agent_output = json.loads(agent_output)
+                logger.info(f"Successfully parsed agent_output string to dict with keys: {list(agent_output.keys())}")
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse agent_output string as JSON: {e}")
+                logger.error(f"Agent output string (first 500 chars): {agent_output[:500]}")
+                agent_output = {}
+
+        # Check different possible locations for structured output
+        if isinstance(agent_output, dict):
+            logger.info(f"Agent output keys: {list(agent_output.keys())}")
+
+            # Direct structured output field
+            if 'structured_output' in agent_output:
+                structured_data = agent_output['structured_output']
+                logger.info("Found structured_output directly in agent_output")
+            # Check if it's wrapped in Output field (from Step Functions)
+            elif 'Output' in agent_output:
+                # Output field might be a JSON string from Step Functions execution
+                output_data = agent_output['Output']
+                logger.info(f"Found Output field, type: {type(output_data)}")
+
+                if isinstance(output_data, str):
+                    try:
+                        output_data = json.loads(output_data)
+                        logger.info(f"Parsed Output JSON, keys: {list(output_data.keys()) if isinstance(output_data, dict) else 'not a dict'}")
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Failed to parse Output as JSON: {e}")
+                        logger.error(f"Output string (first 500 chars): {output_data[:500]}")
+                        output_data = {}
+
+                if isinstance(output_data, dict) and 'structured_output' in output_data:
+                    structured_data = output_data['structured_output']
+                    logger.info(f"Found structured_output in parsed Output, data: {structured_data}")
+                else:
+                    logger.warning(f"No structured_output in Output. Keys available: {list(output_data.keys()) if isinstance(output_data, dict) else 'not a dict'}")
+            # Check for content field (tool result format)
+            elif 'content' in agent_output and isinstance(agent_output['content'], dict):
+                if 'structured_output' in agent_output['content']:
+                    structured_data = agent_output['content']['structured_output']
+                    logger.info("Found structured_output in content field")
+
+        if structured_data is None:
+            # Agent didn't return structured output - this is an error
+            logger.error(f"Agent did not return structured output. Response keys: {list(agent_output.keys()) if isinstance(agent_output, dict) else 'not a dict'}")
+            logger.error(f"Full agent_output (first 2000 chars): {json.dumps(agent_output)[:2000]}")
+            return {
+                **result_row,
+                '_status': 'FAILED',
+                '_error_message': 'Agent did not return structured output. Ensure agent implements return_structured_data tool.',
+                '_timestamp': datetime.utcnow().isoformat()
+            }
+
+        # Extract specified fields from structured output
+        fields_to_extract = output_mapping.get('structured_output_fields', [])
+
+        for field_name in fields_to_extract:
+            if field_name in structured_data:
+                value = structured_data[field_name]
+                # Convert complex types to JSON strings for CSV
+                if isinstance(value, (dict, list)):
+                    value = json.dumps(value)
+                elif value is None:
+                    value = ''
+                result_row[field_name] = value
+            else:
+                # Field not found in structured output
+                result_row[field_name] = ''
+                logger.warning(f"Field '{field_name}' not found in structured output")
+
+        # Add metadata if requested
+        if output_mapping.get('add_metadata', True):
+            result_row['_status'] = 'SUCCESS'
+            result_row['_timestamp'] = datetime.utcnow().isoformat()
+
+            # Add execution time if available
+            if 'execution_metadata' in event:
+                metadata = event['execution_metadata']
+                result_row['_execution_time_ms'] = calculate_execution_time(
+                    metadata.get('start_time'),
+                    metadata.get('end_time')
+                )
+
+        return result_row
+
+    except Exception as e:
+        logger.error(f"Error extracting structured output: {str(e)}")
+        return {
+            **original_row,
+            '_status': 'FAILED',
+            '_error_message': str(e),
+            '_timestamp': datetime.utcnow().isoformat()
+        }
 
 def calculate_execution_time(start_time: Optional[str], end_time: Optional[str]) -> int:
     """Calculate execution time in milliseconds"""
