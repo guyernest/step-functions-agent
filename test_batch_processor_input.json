@@ -1,0 +1,24 @@
+{
+  "csv_s3_uri": "s3://batch-processor-results-prod-672915487120/test_addresses_short.csv",
+  "target": {
+    "type": "agent",
+    "name": "broadband-checker-structured"
+  },
+  "input_mapping": {
+    "address": "address",
+    "postcode": "postcode"
+  },
+  "output_mapping": {
+    "structured_output_fields": [
+      "exchange_station",
+      "download_speed",
+      "upload_speed",
+      "screenshot_url"
+    ],
+    "include_original": true,
+    "add_metadata": true
+  },
+  "execution_config": {
+    "max_concurrency": 10
+  }
+}
