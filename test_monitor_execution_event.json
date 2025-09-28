@@ -1,0 +1,7 @@
+{
+  "name": "monitor_batch_execution",
+  "id": "call_Pwsd9XLUz2HVx9m46ZuxcV4o",
+  "input": {
+    "execution_arn": "arn:aws:states:us-west-2:672915487120:execution:batch-processor-prod:batch-20250926-041634-98d2d675"
+  }
+}
