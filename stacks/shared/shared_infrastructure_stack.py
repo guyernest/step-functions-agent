@@ -58,9 +58,7 @@ class SharedInfrastructureStack(Stack):
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY,  # TODO: Change for production
-            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
-                point_in_time_recovery_enabled=True
-            ),
+            point_in_time_recovery=True,  # Simplified syntax for PITR
             stream=dynamodb.StreamViewType.NEW_AND_OLD_IMAGES
         )
 
@@ -130,9 +128,7 @@ class SharedInfrastructureStack(Stack):
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY,
-            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
-                point_in_time_recovery_enabled=True
-            )
+            point_in_time_recovery=True
         )
         
         # Create Lambda execution role for secret structure manager

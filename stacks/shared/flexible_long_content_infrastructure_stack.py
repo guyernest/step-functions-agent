@@ -98,9 +98,7 @@ class FlexibleLongContentInfrastructureStack(Stack):
             removal_policy=RemovalPolicy.DESTROY,
             time_to_live_attribute="ttl",
             stream=dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
-            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
-                point_in_time_recovery_enabled=True
-            )
+            point_in_time_recovery=True
         )
         
         # Add GSI for debugging

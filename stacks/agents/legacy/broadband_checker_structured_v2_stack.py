@@ -251,7 +251,9 @@ Always provide structured output using return_broadband_data after checking avai
                         "tools": "{% $append($states.result, " + json.dumps(structured_output_tool) + ") %}"
                     },
                     "Output": {
-                        "messages": "{% $states.input.messages %}"
+                        "messages": "{% $states.input.messages %}",
+                        "input": "{% $states.input.input %}",
+                        "tools": "{% $append($states.result, " + json.dumps(structured_output_tool) + ") %}"
                     }
                 },
 
@@ -274,7 +276,7 @@ Always provide structured output using return_broadband_data after checking avai
                                 "timeout": 30
                             },
                             "messages": "{% ($messages := $states.input.messages; $hasSystemMessage := $messages[0].role = 'system'; $hasSystemMessage ? $messages : $append([{'role': 'system', 'content': " + json.dumps(system_prompt) + "}], $messages)) %}",
-                            "tools": "{% $tools %}",
+                            "tools": "{% $states.input.tools %}",
                             "temperature": "{% $exists($states.input.temperature) ? $states.input.temperature : 0.7 %}",
                             "max_tokens": "{% $exists($states.input.max_tokens) ? $states.input.max_tokens : 4096 %}",
                             "stream": False
@@ -364,7 +366,8 @@ Always provide structured output using return_broadband_data after checking avai
                     },
                     "Output": {
                         "messages": "{% $states.input.messages %}",
-                        "tool_results": "{% $states.result %}"
+                        "tool_results": "{% $states.result %}",
+                        "tools": "{% $append([], " + json.dumps(structured_output_tool) + ") %}"
                     }
                 },
 
@@ -373,7 +376,8 @@ Always provide structured output using return_broadband_data after checking avai
                     "Next": "Check for Structured Output",
                     "Output": {
                         "messages": "{% $append($states.input.messages, [{'role': 'user', 'content': $states.input.tool_results}]) %}",
-                        "structured_output": "{% ($filtered := $states.input.tool_results[$.type = 'structured_output']; $count($filtered) > 0 ? $filtered[0] : null) %}"
+                        "structured_output": "{% ($filtered := $states.input.tool_results[$.type = 'structured_output']; $count($filtered) > 0 ? $filtered[0] : null) %}",
+                        "tools": "{% $append([], " + json.dumps(structured_output_tool) + ") %}"
                     }
                 },
 

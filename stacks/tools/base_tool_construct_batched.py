@@ -103,8 +103,8 @@ class BatchedToolConstruct(Construct):
                 "tool_name": tool_spec["tool_name"],
                 "description": tool_spec["description"],
                 "input_schema": tool_spec["input_schema"],
-                "lambda_arn": tool_spec.get("lambda_arn", self.lambda_function.function_arn),
-                "lambda_function_name": tool_spec.get("lambda_function_name", self.lambda_function.function_name),
+                "lambda_arn": tool_spec.get("lambda_arn", self.lambda_function.function_arn if self.lambda_function else "N/A"),
+                "lambda_function_name": tool_spec.get("lambda_function_name", self.lambda_function.function_name if self.lambda_function else "N/A"),
                 "language": tool_spec.get("language", "python"),
                 "tags": tool_spec.get("tags", []),
                 "status": tool_spec.get("status", "active"),
@@ -112,7 +112,10 @@ class BatchedToolConstruct(Construct):
                 "human_approval_required": tool_spec.get("human_approval_required", False),
                 "requires_activity": tool_spec.get("requires_activity", False),
                 "activity_type": tool_spec.get("activity_type", ""),
-                "activity_arn": tool_spec.get("activity_arn", "")
+                "activity_arn": tool_spec.get("activity_arn", ""),
+                "tool_type": tool_spec.get("tool_type", "lambda"),  # New field for Step Functions tools
+                "resource_arn": tool_spec.get("resource_arn", tool_spec.get("lambda_arn", self.lambda_function.function_arn if self.lambda_function else "N/A")),
+                "config": tool_spec.get("config", {})  # Tool-specific configuration
             }
             
             # Convert complex objects to JSON strings
@@ -121,6 +124,8 @@ class BatchedToolConstruct(Construct):
                 tool_spec_for_dynamo["input_schema"] = json.dumps(complete_tool_spec["input_schema"])
             if not isinstance(complete_tool_spec["tags"], str):
                 tool_spec_for_dynamo["tags"] = json.dumps(complete_tool_spec["tags"])
+            if not isinstance(complete_tool_spec["config"], str):
+                tool_spec_for_dynamo["config"] = json.dumps(complete_tool_spec["config"])
             
             # Create DynamoDB item format
             item = {
