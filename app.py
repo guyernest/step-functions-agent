@@ -35,7 +35,9 @@ from stacks.tools.image_analysis_tool_stack import ImageAnalysisToolStack
 from stacks.tools.nova_act_browser_tool_stack import NovaActBrowserToolStack
 from stacks.tools.agentcore_browser_tool_stack import AgentCoreBrowserToolStack
 from stacks.tools.address_search_batch_tool_stack import AddressSearchBatchToolStack
+from stacks.tools.batch_processor_tool_stack import BatchProcessorToolStack
 from stacks.agents.sql_agent_with_base_construct import SQLAgentStack
+from stacks.agents.batch_orchestrator_agent_stack import BatchOrchestratorAgentStack
 from stacks.agents.google_maps_agent_stack import GoogleMapsAgentStack
 from stacks.agents.research_agent_stack import ResearchAgentStack
 from stacks.agents.cloudwatch_agent_stack import CloudWatchAgentStack
@@ -49,7 +51,8 @@ from stacks.agents.web_search_agent_unified_llm_stack import WebSearchAgentUnifi
 from stacks.agents.google_maps_agent_unified_llm_stack import GoogleMapsAgentUnifiedLLMStack
 from stacks.agents.test_automation_remote_agent_unified_llm_stack import TestAutomationRemoteAgentUnifiedLLMStack
 from stacks.agents.broadband_agent_unified_llm_stack import BroadbandAgentUnifiedLLMStack
-from stacks.agents.broadband_checker_structured_v2_stack import BroadbandCheckerStructuredV2Stack
+from stacks.agents.broadband_checker_structured_stack import BroadbandCheckerStructuredStack
+from stacks.agents.travel_time_checker_structured_stack import TravelTimeCheckerStructuredStack
 from stacks.shared.structured_output_infrastructure_stack import StructuredOutputInfrastructureStack
 # from legacy.step_functions_agent.agent_monitoring_stack import AgentMonitoringStack  # Commented out due to missing dependency
 
@@ -335,6 +338,17 @@ def main():
         description=f"Address search batch processor (Step Functions tool) for {environment} environment"
     )
     address_search_batch.add_dependency(shared_infrastructure_stack)
+
+    # Generic Batch Processor Tool - Processes CSV files through agents with structured output
+    batch_processor_tool = BatchProcessorToolStack(
+        app,
+        f"BatchProcessorToolStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Generic batch processor for CSV files with structured output agents for {environment} environment"
+    )
+    batch_processor_tool.add_dependency(shared_infrastructure_stack)
+    batch_processor_tool.add_dependency(agent_registry_stack)
     
     # Deploy agent stacks that reference shared resources
     # These are lightweight and focus only on Step Functions workflows
@@ -386,18 +400,31 @@ def main():
     )
     broadband_agent_rust.add_dependency(agentcore_browser_tools)  # Depends on Agent Core browser tool
 
-    # Broadband Checker V2 with Structured Output - simplified version using unified LLM pattern
-    broadband_checker_v2 = BroadbandCheckerStructuredV2Stack(
+    # Broadband Checker with Structured Output - using unified LLM generator pattern
+    broadband_checker = BroadbandCheckerStructuredStack(
         app,
-        f"BroadbandCheckerStructuredV2Stack-{environment}",
+        f"BroadbandCheckerStructuredStack-{environment}",
         env_name=environment,
         env=env,
-        description=f"Broadband checker V2 with structured output using unified LLM pattern for {environment} environment"
+        description=f"Broadband checker with structured output using unified LLM generator for {environment} environment"
     )
-    broadband_checker_v2.add_dependency(shared_llm_stack)
-    broadband_checker_v2.add_dependency(agent_registry_stack)
-    broadband_checker_v2.add_dependency(shared_infrastructure_stack)  # For ToolRegistry
-    broadband_checker_v2.add_dependency(agentcore_browser_tools)  # For browser tool
+    broadband_checker.add_dependency(shared_llm_stack)
+    broadband_checker.add_dependency(agent_registry_stack)
+    broadband_checker.add_dependency(shared_infrastructure_stack)  # For ToolRegistry
+    broadband_checker.add_dependency(agentcore_browser_tools)  # For browser tool
+
+    # Travel Time Checker with Structured Output - using unified LLM generator pattern
+    travel_time_checker = TravelTimeCheckerStructuredStack(
+        app,
+        f"TravelTimeCheckerStructuredStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Travel time checker with structured output using unified LLM generator for {environment} environment"
+    )
+    travel_time_checker.add_dependency(shared_llm_stack)
+    travel_time_checker.add_dependency(agent_registry_stack)
+    travel_time_checker.add_dependency(shared_infrastructure_stack)  # For ToolRegistry
+    travel_time_checker.add_dependency(google_maps_tool)  # For maps_directions tool
 
     # Google Maps Agent with Unified Rust LLM - location services
     google_maps_agent_rust = GoogleMapsAgentUnifiedLLMStack(
@@ -494,7 +521,18 @@ def main():
         env=env,
         description=f"GraphQL integration and query generation agent for {environment} environment"
     )
-    
+
+    # Batch Orchestrator Agent - Manages batch CSV processing with structured output agents
+    batch_orchestrator_agent = BatchOrchestratorAgentStack(
+        app,
+        f"BatchOrchestratorAgentStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Batch processing orchestrator agent for {environment} environment"
+    )
+    batch_orchestrator_agent.add_dependency(batch_processor_tool)
+    batch_orchestrator_agent.add_dependency(agent_registry_stack)
+
     # Image Analysis Agent - uses Gemini LLM for multimodal image analysis
     image_analysis_agent = ImageAnalysisAgentStack(
         app,
@@ -643,7 +681,7 @@ def main():
                   image_analysis_tools, nova_act_browser_tools, agentcore_browser_tools, sql_agent, google_maps_agent, research_agent,
                   cloudwatch_agent, graphql_agent, image_analysis_agent,
                   test_sql_approval_agent, test_automation_remote_agent, web_search_agent_rust,
-                  broadband_checker_v2,
+                  broadband_checker,
                   long_content_infrastructure, microsoft_graph_long_content,
                   test_automation_remote_agent_rust_long]:
         for key, value in tags.items():

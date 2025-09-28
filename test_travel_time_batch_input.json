@@ -1,0 +1,34 @@
+{
+    "execution_id": "travel-time-test-001",
+    "csv_s3_uri": "s3://batch-processor-results-prod-672915487120/input_files/test-travel-times.csv",
+    "target": "travel-time-checker-structured",
+    "agent_config": {
+        "state_machine_arn": "arn:aws:states:us-west-2:672915487120:stateMachine:travel-time-checker-structured-prod"
+    },
+    "processing_config": {
+        "max_concurrency": 3,
+        "timeout_seconds": 120,
+        "retry_attempts": 2
+    },
+    "input_mapping": {
+        "columns": [
+            {
+                "name": "from_address",
+                "source": "from_address"
+            },
+            {
+                "name": "to_address",
+                "source": "to_address"
+            }
+        ]
+    },
+    "output_mapping": {
+        "structured_output_fields": [
+            "driving_time",
+            "walking_time",
+            "cycling_time"
+        ],
+        "include_original": true,
+        "add_metadata": true
+    }
+}

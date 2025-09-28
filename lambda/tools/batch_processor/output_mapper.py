@@ -163,10 +163,14 @@ def extract_structured_output(event: Dict[str, Any], context) -> Dict[str, Any]:
         output_mapping = event.get('output_mapping', {})
         original_row = event.get('original_row', {})
 
-        # Start with original row if requested
-        result_row = {}
+        # Start with an ordered dictionary to control column order
+        from collections import OrderedDict
+        result_row = OrderedDict()
+
+        # First add original row fields if requested (preserves input column order)
         if output_mapping.get('include_original', True):
-            result_row = original_row.copy()
+            for key, value in original_row.items():
+                result_row[key] = value
 
         # CRITICAL: Extract structured output from agent response
         # The agent MUST return a 'structured_output' field
@@ -228,9 +232,10 @@ def extract_structured_output(event: Dict[str, Any], context) -> Dict[str, Any]:
                 '_timestamp': datetime.utcnow().isoformat()
             }
 
-        # Extract specified fields from structured output
+        # Extract specified fields from structured output in the order they're specified
         fields_to_extract = output_mapping.get('structured_output_fields', [])
 
+        # Add fields in the exact order specified in structured_output_fields
         for field_name in fields_to_extract:
             if field_name in structured_data:
                 value = structured_data[field_name]
@@ -258,7 +263,8 @@ def extract_structured_output(event: Dict[str, Any], context) -> Dict[str, Any]:
                     metadata.get('end_time')
                 )
 
-        return result_row
+        # Return as regular dict (but order is preserved)
+        return dict(result_row)
 
     except Exception as e:
         logger.error(f"Error extracting structured output: {str(e)}")

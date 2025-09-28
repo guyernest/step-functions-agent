@@ -67,23 +67,38 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
                 'files_processed': total_files
             }
 
-        # Determine CSV columns
-        columns = set()
-        for result in all_results:
-            columns.update(result.keys())
-
-        # Order columns: original fields first, then new fields, then metadata
-        ordered_columns = []
+        # Determine CSV columns with proper ordering
+        # Use a list to preserve insertion order
+        original_columns = []
+        output_columns = []
         metadata_columns = []
+        seen_columns = set()
 
-        for col in sorted(columns):
-            if col.startswith('_'):
-                metadata_columns.append(col)
-            else:
-                ordered_columns.append(col)
+        # First pass: get column order from first result (preserves input order)
+        if all_results:
+            first_result = all_results[0]
+            for col in first_result.keys():
+                if col not in seen_columns:
+                    seen_columns.add(col)
+                    if col.startswith('_'):
+                        metadata_columns.append(col)
+                    else:
+                        # Columns from original input will appear first in the result
+                        original_columns.append(col)
 
-        # Combine: regular columns + metadata columns
-        final_columns = ordered_columns + metadata_columns
+        # Second pass: collect any additional columns from other results
+        for result in all_results[1:]:
+            for col in result.keys():
+                if col not in seen_columns:
+                    seen_columns.add(col)
+                    if col.startswith('_'):
+                        if col not in metadata_columns:
+                            metadata_columns.append(col)
+                    else:
+                        original_columns.append(col)
+
+        # Order: original columns (in order they appear) + metadata columns
+        final_columns = original_columns + sorted(metadata_columns)
 
         # Create CSV in memory
         output_buffer = io.StringIO()

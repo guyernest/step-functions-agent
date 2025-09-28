@@ -86,23 +86,35 @@ class BaseAgentConstruct(Construct):
             "observability": self.agent_spec.get("observability", {}),
             "parameters": self.agent_spec.get("parameters", {}),
             "metadata": self.agent_spec.get("metadata", {}),
+            "structured_output": self.agent_spec.get("structured_output"),  # Add structured_output field
+            "state_machine_arn": self.agent_spec.get("state_machine_arn"),  # Add state machine ARN
+            "environment": self.agent_spec.get("environment", self.env_name),  # Add environment
             "deployment_env": self.env_name,
             "created_at": current_timestamp,
             "updated_at": current_timestamp
         }
+
+        # Remove None values to avoid DynamoDB errors
+        complete_agent_spec = {k: v for k, v in complete_agent_spec.items() if v is not None}
         
         # Convert complex objects to JSON strings for DynamoDB storage
         agent_spec_for_dynamo = complete_agent_spec.copy()
         
         # Convert lists and dicts to JSON strings
-        if isinstance(complete_agent_spec["tools"], list):
+        if "tools" in complete_agent_spec and isinstance(complete_agent_spec["tools"], (list, dict)):
             agent_spec_for_dynamo["tools"] = json.dumps(complete_agent_spec["tools"])
-        if isinstance(complete_agent_spec["observability"], dict):
+        if "observability" in complete_agent_spec and isinstance(complete_agent_spec["observability"], dict):
             agent_spec_for_dynamo["observability"] = json.dumps(complete_agent_spec["observability"])
-        if isinstance(complete_agent_spec["parameters"], dict):
+        if "parameters" in complete_agent_spec and isinstance(complete_agent_spec["parameters"], dict):
             agent_spec_for_dynamo["parameters"] = json.dumps(complete_agent_spec["parameters"])
-        if isinstance(complete_agent_spec["metadata"], dict):
+        if "metadata" in complete_agent_spec and isinstance(complete_agent_spec["metadata"], dict):
             agent_spec_for_dynamo["metadata"] = json.dumps(complete_agent_spec["metadata"])
+        if "structured_output" in complete_agent_spec:
+            # structured_output is already a JSON string from the agent stack
+            if not isinstance(complete_agent_spec["structured_output"], str):
+                agent_spec_for_dynamo["structured_output"] = json.dumps(complete_agent_spec["structured_output"])
+            else:
+                agent_spec_for_dynamo["structured_output"] = complete_agent_spec["structured_output"]
         
         # Create the custom resource for direct DynamoDB registration
         cr.AwsCustomResource(

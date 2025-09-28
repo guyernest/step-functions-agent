@@ -2,7 +2,17 @@
 
 ## Overview
 
-The Batch Processor Tool is a Step Functions state machine that processes large CSV datasets through agents or other tools in parallel, handling operations that exceed Lambda's 15-minute timeout limit. Unlike traditional Lambda-based tools, this tool is invoked directly via `states:startExecution.sync:2` from the calling agent, allowing it to run for hours or days while the caller waits for completion. It reads input data from CSV files in S3, processes each row through a specified agent or tool, and generates an output CSV with the original data plus new columns containing the processing results.
+The Batch Processor Tool is a Step Functions state machine that processes large CSV datasets through agents or tools that support **structured output**, handling operations that exceed Lambda's 15-minute timeout limit. Unlike traditional Lambda-based tools, this tool is invoked directly via `states:startExecution.sync:2` from the calling agent, allowing it to run for hours or days while the caller waits for completion.
+
+### Key Requirement: Structured Output
+
+**All agents and tools used with the batch processor MUST implement structured output.** This ensures:
+- Predictable column structure in output CSV files
+- Direct field-to-column mapping without parsing
+- Type safety and validation
+- Consistent error handling
+
+The batch processor reads input data from CSV files in S3, processes each row through a specified agent or tool with structured output capability, and generates an output CSV with the original data plus new columns containing the structured results.
 
 ## Architecture
 
@@ -194,41 +204,72 @@ Apply transformations to values:
 
 ### `output_mapping` Configuration
 
-Controls the structure of the output CSV:
+Maps structured output fields directly to CSV columns:
 
-#### Column Definitions
+#### Structured Output Fields (Recommended)
+For agents with structured output support, specify the fields to extract:
+```json
+{
+  "structured_output_fields": [
+    "exchange_station",
+    "download_speed",
+    "upload_speed",
+    "screenshot_url"
+  ],
+  "include_original": true,
+  "add_metadata": true
+}
+```
+
+**Column Ordering**:
+- Original input columns appear first (preserving their order)
+- Structured output fields appear next (in the order specified)
+- Metadata columns appear last (prefixed with `_`)
+
+Example CSV output:
+```csv
+address,postcode,exchange_station,download_speed,upload_speed,screenshot_url,_status,_timestamp
+"123 Main St","E1 1AA","London Exchange",70,20,"https://...",SUCCESS,2025-01-27T10:00:00Z
+```
+
+#### Legacy Column Definitions (For non-structured agents)
 ```json
 {
   "columns": [
     {
-      "name": "processing_result",
-      "source": "$.result",
-      "default": "ERROR"
+      "name": "company_name",
+      "source": "$.structured_output.company_name",
+      "default": "N/A"
+    },
+    {
+      "name": "industry",
+      "source": "$.structured_output.industry",
+      "default": "Unknown"
+    },
+    {
+      "name": "employee_count",
+      "source": "$.structured_output.employee_count",
+      "type": "number"
     },
     {
       "name": "confidence_score",
-      "source": "$.metadata.confidence",
+      "source": "$.structured_output.confidence",
       "type": "number",
       "format": "%.2f"
-    },
-    {
-      "name": "extracted_entities",
-      "source": "$.entities",
-      "type": "json_string"
     }
   ]
 }
 ```
 
+**Note**: The `source` path should reference fields within `structured_output` for agents or `content` for tools.
+
 #### Options
 - **`include_original`**: (default: true) Include all original CSV columns
 - **`add_metadata`**: (default: true) Add execution metadata columns:
-  - `_execution_id`: Unique identifier for this batch
-  - `_row_id`: Original row number
   - `_status`: SUCCESS | FAILED | TIMEOUT
   - `_error_message`: Error details if failed
-  - `_execution_time_ms`: Processing time per row
   - `_timestamp`: ISO 8601 completion time
+  - `_execution_time_ms`: Processing time per row (if available)
 
 ### `execution_config` Configuration
 
@@ -239,9 +280,56 @@ Controls execution behavior:
 - **`retry_policy`**: Retry configuration for transient failures
 - **`continue_on_error`**: (default: true) Continue processing remaining rows on failure
 
+## Structured Output Requirements
+
+### Why Structured Output is Required
+
+1. **CSV Compatibility**: CSV files require consistent column structure
+2. **Direct Mapping**: Structured fields map directly to columns without parsing
+3. **Type Safety**: Know the data type for each column
+4. **Validation**: Automatic validation against defined schemas
+5. **Simplicity**: No complex extraction logic needed
+
+### How to Make Your Agent Batch-Compatible
+
+1. **Define Output Schema**:
+```json
+{
+  "type": "object",
+  "properties": {
+    "category": {"type": "string"},
+    "priority": {"type": "string", "enum": ["low", "medium", "high"]},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+  },
+  "required": ["category", "priority"]
+}
+```
+
+2. **Implement Structured Output Tool**:
+```python
+def return_classification(category, priority, confidence=0.95):
+    return {
+        "type": "structured_output",
+        "content": {
+            "category": category,
+            "priority": priority,
+            "confidence": confidence
+        }
+    }
+```
+
+3. **Register Schema with Agent**:
+```yaml
+agent_config:
+  structured_output:
+    enabled: true
+    schema: classification_v1
+    tool_name: return_classification
+```
+
 ## Usage Examples
 
-### Example 1: Customer Support Ticket Classification
+### Example 1: Customer Support Ticket Classification (With Structured Output)
 
 Input CSV:
 ```csv
@@ -341,7 +429,100 @@ Configuration:
 }
 ```
 
-### Example 3: Data Enrichment with Multiple Sources
+### Example 3: Travel Time Calculation (Structured Output Agent)
+
+Input CSV:
+```csv
+from_address,to_address
+"Buckingham Palace, London","Tower of London, London"
+"Times Square, New York","Central Park, New York"
+```
+
+Configuration:
+```json
+{
+  "csv_s3_uri": "s3://bucket/travel-routes.csv",
+  "target": "travel-time-checker-structured",
+  "agent_config": {
+    "state_machine_arn": "arn:aws:states:region:account:stateMachine:travel-time-checker-structured-prod"
+  },
+  "input_mapping": {
+    "columns": [
+      {
+        "name": "from_address",
+        "source": "from_address"
+      },
+      {
+        "name": "to_address",
+        "source": "to_address"
+      }
+    ]
+  },
+  "output_mapping": {
+    "structured_output_fields": [
+      "driving_time",
+      "walking_time",
+      "cycling_time"
+    ],
+    "include_original": true,
+    "add_metadata": true
+  },
+  "processing_config": {
+    "max_concurrency": 3,
+    "timeout_seconds": 120
+  }
+}
+```
+
+Output CSV:
+```csv
+from_address,to_address,driving_time,walking_time,cycling_time,_status,_timestamp
+"Buckingham Palace, London","Tower of London, London",18,73,17,SUCCESS,2025-01-27T10:00:00Z
+"Times Square, New York","Central Park, New York",6,14,5,SUCCESS,2025-01-27T10:00:01Z
+```
+
+### Example 4: Broadband Availability Check (Structured Output Agent)
+
+Input CSV:
+```csv
+address,postcode
+"13 ALBION DRIVE, HACKNEY, LONDON","E8 4LX"
+"10 Downing Street, Westminster, London","SW1A 2AA"
+```
+
+Configuration:
+```json
+{
+  "csv_s3_uri": "s3://bucket/addresses.csv",
+  "target": "broadband-checker-structured",
+  "input_mapping": {
+    "address": "address",
+    "postcode": "postcode"
+  },
+  "output_mapping": {
+    "structured_output_fields": [
+      "exchange_station",
+      "download_speed",
+      "upload_speed",
+      "screenshot_url"
+    ],
+    "include_original": true,
+    "add_metadata": true
+  },
+  "execution_config": {
+    "max_concurrency": 5
+  }
+}
+```
+
+Output CSV:
+```csv
+address,postcode,exchange_station,download_speed,upload_speed,screenshot_url,_status,_timestamp
+"13 ALBION DRIVE, HACKNEY, LONDON","E8 4LX","London Exchange",67,20,"https://s3.../screenshot.html",SUCCESS,2025-01-27T10:00:00Z
+"10 Downing Street, Westminster, London","SW1A 2AA","Westminster Exchange",330,50,"https://s3.../screenshot.html",SUCCESS,2025-01-27T10:00:01Z
+```
+
+### Example 5: Data Enrichment with Multiple Sources
 
 Input CSV:
 ```csv
@@ -402,6 +583,15 @@ Configuration:
 
 ## Integration with Agents
 
+### Requirements for Batch-Compatible Agents
+
+**IMPORTANT**: To be compatible with the batch processor, agents MUST:
+
+1. **Implement a structured output tool** (e.g., `return_structured_data`, `return_output`)
+2. **Define and validate output schema** using JSON Schema
+3. **Return consistent field structure** for every row
+4. **Handle errors gracefully** with structured error responses
+
 ### For Agent Developers
 
 Your agent will receive input in the format:
@@ -418,20 +608,37 @@ Your agent will receive input in the format:
 }
 ```
 
-Your agent should return:
+Your agent MUST return structured output:
 ```json
 {
-  "result": "Success",
-  "data": {
-    // Your agent's output
+  "messages": [...],
+  "structured_output": {
+    "field1": "value1",
+    "field2": "value2",
+    // All fields defined in your output schema
   },
-  "metadata": {
-    // Optional metadata
-  }
+  "success": true
 }
 ```
 
+#### Example: Structured Output Tool Implementation
+
+```python
+def return_structured_data(data):
+    """Tool that returns validated structured output"""
+    # Validate against schema
+    validate(data, OUTPUT_SCHEMA)
+
+    return {
+        "type": "structured_output",
+        "content": data,
+        "schema_version": "1.0"
+    }
+```
+
 ### For Tool Developers
+
+**IMPORTANT**: Tools used with batch processor MUST support structured output.
 
 Tools receive the standard tool invocation format:
 ```json
@@ -444,14 +651,17 @@ Tools receive the standard tool invocation format:
 }
 ```
 
-Return format:
+Tools MUST return structured data:
 ```json
 {
-  "type": "tool_result",
+  "type": "structured_output",
   "tool_use_id": "unique_invocation_id",
   "content": {
-    // Tool output
-  }
+    "field1": "value1",
+    "field2": "value2"
+    // Structured fields matching defined schema
+  },
+  "schema": "tool_output_v1"
 }
 ```
 

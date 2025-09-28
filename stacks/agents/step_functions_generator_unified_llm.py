@@ -20,6 +20,7 @@ class UnifiedLLMStepFunctionsGenerator:
         system_prompt: str,
         default_provider: str = "anthropic",
         default_model: str = "claude-3-5-sonnet-20241022",
+        structured_output_schema: Dict[str, Any] = None,
         llm_models_table_name: str = None,
         agent_registry_table_name: str = None,
         tool_registry_table_name: str = None,
@@ -27,7 +28,7 @@ class UnifiedLLMStepFunctionsGenerator:
     ) -> str:
         """
         Generate a Step Functions definition for the unified Rust LLM service
-        
+
         Args:
             agent_name: Name of the agent
             unified_llm_arn: ARN of the unified Rust LLM Lambda function
@@ -35,11 +36,12 @@ class UnifiedLLMStepFunctionsGenerator:
             system_prompt: System prompt for the agent
             default_provider: Default LLM provider (openai, anthropic, gemini)
             default_model: Default model ID for the provider
+            structured_output_schema: Optional schema for structured output
             llm_models_table_name: Name of LLM models DynamoDB table
             agent_registry_table_name: Name of agent registry DynamoDB table
             tool_registry_table_name: Name of tool registry DynamoDB table
             approval_activity_arn: ARN of approval activity for human approval tools
-            
+
         Returns:
             JSON string of the Step Functions definition
         """
@@ -48,11 +50,11 @@ class UnifiedLLMStepFunctionsGenerator:
         # This generator creates static definitions based on tool configs
         tool_definitions = []
         tool_names = []
-        
+
         for config in tool_configs:
             tool_name = config["tool_name"]
             tool_names.append(tool_name)
-            
+
             # Create basic tool definition from config
             # Full schema will be resolved from DynamoDB at runtime
             tool_definitions.append({
@@ -60,11 +62,21 @@ class UnifiedLLMStepFunctionsGenerator:
                 "description": f"Tool: {tool_name}",
                 "input_schema": {"type": "object", "properties": {}, "required": []}
             })
+
+        # Create structured output tool if schema provided
+        structured_output_tool = None
+        if structured_output_schema:
+            structured_output_tool = {
+                "name": f"return_{agent_name}_data",
+                "description": f"Return structured {agent_name} data in the required format",
+                "input_schema": structured_output_schema
+            }
         
         # Generate tool routing choices
         tool_choices = UnifiedLLMStepFunctionsGenerator._generate_tool_choices(
-            tool_configs, 
+            tool_configs,
             agent_name=agent_name,
+            structured_output_schema=structured_output_schema,
             approval_activity_arn=approval_activity_arn
         )
         
@@ -162,7 +174,10 @@ class UnifiedLLMStepFunctionsGenerator:
                     },
                     "Next": "Call Unified LLM",
                     "Assign": {
-                        "tools": "{% $states.result %}"
+                        "tools": "{% " + (
+                            f"($toolNames := $states.result.name; $structuredToolName := '{structured_output_tool['name']}'; $structuredToolName in $toolNames ? $states.result : $append($states.result, {json.dumps(structured_output_tool)}))"
+                            if structured_output_tool else "$states.result"
+                        ) + " %}"
                     },
                     "Output": {
                         "messages": "{% $states.input.messages %}"
@@ -292,7 +307,12 @@ class UnifiedLLMStepFunctionsGenerator:
                                 "Choices": tool_choices,
                                 "Default": "Unknown Tool"
                             },
-                            **UnifiedLLMStepFunctionsGenerator._generate_tool_states(tool_configs, approval_activity_arn),
+                            **UnifiedLLMStepFunctionsGenerator._generate_tool_states(
+                                tool_configs,
+                                agent_name=agent_name,
+                                structured_output_schema=structured_output_schema,
+                                approval_activity_arn=approval_activity_arn
+                            ),
                             "Unknown Tool": {
                                 "Type": "Pass",
                                 "Output": {
@@ -312,9 +332,12 @@ class UnifiedLLMStepFunctionsGenerator:
                 "Prepare Tool Results": {
                     "Type": "Pass",
                     "Comment": "Format tool results for the next LLM call",
-                    "Next": "Call Unified LLM",
+                    "Next": "Check for Structured Output" if structured_output_schema else "Call Unified LLM",
                     "Output": {
                         "messages": "{% $append($states.input.messages, [ { \"role\": \"user\", \"content\": [$filter($tool_results, function($v) { $v != {} })] } ]) %}"
+                    } if not structured_output_schema else {
+                        "messages": "{% $append($states.input.messages, [ { \"role\": \"user\", \"content\": [$filter($tool_results, function($v) { $v != {} })] } ]) %}",
+                        "structured_output": "{% ($filtered := $tool_results[$.type = 'structured_output']; $count($filtered) > 0 ? $filtered[0] : null) %}"
                     }
                 },
                 "Success": {
@@ -323,11 +346,35 @@ class UnifiedLLMStepFunctionsGenerator:
                 }
             }
         }
+
+        # Add structured output check state if schema provided
+        if structured_output_schema:
+            definition["States"]["Check for Structured Output"] = {
+                "Type": "Choice",
+                "Choices": [
+                    {
+                        "Condition": "{% $states.input.structured_output != null %}",
+                        "Next": "Success with Structured Output"
+                    }
+                ],
+                "Default": "Call Unified LLM"
+            }
+
+            definition["States"]["Success with Structured Output"] = {
+                "Type": "Pass",
+                "Output": {
+                    "messages": "{% $states.input.messages %}",
+                    "structured_output": "{% $states.input.structured_output.content %}",
+                    "success": "{% true %}"
+                },
+                "End": True
+            }
         
         return json.dumps(definition, indent=2)
     
     @staticmethod
-    def _generate_tool_choices(tool_configs: List[Dict[str, Any]], agent_name: str = None, 
+    def _generate_tool_choices(tool_configs: List[Dict[str, Any]], agent_name: str = None,
+                              structured_output_schema: Dict[str, Any] = None,
                               approval_activity_arn: str = None) -> List[Dict[str, Any]]:
         """Generate the Choice conditions for tool routing"""
         choices = []
@@ -337,10 +384,21 @@ class UnifiedLLMStepFunctionsGenerator:
                 "Condition": "{% $states.input.name = '" + tool_name + "' %}",
                 "Next": f"Execute {tool_name}"
             })
+
+        # Add structured output tool routing if schema provided
+        if structured_output_schema:
+            structured_output_tool_name = f"return_{agent_name}_data"
+            choices.append({
+                "Condition": "{% $states.input.name = '" + structured_output_tool_name + "' %}",
+                "Next": "Process Structured Output"
+            })
+
         return choices
     
     @staticmethod
-    def _generate_tool_states(tool_configs: List[Dict[str, Any]], 
+    def _generate_tool_states(tool_configs: List[Dict[str, Any]],
+                             agent_name: str = None,
+                             structured_output_schema: Dict[str, Any] = None,
                              approval_activity_arn: str = None) -> Dict[str, Any]:
         """Generate the tool execution states"""
         states = {}
@@ -523,21 +581,64 @@ class UnifiedLLMStepFunctionsGenerator:
                         "Output": "{% $states.result.Payload %}"
                     }
             else:
-                # Direct tool execution without approval
-                states[f"Execute {tool_name}"] = {
-                    "Type": "Task",
-                    "Resource": "arn:aws:states:::lambda:invoke",
-                    "Comment": f"Execute {tool_name}",
-                    "Arguments": {
-                        "FunctionName": lambda_arn,
-                        "Payload": {
-                            "name": "{% $states.input.name %}",
-                            "id": "{% $states.input.id %}",
-                            "input": "{% $states.input.input %}"
-                        }
-                    },
-                    "End": True,
-                    "Output": "{% $states.result.Payload %}"
+                # Check if tool requires polling interval
+                polling_interval = config.get('polling_interval')
+                if polling_interval:
+                    # Add wait state before tool execution for polling
+                    states[f"Execute {tool_name}"] = {
+                        "Type": "Wait",
+                        "Comment": f"Wait {polling_interval} seconds before {tool_name}",
+                        "Seconds": polling_interval,
+                        "Next": f"Invoke {tool_name} After Wait"
+                    }
+                    states[f"Invoke {tool_name} After Wait"] = {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "Comment": f"Execute {tool_name} after polling interval",
+                        "Arguments": {
+                            "FunctionName": lambda_arn,
+                            "Payload": {
+                                "name": "{% $states.input.name %}",
+                                "id": "{% $states.input.id %}",
+                                "input": "{% $states.input.input %}",
+                                "polling_metadata": {
+                                    "interval": polling_interval,
+                                    "max_attempts": config.get('max_polling_attempts', 20)
+                                }
+                            }
+                        },
+                        "End": True,
+                        "Output": "{% $states.result.Payload %}"
+                    }
+                else:
+                    # Direct tool execution without approval or wait
+                    states[f"Execute {tool_name}"] = {
+                        "Type": "Task",
+                        "Resource": "arn:aws:states:::lambda:invoke",
+                        "Comment": f"Execute {tool_name}",
+                        "Arguments": {
+                            "FunctionName": lambda_arn,
+                            "Payload": {
+                                "name": "{% $states.input.name %}",
+                                "id": "{% $states.input.id %}",
+                                "input": "{% $states.input.input %}"
+                            }
+                        },
+                        "End": True,
+                        "Output": "{% $states.result.Payload %}"
+                    }
+
+        # Add structured output processing state if schema provided
+        if structured_output_schema:
+            states["Process Structured Output"] = {
+                "Type": "Pass",
+                "End": True,
+                "Output": {
+                    "type": "structured_output",
+                    "tool_use_id": "{% $states.input.id %}",
+                    "name": f"return_{agent_name}_data",
+                    "content": "{% $states.input.input %}"
                 }
-        
+            }
+
         return states
