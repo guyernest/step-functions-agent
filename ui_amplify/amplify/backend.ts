@@ -102,40 +102,52 @@ const externalDataSourcesStack = backend.createStack('ExternalDataSources');
 // This must match the ENVIRONMENT variable used in Core CDK app.py
 const userName = process.env.USER || 'user';
 
-// Determine environment based on file or environment variable
+// Determine environment based on (in order of precedence):
+// 1. Environment variable (for Amplify branch deployments)
+// 2. File-based detection (for local development)
+// 3. Default sandbox mode
 let envSuffix: string;
-try {
-  // Check for environment file (written by Makefile commands)
-  // Try multiple possible locations for the .amplify-env file
-  const possiblePaths = [
-    '.amplify-env',                    // Current working directory
-    '../.amplify-env',                 // One level up
-    '../../.amplify-env',              // Two levels up
-    path.join(process.cwd(), '.amplify-env'),  // Absolute from cwd
-  ];
 
-  let envFile: string | null = null;
-  for (const filePath of possiblePaths) {
-    try {
-      envFile = fs.readFileSync(filePath, 'utf8').trim();
-      console.log(`    Found .amplify-env at: ${filePath}`);
-      break;
-    } catch {
-      // Try next path
+// First, check for environment variable from Amplify Console
+if (process.env.TABLE_ENV_SUFFIX) {
+  envSuffix = process.env.TABLE_ENV_SUFFIX;
+  console.log(`=== Using environment from TABLE_ENV_SUFFIX variable: ${envSuffix} ===`);
+  console.log(`    (Set via Amplify Console environment variables)`);
+} else {
+  // Fall back to file-based detection for local development
+  try {
+    // Check for environment file (written by Makefile commands)
+    // Try multiple possible locations for the .amplify-env file
+    const possiblePaths = [
+      '.amplify-env',                    // Current working directory
+      '../.amplify-env',                 // One level up
+      '../../.amplify-env',              // Two levels up
+      path.join(process.cwd(), '.amplify-env'),  // Absolute from cwd
+    ];
+
+    let envFile: string | null = null;
+    for (const filePath of possiblePaths) {
+      try {
+        envFile = fs.readFileSync(filePath, 'utf8').trim();
+        console.log(`    Found .amplify-env at: ${filePath}`);
+        break;
+      } catch {
+        // Try next path
+      }
     }
-  }
 
-  if (envFile) {
-    envSuffix = envFile;
-    console.log(`=== Using environment from .amplify-env file: ${envSuffix} ===`);
-  } else {
-    throw new Error('No .amplify-env file found');
+    if (envFile) {
+      envSuffix = envFile;
+      console.log(`=== Using environment from .amplify-env file: ${envSuffix} ===`);
+    } else {
+      throw new Error('No .amplify-env file found');
+    }
+  } catch (err) {
+    // Fallback to sandbox mode if no file exists
+    envSuffix = `sandbox-${userName}`;
+    console.log(`=== Using default sandbox environment: ${envSuffix} ===`);
+    console.log(`    (No TABLE_ENV_SUFFIX variable or .amplify-env file found)`);
   }
-} catch (err) {
-  // Fallback to sandbox mode if no file exists
-  envSuffix = `sandbox-${userName}`;
-  console.log(`=== Using default sandbox environment: ${envSuffix} ===`);
-  console.log(`    (Could not read .amplify-env in any location)`);
 }
 
 // Resource discovery strategy:

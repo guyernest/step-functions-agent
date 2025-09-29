@@ -1,5 +1,7 @@
 # Deployment Guide
 
+> **Note**: This guide covers local sandbox deployment. For production branch deployments using AWS Amplify Hosting, see [REMOTE_DEPLOYMENT.md](./REMOTE_DEPLOYMENT.md).
+
 ## Quick Start
 
 ### For Production

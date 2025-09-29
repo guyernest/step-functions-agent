@@ -1,0 +1,33 @@
+version: 1
+applications:
+  - appRoot: ui_amplify
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+        build:
+          commands:
+            # Log the environment for debugging
+            - echo "Building for environment TABLE_ENV_SUFFIX=$TABLE_ENV_SUFFIX"
+            # Generate Amplify outputs
+            - npx ampx generate outputs --branch $AWS_BRANCH --app-id $AWS_APP_ID
+            # Build the React application
+            - npm run build
+      artifacts:
+        baseDirectory: dist
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+          - .npm/**/*
+
+    backend:
+      phases:
+        build:
+          commands:
+            # Log the environment for debugging
+            - echo "Deploying backend with TABLE_ENV_SUFFIX=$TABLE_ENV_SUFFIX"
+            # Deploy the backend
+            - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
