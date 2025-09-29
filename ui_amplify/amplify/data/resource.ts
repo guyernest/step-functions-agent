@@ -357,7 +357,11 @@ const schema = a.schema({
     .arguments({
       stateMachineArn: a.string(),
       status: a.string(),
-      maxResults: a.integer()
+      maxResults: a.integer(),
+      nextToken: a.string(),
+      agentName: a.string(),
+      startDateFrom: a.string(),
+      startDateTo: a.string()
     })
     .returns(a.json())
     .handler(a.handler.function(listStepFunctionExecutions))

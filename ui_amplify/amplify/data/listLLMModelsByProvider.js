@@ -1,4 +1,6 @@
 export function request(ctx) {
+  console.log('listLLMModelsByProvider request - provider:', ctx.arguments.provider);
+
   return {
     operation: 'Query',
     index: 'provider-index',
@@ -17,10 +19,14 @@ export function request(ctx) {
 }
 
 export function response(ctx) {
+  console.log('listLLMModelsByProvider response - result:', JSON.stringify(ctx.result));
+
   if (!ctx.result || !ctx.result.items) {
+    console.log('No items found in response');
     return [];
   }
-  
+
+  console.log('Found', ctx.result.items.length, 'items');
   return ctx.result.items
     .map(function(item) {
       return {

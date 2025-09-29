@@ -32,7 +32,7 @@ PYTHON_TOOLS := $(TOOLS_DIR)/code-interpreter $(TOOLS_DIR)/db-interface $(TOOLS_
 TS_TOOLS := $(TOOLS_DIR)/google-maps
 
 # Rust tools directories
-RUST_TOOLS := $(TOOLS_DIR)/rust-clustering
+RUST_TOOLS := $(TOOLS_DIR)/rust-clustering $(TOOLS_DIR)/local-agent
 RUST_LLM := $(CALL_LLM_RUST_DIR)
 
 # Java tools directories
@@ -374,7 +374,12 @@ build-rust: build-llm-rust
 	@for dir in $(RUST_TOOLS); do \
 		if [ -f $$dir/Cargo.toml ]; then \
 			echo "  🔨 Building $$dir..."; \
-			cd $$dir && $(CARGO) build --release && cd -; \
+			if [ "$$dir" = "$(TOOLS_DIR)/local-agent" ]; then \
+				echo "    Using special build for local-agent (Lambda deployment)"; \
+				cd $$dir && $(MAKE) all && cd -; \
+			else \
+				cd $$dir && $(CARGO) build --release && cd -; \
+			fi \
 		fi \
 	done
 

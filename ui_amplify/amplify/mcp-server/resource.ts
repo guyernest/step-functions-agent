@@ -13,26 +13,26 @@ import { SimpleApiKeyMcpConstruct } from "./constructs/SimpleApiKeyMcpConstruct"
 import { McpConstructProps } from "./constructs/common-interfaces";
 
 // Configuration constants
-const ENVIRONMENT = "prod"; // Match the environment used by other stacks
+// Get environment from backend context (passed from backend.ts)
 const APPLICATION_NAME = "step-functions-agents";
-const PROJECT_NAME = `${APPLICATION_NAME}-${ENVIRONMENT}`;
-
-// Common tags for all resources
-const COMMON_TAGS = {
-  Environment: ENVIRONMENT,
-  Application: APPLICATION_NAME,
-  Project: PROJECT_NAME,
-  ManagedBy: "Amplify-Gen2",
-  Purpose: "MCP-Server-with-API-Key-Authentication",
-  Template: "step-functions-agents-mcp",
-};
 
 /**
  * Creates MCP server resources with simple API key authentication
  * This function is called from backend.ts after auth and data resources are created
  */
-export function createMcpServerResources(backend: Backend<{ auth: any; data: any }>) {
+export function createMcpServerResources(backend: Backend<{ auth: any; data: any }>, envSuffix: string = 'sandbox') {
+  const PROJECT_NAME = `${APPLICATION_NAME}-${envSuffix}`;
   const mcpServerStack = backend.createStack(`${PROJECT_NAME}-mcp-stack`);
+
+  // Common tags for all resources
+  const COMMON_TAGS = {
+    Environment: envSuffix,
+    Application: APPLICATION_NAME,
+    Project: PROJECT_NAME,
+    ManagedBy: "Amplify-Gen2",
+    Purpose: "MCP-Server-with-API-Key-Authentication",
+    Template: "step-functions-agents-mcp",
+  };
 
   // Apply common tags to the entire stack
   Object.entries(COMMON_TAGS).forEach(([key, value]) => {
@@ -173,7 +173,7 @@ export function createMcpServerResources(backend: Backend<{ auth: any; data: any
   // Prepare construct props
   const constructProps: McpConstructProps = {
     projectName: PROJECT_NAME,
-    environment: ENVIRONMENT,
+    environment: envSuffix,
     applicationName: APPLICATION_NAME,
     userPool,
     userPoolClient,
@@ -201,7 +201,7 @@ export function createMcpServerResources(backend: Backend<{ auth: any; data: any
       healthCheckEndpoint: `${apiUrl}/health`,
 
       // Resource information
-      environment: ENVIRONMENT,
+      environment: envSuffix,
       applicationName: APPLICATION_NAME,
       projectName: PROJECT_NAME,
 

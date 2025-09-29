@@ -1,3 +1,20 @@
+/**
+ * Amplify Backend Configuration
+ *
+ * Architecture:
+ * - This Amplify app provides the management UI for the Step Functions Agent Framework
+ * - Core infrastructure (agents, tools, registries) is managed by the main CDK application
+ * - This app references those resources using predictable naming conventions
+ *
+ * Resource Discovery Strategy:
+ * 1. Production/Dev: References existing tables from Core CDK by name
+ * 2. Sandbox: Can create local tables for isolated development
+ *
+ * Environment Configuration:
+ * - Set environment via .amplify-env file (created by Makefile)
+ * - Control table strategy via USE_EXISTING_TABLES env var
+ * - Default: prod/dev use existing tables, sandbox creates local
+ */
 import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
@@ -20,7 +37,9 @@ import { executeHealthTest } from './backend/function/executeHealthTest/resource
 // import { listAPIKeys } from './backend/function/listAPIKeys/resource';
 import { createMcpServerResources } from './mcp-server/resource';
 import { PolicyStatement, Effect, Policy } from 'aws-cdk-lib/aws-iam';
-import { aws_dynamodb, RemovalPolicy } from 'aws-cdk-lib';
+import { aws_dynamodb, RemovalPolicy, Fn } from 'aws-cdk-lib';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * @see https://docs.amplify.aws/react/build-a-backend/ to add storage, functions, and more
@@ -79,70 +98,199 @@ backend.auth.resources.authenticatedUserIamRole.attachInlinePolicy(stepFunctions
 // Add external DynamoDB tables as data sources
 const externalDataSourcesStack = backend.createStack('ExternalDataSources');
 
-// Define table names - always use prod for now
-const agentRegistryTableName = 'AgentRegistry-prod';
-const toolRegistryTableName = 'ToolRegistry-prod';
-const mcpRegistryTableName = 'MCPServerRegistry-prod';
-const testEventsTableName = 'TestEvents-prod';
-const testResultsTableName = 'TestResults-prod';
+// Determine environment suffix to match Core CDK naming
+// This must match the ENVIRONMENT variable used in Core CDK app.py
+const userName = process.env.USER || 'user';
 
-// Reference the existing external DynamoDB tables
-const agentRegistryTable = aws_dynamodb.Table.fromTableName(
-  externalDataSourcesStack,
-  'AgentRegistryTable',
-  agentRegistryTableName
-);
+// Determine environment based on file or environment variable
+let envSuffix: string;
+try {
+  // Check for environment file (written by Makefile commands)
+  // Try multiple possible locations for the .amplify-env file
+  const possiblePaths = [
+    '.amplify-env',                    // Current working directory
+    '../.amplify-env',                 // One level up
+    '../../.amplify-env',              // Two levels up
+    path.join(process.cwd(), '.amplify-env'),  // Absolute from cwd
+  ];
 
-const toolRegistryTable = aws_dynamodb.Table.fromTableName(
-  externalDataSourcesStack,
-  'ToolRegistryTable',
-  toolRegistryTableName
-);
+  let envFile: string | null = null;
+  for (const filePath of possiblePaths) {
+    try {
+      envFile = fs.readFileSync(filePath, 'utf8').trim();
+      console.log(`    Found .amplify-env at: ${filePath}`);
+      break;
+    } catch {
+      // Try next path
+    }
+  }
 
-// Reference the MCP Registry table
-const mcpRegistryTable = aws_dynamodb.Table.fromTableName(
-  externalDataSourcesStack,
-  'MCPRegistryTable',
-  mcpRegistryTableName
-);
+  if (envFile) {
+    envSuffix = envFile;
+    console.log(`=== Using environment from .amplify-env file: ${envSuffix} ===`);
+  } else {
+    throw new Error('No .amplify-env file found');
+  }
+} catch (err) {
+  // Fallback to sandbox mode if no file exists
+  envSuffix = `sandbox-${userName}`;
+  console.log(`=== Using default sandbox environment: ${envSuffix} ===`);
+  console.log(`    (Could not read .amplify-env in any location)`);
+}
 
-// Reference the ToolSecrets table
-const toolSecretsTable = aws_dynamodb.Table.fromTableName(
-  externalDataSourcesStack,
-  'ToolSecretsTable',
-  'ToolSecrets-prod'
-);
+// Resource discovery strategy:
+// 1. Use predictable naming conventions that match Core CDK
+// 2. Reference tables by name (they must exist in the account)
+// 3. For true sandbox isolation, create separate sandbox tables
 
-// Reference the TestEvents table
-const testEventsTable = aws_dynamodb.Table.fromTableName(
-  externalDataSourcesStack,
-  'TestEventsTable',
-  testEventsTableName
-);
+// Determine if we should import from Core CDK or create local tables
+const importFromCoreCDK = envSuffix === 'prod' || envSuffix === 'dev' || process.env.USE_EXISTING_TABLES === 'true';
 
-// Reference the TestResults table
-const testResultsTable = aws_dynamodb.Table.fromTableName(
-  externalDataSourcesStack,
-  'TestResultsTable',
-  testResultsTableName
-);
+// For logging
+console.log(`=== Environment Configuration ===`);
+console.log(`    Environment suffix: ${envSuffix}`);
+console.log(`    Strategy: ${importFromCoreCDK ? 'Import from Core CDK exports' : 'Create local sandbox tables'}`);
 
-// Create the LLMModels table as part of this stack
-const llmModelsTable = new aws_dynamodb.Table(externalDataSourcesStack, 'LLMModelsTable', {
-  tableName: 'LLMModels-prod',
-  partitionKey: { name: 'pk', type: aws_dynamodb.AttributeType.STRING },
-  billingMode: aws_dynamodb.BillingMode.PAY_PER_REQUEST,
-  pointInTimeRecovery: true,
-  removalPolicy: RemovalPolicy.RETAIN
-});
+// When importing from Core CDK, we'll use CloudFormation exports
+// When creating local, we'll use predictable names with sandbox suffix
+const tableEnvSuffix = importFromCoreCDK ? envSuffix : `sandbox-${userName}`;
 
-// Add Global Secondary Index for provider queries
-llmModelsTable.addGlobalSecondaryIndex({
-  indexName: 'provider-index',
-  partitionKey: { name: 'provider', type: aws_dynamodb.AttributeType.STRING },
-  sortKey: { name: 'is_active', type: aws_dynamodb.AttributeType.STRING },
-  projectionType: aws_dynamodb.ProjectionType.ALL
-});
+// Import or create DynamoDB tables
+let agentRegistryTable: aws_dynamodb.ITable;
+let toolRegistryTable: aws_dynamodb.ITable;
+let mcpRegistryTable: aws_dynamodb.ITable;
+let toolSecretsTable: aws_dynamodb.ITable;
+let testEventsTable: aws_dynamodb.ITable;
+let testResultsTable: aws_dynamodb.ITable;
+
+if (importFromCoreCDK) {
+  // Import tables from Core CDK using CloudFormation exports
+  console.log(`=== Importing tables from Core CDK CloudFormation exports ===`);
+
+  // Import tables using the ARN exports from Core CDK
+  agentRegistryTable = aws_dynamodb.Table.fromTableArn(
+    externalDataSourcesStack,
+    'AgentRegistryTable',
+    Fn.importValue(`SharedTableArnAgentRegistry-${tableEnvSuffix}`)
+  );
+
+  toolRegistryTable = aws_dynamodb.Table.fromTableArn(
+    externalDataSourcesStack,
+    'ToolRegistryTable',
+    Fn.importValue(`SharedTableArnToolRegistry-${tableEnvSuffix}`)
+  );
+
+  mcpRegistryTable = aws_dynamodb.Table.fromTableArn(
+    externalDataSourcesStack,
+    'MCPRegistryTable',
+    Fn.importValue(`MCPRegistryTableArn-${tableEnvSuffix}`)
+  );
+
+  // For tables without ARN exports, use the name exports
+  toolSecretsTable = aws_dynamodb.Table.fromTableName(
+    externalDataSourcesStack,
+    'ToolSecretsTable',
+    Fn.importValue(`ToolSecretsTableName-${tableEnvSuffix}`)
+  );
+
+  testEventsTable = aws_dynamodb.Table.fromTableName(
+    externalDataSourcesStack,
+    'TestEventsTable',
+    Fn.importValue(`SharedTableTestEvents-${tableEnvSuffix}`)
+  );
+
+  testResultsTable = aws_dynamodb.Table.fromTableName(
+    externalDataSourcesStack,
+    'TestResultsTable',
+    Fn.importValue(`SharedTableTestResults-${tableEnvSuffix}`)
+  );
+} else {
+  // For sandbox/dev environments, create lightweight local tables
+  // This allows the UI to work independently during development
+  console.log(`=== Creating local sandbox tables with suffix: ${tableEnvSuffix} ===`);
+
+  agentRegistryTable = new aws_dynamodb.Table(externalDataSourcesStack, 'AgentRegistryTable', {
+    tableName: `AgentRegistry-${tableEnvSuffix}`,
+    partitionKey: { name: 'id', type: aws_dynamodb.AttributeType.STRING },
+    billingMode: aws_dynamodb.BillingMode.PAY_PER_REQUEST,
+    removalPolicy: RemovalPolicy.DESTROY
+  });
+
+  toolRegistryTable = new aws_dynamodb.Table(externalDataSourcesStack, 'ToolRegistryTable', {
+    tableName: `ToolRegistry-${tableEnvSuffix}`,
+    partitionKey: { name: 'id', type: aws_dynamodb.AttributeType.STRING },
+    billingMode: aws_dynamodb.BillingMode.PAY_PER_REQUEST,
+    removalPolicy: RemovalPolicy.DESTROY
+  });
+
+  mcpRegistryTable = new aws_dynamodb.Table(externalDataSourcesStack, 'MCPRegistryTable', {
+    tableName: `MCPServerRegistry-${tableEnvSuffix}`,
+    partitionKey: { name: 'id', type: aws_dynamodb.AttributeType.STRING },
+    billingMode: aws_dynamodb.BillingMode.PAY_PER_REQUEST,
+    removalPolicy: RemovalPolicy.DESTROY
+  });
+
+  toolSecretsTable = new aws_dynamodb.Table(externalDataSourcesStack, 'ToolSecretsTable', {
+    tableName: `ToolSecrets-${tableEnvSuffix}`,
+    partitionKey: { name: 'id', type: aws_dynamodb.AttributeType.STRING },
+    billingMode: aws_dynamodb.BillingMode.PAY_PER_REQUEST,
+    removalPolicy: RemovalPolicy.DESTROY
+  });
+
+  testEventsTable = new aws_dynamodb.Table(externalDataSourcesStack, 'TestEventsTable', {
+    tableName: `TestEvents-${tableEnvSuffix}`,
+    partitionKey: { name: 'id', type: aws_dynamodb.AttributeType.STRING },
+    billingMode: aws_dynamodb.BillingMode.PAY_PER_REQUEST,
+    removalPolicy: RemovalPolicy.DESTROY
+  });
+
+  testResultsTable = new aws_dynamodb.Table(externalDataSourcesStack, 'TestResultsTable', {
+    tableName: `TestResults-${tableEnvSuffix}`,
+    partitionKey: { name: 'id', type: aws_dynamodb.AttributeType.STRING },
+    billingMode: aws_dynamodb.BillingMode.PAY_PER_REQUEST,
+    removalPolicy: RemovalPolicy.DESTROY
+  });
+}
+
+// Handle LLMModels table
+// For prod/dev, import the existing table from Core CDK
+// For sandbox, create a local table
+let llmModelsTable: aws_dynamodb.ITable;
+
+if (importFromCoreCDK) {
+  // Import the existing LLMModels table from Core CDK
+  // Core CDK creates this as LLMModels-{env}
+  const llmModelsTableName = `LLMModels-${tableEnvSuffix}`;
+  console.log(`    Importing LLMModels table: ${llmModelsTableName}`);
+
+  llmModelsTable = aws_dynamodb.Table.fromTableAttributes(
+    externalDataSourcesStack,
+    'LLMModelsTable',
+    {
+      tableName: llmModelsTableName,
+      globalIndexes: ['provider-index'] // Include the GSI name so CDK knows about it
+    }
+  );
+} else {
+  // Create local LLMModels table for sandbox
+  const llmModelsTableName = `LLMModels-${tableEnvSuffix}`;
+
+  llmModelsTable = new aws_dynamodb.Table(externalDataSourcesStack, 'LLMModelsTable', {
+    tableName: llmModelsTableName,
+    partitionKey: { name: 'pk', type: aws_dynamodb.AttributeType.STRING },
+    billingMode: aws_dynamodb.BillingMode.PAY_PER_REQUEST,
+    pointInTimeRecovery: true,
+    removalPolicy: RemovalPolicy.DESTROY
+  });
+
+  // Add Global Secondary Index for provider queries
+  (llmModelsTable as aws_dynamodb.Table).addGlobalSecondaryIndex({
+    indexName: 'provider-index',
+    partitionKey: { name: 'provider', type: aws_dynamodb.AttributeType.STRING },
+    sortKey: { name: 'is_active', type: aws_dynamodb.AttributeType.STRING },
+    projectionType: aws_dynamodb.ProjectionType.ALL
+  });
+}
 
 // Add the tables as data sources to the GraphQL API
 backend.data.addDynamoDbDataSource(
@@ -179,6 +327,7 @@ backend.data.addDynamoDbDataSource(
   'TestResultsDataSource',
   testResultsTable
 );
+
 
 // Grant Step Functions permissions to the startAgentExecution Lambda
 const stepFunctionsExecutionPolicy = new PolicyStatement({
@@ -280,9 +429,9 @@ const secretsManagerPolicy = new PolicyStatement({
     'secretsmanager:CreateSecret',
     'secretsmanager:UpdateSecret'
   ],
-  // The secret is at /ai-agent/llm-secrets/prod (not a prefix)
+  // The secret path includes environment suffix
   // AWS adds a random suffix to the ARN, so we use wildcard
-  resources: ['arn:aws:secretsmanager:*:*:secret:/ai-agent/llm-secrets/prod*']
+  resources: [`arn:aws:secretsmanager:*:*:secret:/ai-agent/llm-secrets/${envSuffix}*`]
 });
 
 backend.updateProviderAPIKey.resources.lambda.addToRolePolicy(secretsManagerPolicy);
@@ -293,7 +442,7 @@ const getToolSecretValuesPolicy = new PolicyStatement({
   actions: [
     'secretsmanager:GetSecretValue'
   ],
-  resources: ['arn:aws:secretsmanager:*:*:secret:/ai-agent/tool-secrets/prod*']
+  resources: [`arn:aws:secretsmanager:*:*:secret:/ai-agent/tool-secrets/${envSuffix}*`]
 });
 
 backend.getToolSecretValues.resources.lambda.addToRolePolicy(getToolSecretValuesPolicy);
@@ -305,7 +454,7 @@ const updateToolSecretsPolicy = new PolicyStatement({
     'secretsmanager:GetSecretValue',
     'secretsmanager:UpdateSecret'
   ],
-  resources: ['arn:aws:secretsmanager:*:*:secret:/ai-agent/tool-secrets/prod*']
+  resources: [`arn:aws:secretsmanager:*:*:secret:/ai-agent/tool-secrets/${envSuffix}*`]
 });
 
 backend.updateToolSecrets.resources.lambda.addToRolePolicy(updateToolSecretsPolicy);
@@ -329,8 +478,8 @@ mcpRegistryTable.grantWriteData(backend.registerMCPServer.resources.lambda);
 mcpRegistryTable.grantReadData(backend.registerMCPServer.resources.lambda);
 
 // Add environment variables using the backend method
-backend.registerMCPServer.addEnvironment('MCP_REGISTRY_TABLE_NAME', mcpRegistryTableName);
-backend.registerMCPServer.addEnvironment('ENV_NAME', 'prod');
+backend.registerMCPServer.addEnvironment('MCP_REGISTRY_TABLE_NAME', mcpRegistryTable.tableName);
+backend.registerMCPServer.addEnvironment('ENV_NAME', envSuffix);
 
 // Configure executeHealthTest Lambda function
 // Grant permissions to test-related tables
@@ -372,7 +521,9 @@ const apiKeyTablePolicy = new PolicyStatement({
 // backend.listAPIKeys.resources.lambda.addToRolePolicy(apiKeyTablePolicy);
 
 // Create MCP server resources for n8n integration
-const mcpResources = createMcpServerResources(backend);
+// In sandbox mode, use a unique suffix to avoid conflicts with production MCP resources
+const mcpEnvSuffix = process.env.AWS_BRANCH === 'main' ? envSuffix : `sandbox-${userName}`;
+const mcpResources = createMcpServerResources(backend, mcpEnvSuffix);
 
 // Add environment variables for API key management functions to access the table
 // const apiKeyTableName = `step-functions-agents-prod-api-keys`; // Use prod to match other stacks

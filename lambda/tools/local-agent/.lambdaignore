@@ -1,0 +1,43 @@
+# Ignore Tauri desktop app files
+src-tauri/
+dist/
+node_modules/
+rust-executor-standalone/
+
+# Ignore development files
+*.md
+*.lock
+package*.json
+tsconfig*.json
+postcss.config.js
+tailwind.config.js
+vite.config.ts
+index.html
+pyproject.toml
+daemon_config.json
+iam-policy.json
+
+# Ignore examples and tests
+examples/
+example_scripts/
+claude-instance/
+
+# Ignore build artifacts except deployment
+target/
+!deployment/
+
+# Ignore source files (we only need the binary)
+src/
+*.py
+*.ts
+*.js
+
+# Ignore IDE and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Keep only the bootstrap binary in deployment/
+!deployment/bootstrap

@@ -121,6 +121,26 @@ class LocalAutomationToolStack(Stack):
         )
         
         # Create Rust Lambda function for local automation
+        # Deploy only the pre-built bootstrap binary from the deployment directory
+        # The bootstrap must be built beforehand using: cargo lambda build --release --arm64
+        from pathlib import Path
+
+        deployment_dir = Path("lambda/tools/local-agent/deployment")
+
+        # Verify the bootstrap binary exists
+        if not (deployment_dir / "bootstrap").exists():
+            raise RuntimeError(
+                f"Bootstrap binary not found at {deployment_dir}/bootstrap\n"
+                "Please build it first by running:\n"
+                "  cd lambda/tools/local-agent\n"
+                "  cargo lambda build --release --arm64\n"
+                "  mkdir -p deployment\n"
+                "  cp target/lambda/local_sfn_agent/bootstrap deployment/"
+            )
+
+        # Use only the deployment directory with the bootstrap binary
+        code_asset = _lambda.Code.from_asset(str(deployment_dir))
+
         self.local_automation_lambda = _lambda.Function(
             self,
             "LocalAutomationLambda",
@@ -128,7 +148,7 @@ class LocalAutomationToolStack(Stack):
             description="Secure local command execution and RPA through Rust-based agent with activity-based security",
             runtime=_lambda.Runtime.PROVIDED_AL2023,
             architecture=_lambda.Architecture.ARM_64,
-            code=_lambda.Code.from_asset("lambda/tools/local-agent/"),
+            code=code_asset,
             handler="main",
             timeout=Duration.minutes(5),  # Local commands may take time
             memory_size=512,

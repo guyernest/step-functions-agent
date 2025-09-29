@@ -12,7 +12,9 @@ help:
 	@echo ""
 	@echo "Available commands:"
 	@echo "  make install       - Install all dependencies"
-	@echo "  make sandbox       - Start Amplify sandbox environment"
+	@echo "  make sandbox       - Start Amplify sandbox (with sandbox-USER tables)"
+	@echo "  make sandbox-dev   - Start Amplify sandbox (with dev tables)"
+	@echo "  make sandbox-prod  - Start Amplify sandbox (WARNING: uses PROD tables)"
 	@echo "  make build         - Build everything (MCP server + frontend)"
 	@echo "  make build-mcp     - Build MCP server (Rust Lambda function)"
 	@echo "  make build-frontend - Build frontend application"
@@ -36,9 +38,24 @@ install:
 	@cd $(MCP_SERVER_DIR) && make install-deps
 	@echo "Dependencies installed!"
 
-# Start Amplify sandbox
+# Start Amplify sandbox with sandbox environment
 sandbox:
-	@echo "Starting Amplify sandbox..."
+	@echo "Starting Amplify sandbox with sandbox environment..."
+	@echo "sandbox-$(USER)" > .amplify-env
+	npx ampx sandbox
+
+# Start Amplify sandbox for dev environment
+sandbox-dev:
+	@echo "Starting Amplify sandbox with dev environment..."
+	@echo "dev" > .amplify-env
+	npx ampx sandbox
+
+# Start Amplify sandbox for prod (WARNING: uses production tables)
+sandbox-prod:
+	@echo "WARNING: Starting sandbox with PRODUCTION tables!"
+	@echo "Press Ctrl+C to cancel, or wait 5 seconds to continue..."
+	@sleep 5
+	@echo "prod" > .amplify-env
 	npx ampx sandbox
 
 # Build everything
