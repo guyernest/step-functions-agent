@@ -1,0 +1,1 @@
+/Users/guy/projects/step-functions-agent/lambda/tools/local-agent/target/aarch64-unknown-linux-gnu/release/local_sfn_agent: /Users/guy/projects/step-functions-agent/lambda/tools/local-agent/src/lib.rs /Users/guy/projects/step-functions-agent/lambda/tools/local-agent/src/main.rs

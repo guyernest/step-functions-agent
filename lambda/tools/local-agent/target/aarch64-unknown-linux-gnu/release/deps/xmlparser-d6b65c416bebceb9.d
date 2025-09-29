@@ -1,0 +1,11 @@
+/Users/guy/projects/step-functions-agent/lambda/tools/local-agent/target/aarch64-unknown-linux-gnu/release/deps/xmlparser-d6b65c416bebceb9.d: /Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/lib.rs /Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/error.rs /Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/stream.rs /Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/strspan.rs /Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/xmlchar.rs
+
+/Users/guy/projects/step-functions-agent/lambda/tools/local-agent/target/aarch64-unknown-linux-gnu/release/deps/libxmlparser-d6b65c416bebceb9.rlib: /Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/lib.rs /Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/error.rs /Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/stream.rs /Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/strspan.rs /Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/xmlchar.rs
+
+/Users/guy/projects/step-functions-agent/lambda/tools/local-agent/target/aarch64-unknown-linux-gnu/release/deps/libxmlparser-d6b65c416bebceb9.rmeta: /Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/lib.rs /Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/error.rs /Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/stream.rs /Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/strspan.rs /Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/xmlchar.rs
+
+/Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/lib.rs:
+/Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/error.rs:
+/Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/stream.rs:
+/Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/strspan.rs:
+/Users/guy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xmlparser-0.13.6/src/xmlchar.rs:
