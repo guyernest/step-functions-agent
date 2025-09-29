@@ -7,6 +7,9 @@ applications:
             # Install Rust and cargo-lambda for building the MCP server
             - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
             - source $HOME/.cargo/env
+            # Install Zig for cross-compilation
+            - pip3 install ziglang
+            # Install cargo-lambda
             - cargo install cargo-lambda
             # Build the Rust MCP server
             - cd amplify/mcp-server/rust-mcp-server
