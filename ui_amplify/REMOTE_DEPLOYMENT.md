@@ -6,21 +6,24 @@ This guide explains how to deploy the Amplify UI application to different enviro
 ## Environment Detection Strategy
 
 The backend uses the following precedence for determining the environment:
-1. **Environment Variable** (`TABLE_ENV_SUFFIX`) - For branch deployments
+1. **Environment Variable** (`TABLE_ENV_SUFFIX`) - Explicitly set in Amplify Console
 2. **File-based** (`.amplify-env`) - For local sandbox development
-3. **Default** (`sandbox-{username}`) - Fallback for isolated development
+3. **Default for Amplify Hosting** (`prod`) - When deployed via Amplify Hosting without TABLE_ENV_SUFFIX
+4. **Default for local** (`sandbox-{username}`) - For isolated local development
 
 ## Setting Up Remote Deployments
 
-### Step 1: Configure Environment Variables in Amplify Console
+### Step 1: Configure Environment Variables in Amplify Console (Optional)
+
+By default, Amplify Hosting deployments will use `prod` tables. Only set this if you need a different environment.
 
 1. Navigate to your Amplify app in the AWS Console
 2. Go to **Environment variables** under **Hosting > Build settings**
-3. Add the following environment variable:
+3. Add the following environment variable (if needed):
    ```
-   TABLE_ENV_SUFFIX = prod    # For production branch
    TABLE_ENV_SUFFIX = dev     # For development branch
    TABLE_ENV_SUFFIX = staging # For staging branch
+   # No need to set for production - it's the default
    ```
 
 ### Step 2: Create/Update amplify.yml

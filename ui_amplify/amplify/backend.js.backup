@@ -1,0 +1,286 @@
+import { defineBackend } from '@aws-amplify/backend';
+import { auth } from './auth/resource';
+import { data } from './data/resource';
+import { startAgentExecution } from './backend/function/startAgentExecution/resource';
+import { listStepFunctionExecutions } from './backend/function/listStepFunctionExecutions/resource';
+import { getStepFunctionExecution } from './backend/function/getStepFunctionExecution/resource';
+import { getExecutionStatistics } from './backend/function/getExecutionStatistics/resource';
+import { getCloudWatchMetrics } from './backend/function/getCloudWatchMetrics/resource';
+import { testToolExecution } from './backend/function/testToolExecution/resource';
+import { updateProviderAPIKey } from './backend/function/updateProviderAPIKey/resource';
+import { getToolSecretValues } from './backend/function/getToolSecretValues/resource';
+import { updateToolSecrets } from './backend/function/updateToolSecrets/resource';
+import { getStateMachineInfo } from './backend/function/getStateMachineInfo/resource';
+import { registerMCPServer } from './backend/function/registerMCPServer/resource';
+import { executeHealthTest } from './backend/function/executeHealthTest/resource';
+// API Key management functions - to be implemented if needed
+// import { generateAPIKey } from './backend/function/generateAPIKey/resource';
+// import { revokeAPIKey } from './backend/function/revokeAPIKey/resource';
+// import { rotateAPIKey } from './backend/function/rotateAPIKey/resource';
+// import { listAPIKeys } from './backend/function/listAPIKeys/resource';
+import { createMcpServerResources } from './mcp-server/resource';
+import { PolicyStatement, Effect, Policy } from 'aws-cdk-lib/aws-iam';
+import { aws_dynamodb, RemovalPolicy } from 'aws-cdk-lib';
+/**
+ * @see https://docs.amplify.aws/react/build-a-backend/ to add storage, functions, and more
+ */
+const backend = defineBackend({
+    auth,
+    data,
+    startAgentExecution,
+    listStepFunctionExecutions,
+    getStepFunctionExecution,
+    getExecutionStatistics,
+    getCloudWatchMetrics,
+    testToolExecution,
+    updateProviderAPIKey,
+    getToolSecretValues,
+    updateToolSecrets,
+    getStateMachineInfo,
+    registerMCPServer,
+    executeHealthTest,
+    // API key management functions - to be implemented
+    // generateAPIKey,
+    // revokeAPIKey,
+    // rotateAPIKey,
+    // listAPIKeys,
+});
+// Set the Cognito User Pool name
+const userPool = backend.auth.resources.userPool;
+const cfnUserPool = userPool.node.defaultChild;
+cfnUserPool.userPoolName = 'StepFunctionsAgentAuth';
+// Grant Step Functions permissions to authenticated users
+const stepFunctionsPolicy = new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: [
+        'states:GetActivityTask',
+        'states:SendTaskSuccess',
+        'states:SendTaskFailure',
+        'states:ListActivities',
+        'states:DescribeActivity',
+        'states:StartExecution',
+        'states:ListStateMachines',
+        'states:DescribeExecution',
+        'states:ListTagsForResource'
+    ],
+    resources: ['*']
+});
+// Add the policies to the authenticated role
+const stepFunctionsActivityPolicy = new Policy(backend.auth.resources.authenticatedUserIamRole.stack, 'StepFunctionsActivityPolicy', {
+    statements: [stepFunctionsPolicy]
+});
+backend.auth.resources.authenticatedUserIamRole.attachInlinePolicy(stepFunctionsActivityPolicy);
+// Add external DynamoDB tables as data sources
+const externalDataSourcesStack = backend.createStack('ExternalDataSources');
+// Define table names - always use prod for now
+const agentRegistryTableName = 'AgentRegistry-prod';
+const toolRegistryTableName = 'ToolRegistry-prod';
+const mcpRegistryTableName = 'MCPServerRegistry-prod';
+const testEventsTableName = 'TestEvents-prod';
+const testResultsTableName = 'TestResults-prod';
+// Reference the existing external DynamoDB tables
+const agentRegistryTable = aws_dynamodb.Table.fromTableName(externalDataSourcesStack, 'AgentRegistryTable', agentRegistryTableName);
+const toolRegistryTable = aws_dynamodb.Table.fromTableName(externalDataSourcesStack, 'ToolRegistryTable', toolRegistryTableName);
+// Reference the MCP Registry table
+const mcpRegistryTable = aws_dynamodb.Table.fromTableName(externalDataSourcesStack, 'MCPRegistryTable', mcpRegistryTableName);
+// Reference the ToolSecrets table
+const toolSecretsTable = aws_dynamodb.Table.fromTableName(externalDataSourcesStack, 'ToolSecretsTable', 'ToolSecrets-prod');
+// Reference the TestEvents table
+const testEventsTable = aws_dynamodb.Table.fromTableName(externalDataSourcesStack, 'TestEventsTable', testEventsTableName);
+// Reference the TestResults table
+const testResultsTable = aws_dynamodb.Table.fromTableName(externalDataSourcesStack, 'TestResultsTable', testResultsTableName);
+// Create the LLMModels table as part of this stack
+const llmModelsTable = new aws_dynamodb.Table(externalDataSourcesStack, 'LLMModelsTable', {
+    tableName: 'LLMModels-prod',
+    partitionKey: { name: 'pk', type: aws_dynamodb.AttributeType.STRING },
+    billingMode: aws_dynamodb.BillingMode.PAY_PER_REQUEST,
+    pointInTimeRecovery: true,
+    removalPolicy: RemovalPolicy.RETAIN
+});
+// Add Global Secondary Index for provider queries
+llmModelsTable.addGlobalSecondaryIndex({
+    indexName: 'provider-index',
+    partitionKey: { name: 'provider', type: aws_dynamodb.AttributeType.STRING },
+    sortKey: { name: 'is_active', type: aws_dynamodb.AttributeType.STRING },
+    projectionType: aws_dynamodb.ProjectionType.ALL
+});
+// Add the tables as data sources to the GraphQL API
+backend.data.addDynamoDbDataSource('AgentRegistryDataSource', agentRegistryTable);
+backend.data.addDynamoDbDataSource('ToolRegistryDataSource', toolRegistryTable);
+backend.data.addDynamoDbDataSource('MCPRegistryDataSource', mcpRegistryTable);
+backend.data.addDynamoDbDataSource('LLMModelsDataSource', llmModelsTable);
+backend.data.addDynamoDbDataSource('ToolSecretsDataSource', toolSecretsTable);
+backend.data.addDynamoDbDataSource('TestEventsDataSource', testEventsTable);
+backend.data.addDynamoDbDataSource('TestResultsDataSource', testResultsTable);
+// Grant Step Functions permissions to the startAgentExecution Lambda
+const stepFunctionsExecutionPolicy = new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: [
+        'states:StartExecution',
+        'states:ListStateMachines',
+        'states:ListTagsForResource'
+    ],
+    resources: ['*']
+});
+backend.startAgentExecution.resources.lambda.addToRolePolicy(stepFunctionsExecutionPolicy);
+// Grant Step Functions permissions to the listStepFunctionExecutions Lambda
+const stepFunctionsListPolicy = new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: [
+        'states:ListExecutions',
+        'states:ListStateMachines',
+        'states:DescribeExecution',
+        'states:ListTagsForResource'
+    ],
+    resources: ['*']
+});
+backend.listStepFunctionExecutions.resources.lambda.addToRolePolicy(stepFunctionsListPolicy);
+// Grant Step Functions permissions to the getStepFunctionExecution Lambda
+const stepFunctionsDetailPolicy = new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: [
+        'states:DescribeExecution',
+        'states:GetExecutionHistory'
+    ],
+    resources: ['*']
+});
+backend.getStepFunctionExecution.resources.lambda.addToRolePolicy(stepFunctionsDetailPolicy);
+// Grant Step Functions permissions to the getExecutionStatistics Lambda
+const stepFunctionsStatsPolicy = new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: [
+        'states:ListExecutions',
+        'states:ListStateMachines',
+        'states:DescribeExecution',
+        'states:ListTagsForResource'
+    ],
+    resources: ['*']
+});
+backend.getExecutionStatistics.resources.lambda.addToRolePolicy(stepFunctionsStatsPolicy);
+// Grant CloudWatch permissions to the getCloudWatchMetrics Lambda
+const cloudWatchMetricsPolicy = new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: [
+        'cloudwatch:GetMetricData',
+        'cloudwatch:GetMetricStatistics',
+        'cloudwatch:ListMetrics'
+    ],
+    resources: ['*']
+});
+backend.getCloudWatchMetrics.resources.lambda.addToRolePolicy(cloudWatchMetricsPolicy);
+// Grant DynamoDB permissions to the getCloudWatchMetrics Lambda for reading model costs
+const dynamoDBMetricsPolicy = new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: [
+        'dynamodb:ListTables',
+        'dynamodb:Scan',
+        'dynamodb:GetItem'
+    ],
+    resources: ['*']
+});
+backend.getCloudWatchMetrics.resources.lambda.addToRolePolicy(dynamoDBMetricsPolicy);
+// Grant permissions to the testToolExecution Lambda
+const testToolExecutionPolicy = new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: [
+        'dynamodb:GetItem',
+        'lambda:InvokeFunction'
+    ],
+    resources: ['*']
+});
+backend.testToolExecution.resources.lambda.addToRolePolicy(testToolExecutionPolicy);
+// Grant Secrets Manager permissions to the updateProviderAPIKey Lambda
+const secretsManagerPolicy = new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: [
+        'secretsmanager:GetSecretValue',
+        'secretsmanager:PutSecretValue',
+        'secretsmanager:CreateSecret',
+        'secretsmanager:UpdateSecret'
+    ],
+    // The secret is at /ai-agent/llm-secrets/prod (not a prefix)
+    // AWS adds a random suffix to the ARN, so we use wildcard
+    resources: ['arn:aws:secretsmanager:*:*:secret:/ai-agent/llm-secrets/prod*']
+});
+backend.updateProviderAPIKey.resources.lambda.addToRolePolicy(secretsManagerPolicy);
+// Grant permissions to the getToolSecretValues Lambda
+const getToolSecretValuesPolicy = new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: [
+        'secretsmanager:GetSecretValue'
+    ],
+    resources: ['arn:aws:secretsmanager:*:*:secret:/ai-agent/tool-secrets/prod*']
+});
+backend.getToolSecretValues.resources.lambda.addToRolePolicy(getToolSecretValuesPolicy);
+// Grant permissions to the updateToolSecrets Lambda
+const updateToolSecretsPolicy = new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: [
+        'secretsmanager:GetSecretValue',
+        'secretsmanager:UpdateSecret'
+    ],
+    resources: ['arn:aws:secretsmanager:*:*:secret:/ai-agent/tool-secrets/prod*']
+});
+backend.updateToolSecrets.resources.lambda.addToRolePolicy(updateToolSecretsPolicy);
+// Grant Step Functions permissions to the getStateMachineInfo Lambda
+const getStateMachineInfoPolicy = new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: [
+        'states:DescribeStateMachine',
+        'states:ListStateMachines',
+        'states:ListTagsForResource'
+    ],
+    resources: ['*']
+});
+backend.getStateMachineInfo.resources.lambda.addToRolePolicy(getStateMachineInfoPolicy);
+// Configure registerMCPServer Lambda function
+// Grant write permissions to MCP Registry table
+mcpRegistryTable.grantWriteData(backend.registerMCPServer.resources.lambda);
+mcpRegistryTable.grantReadData(backend.registerMCPServer.resources.lambda);
+// Add environment variables using the backend method
+backend.registerMCPServer.addEnvironment('MCP_REGISTRY_TABLE_NAME', mcpRegistryTableName);
+backend.registerMCPServer.addEnvironment('ENV_NAME', 'prod');
+// Configure executeHealthTest Lambda function
+// Grant permissions to test-related tables
+testEventsTable.grantReadWriteData(backend.executeHealthTest.resources.lambda);
+testResultsTable.grantReadWriteData(backend.executeHealthTest.resources.lambda);
+toolRegistryTable.grantReadData(backend.executeHealthTest.resources.lambda);
+agentRegistryTable.grantReadData(backend.executeHealthTest.resources.lambda);
+// Grant permissions to invoke Lambda functions and Step Functions
+const executeHealthTestPolicy = new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: [
+        'lambda:InvokeFunction',
+        'states:StartExecution',
+        'states:DescribeExecution'
+    ],
+    resources: ['*']
+});
+backend.executeHealthTest.resources.lambda.addToRolePolicy(executeHealthTestPolicy);
+// Grant DynamoDB permissions to API key management Lambda functions
+const apiKeyTablePolicy = new PolicyStatement({
+    effect: Effect.ALLOW,
+    actions: [
+        'dynamodb:PutItem',
+        'dynamodb:GetItem',
+        'dynamodb:UpdateItem',
+        'dynamodb:Query',
+        'dynamodb:Scan'
+    ],
+    resources: ['*'] // Will be restricted to specific API key table
+});
+// API key function permissions - commented out until functions are implemented
+// backend.generateAPIKey.resources.lambda.addToRolePolicy(apiKeyTablePolicy);
+// backend.revokeAPIKey.resources.lambda.addToRolePolicy(apiKeyTablePolicy);
+// backend.rotateAPIKey.resources.lambda.addToRolePolicy(apiKeyTablePolicy);
+// backend.listAPIKeys.resources.lambda.addToRolePolicy(apiKeyTablePolicy);
+// Create MCP server resources for n8n integration
+const mcpResources = createMcpServerResources(backend);
+// Add environment variables for API key management functions to access the table
+// const apiKeyTableName = `step-functions-agents-prod-api-keys`; // Use prod to match other stacks
+// backend.generateAPIKey.addEnvironment('API_KEY_TABLE_NAME', apiKeyTableName);
+// backend.revokeAPIKey.addEnvironment('API_KEY_TABLE_NAME', apiKeyTableName);
+// backend.rotateAPIKey.addEnvironment('API_KEY_TABLE_NAME', apiKeyTableName);
+// backend.listAPIKeys.addEnvironment('API_KEY_TABLE_NAME', apiKeyTableName);
+// Export MCP resources for external access if needed
+export { mcpResources };

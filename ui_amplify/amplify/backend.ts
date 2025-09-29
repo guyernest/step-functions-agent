@@ -143,10 +143,19 @@ if (process.env.TABLE_ENV_SUFFIX) {
       throw new Error('No .amplify-env file found');
     }
   } catch (err) {
-    // Fallback to sandbox mode if no file exists
-    envSuffix = `sandbox-${userName}`;
-    console.log(`=== Using default sandbox environment: ${envSuffix} ===`);
-    console.log(`    (No TABLE_ENV_SUFFIX variable or .amplify-env file found)`);
+    // Check if we're running in Amplify Hosting (has AWS_BRANCH env var)
+    if (process.env.AWS_BRANCH) {
+      // Default to prod for Amplify Hosting deployments
+      envSuffix = 'prod';
+      console.log(`=== Using default 'prod' for Amplify Hosting deployment ===`);
+      console.log(`    Branch: ${process.env.AWS_BRANCH}`);
+      console.log(`    (Set TABLE_ENV_SUFFIX to override)`);
+    } else {
+      // Fallback to sandbox mode for local development
+      envSuffix = `sandbox-${userName}`;
+      console.log(`=== Using default sandbox environment: ${envSuffix} ===`);
+      console.log(`    (No TABLE_ENV_SUFFIX variable or .amplify-env file found)`);
+    }
   }
 }
 
