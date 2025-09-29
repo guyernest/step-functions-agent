@@ -1,33 +1,36 @@
 version: 1
-applications:
-  - appRoot: ui_amplify
-    frontend:
-      phases:
-        preBuild:
-          commands:
-            - npm ci
-        build:
-          commands:
-            # Log the environment for debugging
-            - echo "Building for environment TABLE_ENV_SUFFIX=$TABLE_ENV_SUFFIX"
-            # Generate Amplify outputs
-            - npx ampx generate outputs --branch $AWS_BRANCH --app-id $AWS_APP_ID
-            # Build the React application
-            - npm run build
-      artifacts:
-        baseDirectory: dist
-        files:
-          - '**/*'
-      cache:
-        paths:
-          - node_modules/**/*
-          - .npm/**/*
-
-    backend:
-      phases:
-        build:
-          commands:
-            # Log the environment for debugging
-            - echo "Deploying backend with TABLE_ENV_SUFFIX=$TABLE_ENV_SUFFIX"
-            # Deploy the backend
-            - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+backend:
+  phases:
+    build:
+      commands:
+        # Navigate to the ui_amplify directory
+        - cd ui_amplify
+        # Install dependencies
+        - npm ci
+        # Log the environment for debugging
+        - echo "Deploying backend - Branch: $AWS_BRANCH"
+        - echo "TABLE_ENV_SUFFIX is: ${TABLE_ENV_SUFFIX:-not set, will use prod default}"
+        # Deploy the backend
+        - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+frontend:
+  phases:
+    preBuild:
+      commands:
+        # Navigate to the ui_amplify directory
+        - cd ui_amplify
+        # Install dependencies
+        - npm ci
+    build:
+      commands:
+        # Log the environment for debugging
+        - echo "Building for environment - Branch: $AWS_BRANCH"
+        - echo "TABLE_ENV_SUFFIX is: ${TABLE_ENV_SUFFIX:-not set, will use prod default}"
+        # Build the React application
+        - npm run build
+  artifacts:
+    baseDirectory: ui_amplify/dist
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - ui_amplify/node_modules/**/*
