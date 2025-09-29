@@ -1,36 +1,31 @@
 version: 1
-backend:
-  phases:
-    build:
-      commands:
-        # Navigate to the ui_amplify directory
-        - cd ui_amplify
-        # Install dependencies
-        - npm ci
-        # Log the environment for debugging
-        - echo "Deploying backend - Branch: $AWS_BRANCH"
-        - echo "TABLE_ENV_SUFFIX is: ${TABLE_ENV_SUFFIX:-not set, will use prod default}"
-        # Deploy the backend
-        - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
-frontend:
-  phases:
-    preBuild:
-      commands:
-        # Navigate to the ui_amplify directory
-        - cd ui_amplify
-        # Install dependencies
-        - npm ci
-    build:
-      commands:
-        # Log the environment for debugging
-        - echo "Building for environment - Branch: $AWS_BRANCH"
-        - echo "TABLE_ENV_SUFFIX is: ${TABLE_ENV_SUFFIX:-not set, will use prod default}"
-        # Build the React application
-        - npm run build
-  artifacts:
-    baseDirectory: ui_amplify/dist
-    files:
-      - '**/*'
-  cache:
-    paths:
-      - ui_amplify/node_modules/**/*
+applications:
+  - backend:
+      phases:
+        build:
+          commands:
+            # Log the environment for debugging
+            - echo "Deploying backend - Branch: $AWS_BRANCH"
+            - echo "TABLE_ENV_SUFFIX is: ${TABLE_ENV_SUFFIX:-not set, will use prod default}"
+            # Install dependencies
+            - npm ci --cache .npm --prefer-offline
+            # Deploy the backend
+            - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+    frontend:
+      phases:
+        build:
+          commands:
+            # Log the environment for debugging
+            - echo "Building frontend - Branch: $AWS_BRANCH"
+            - echo "TABLE_ENV_SUFFIX is: ${TABLE_ENV_SUFFIX:-not set, will use prod default}"
+            # Build the React application
+            - npm run build
+      artifacts:
+        baseDirectory: dist
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - .npm/**/*
+          - node_modules/**/*
+    appRoot: ui_amplify
