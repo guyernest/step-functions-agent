@@ -11,6 +11,7 @@ import { updateToolSecrets } from '../backend/function/updateToolSecrets/resourc
 import { getStateMachineInfo } from '../backend/function/getStateMachineInfo/resource';
 import { registerMCPServer } from '../backend/function/registerMCPServer/resource';
 import { executeHealthTest } from '../backend/function/executeHealthTest/resource';
+import { listExecutionsFromIndex } from '../backend/function/listExecutionsFromIndex/resource';
 // API Key management functions - to be implemented if needed
 // import { generateAPIKey } from '../backend/function/generateAPIKey/resource';
 // import { revokeAPIKey } from '../backend/function/revokeAPIKey/resource';
@@ -365,6 +366,23 @@ const schema = a.schema({
     })
     .returns(a.json())
     .handler(a.handler.function(listStepFunctionExecutions))
+    .authorization((allow) => [
+      allow.authenticated(),
+      allow.publicApiKey()
+    ]),
+
+  listExecutionsFromIndex: a
+    .query()
+    .arguments({
+      agentName: a.string(),
+      status: a.string(),
+      startDateFrom: a.string(),
+      startDateTo: a.string(),
+      maxResults: a.integer(),
+      nextToken: a.string()
+    })
+    .returns(a.json())
+    .handler(a.handler.function(listExecutionsFromIndex))
     .authorization((allow) => [
       allow.authenticated(),
       allow.publicApiKey()

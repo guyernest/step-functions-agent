@@ -196,3 +196,119 @@ npm run test-registration
 - [ ] Integration with monitoring and alerting
 - [ ] Support for blue/green deployments
 - [ ] Automatic tool discovery from Lambda introspection
+
+---
+
+# Backfill Execution Index Script
+
+This script populates the ExecutionIndex DynamoDB table with historical execution data from Step Functions.
+
+## Purpose
+
+The ExecutionIndex table tracks agent executions for fast querying in the UI. New executions are automatically indexed via EventBridge, but historical executions need to be backfilled.
+
+## Usage
+
+### Using Makefile (Recommended)
+
+```bash
+# Dry run (preview what will be written)
+make backfill-index-dry-run
+
+# Backfill last 30 days (default)
+make backfill-index
+
+# Backfill last 7 days
+make backfill-index DAYS=7
+
+# Backfill last 90 days
+make backfill-index DAYS=90
+```
+
+### Direct Script Execution
+
+```bash
+# Dry run
+node scripts/backfill-execution-index.js --dry-run
+
+# Backfill with options
+node scripts/backfill-execution-index.js \
+  --table-name ExecutionIndex-prod \
+  --days 30 \
+  --batch-size 25
+```
+
+## Options
+
+- `--table-name <name>` - DynamoDB table name (default: `ExecutionIndex-prod`)
+- `--days <number>` - Number of days to backfill (default: `30`)
+- `--batch-size <number>` - Batch write size (default: `25`, max: `25`)
+- `--dry-run` - Preview without writing to DynamoDB
+
+## How It Works
+
+1. **List State Machines** - Fetches all Step Functions state machines in the account
+2. **Filter by Tags** - Identifies agent state machines using tags:
+   - `Type=Agent`
+   - `Application=StepFunctionsAgent`
+3. **List Executions** - For each agent, fetches executions within the date range
+4. **Write to Index** - Batch writes execution data to DynamoDB with:
+   - Primary Key: `executionArn`
+   - Attributes: `agentName`, `status`, `startDate`, `stopDate`, `durationSeconds`, etc.
+5. **Statistics** - Reports progress and summary
+
+## Output Example
+
+```
+================================================================================
+Execution Index Backfill Script
+================================================================================
+Table: ExecutionIndex-prod
+Days: 30
+Batch Size: 25
+Dry Run: false
+================================================================================
+
+Fetching state machines...
+Found 15 state machines
+
+Processing state machine: arn:aws:states:us-west-2:123:stateMachine:google-maps-agent-rust-prod
+  Agent: google-maps-agent-rust
+  Fetching executions from 2025-09-01T00:00:00.000Z to 2025-09-30T00:00:00.000Z
+  Progress: 50 executions, 50 written
+  Completed: 50 executions processed
+
+...
+
+================================================================================
+Backfill Complete
+================================================================================
+State machines processed: 15
+Total executions found: 1250
+Agent executions: 1000
+Non-agent executions: 250
+Records written: 1000
+Errors: 0
+Duration: 45.32s
+================================================================================
+```
+
+## Best Practices
+
+1. **Always dry-run first** - Preview what will be written
+2. **Start with recent data** - Use `--days 7` first to test
+3. **Monitor progress** - Watch console output for errors
+4. **Verify results** - Query DynamoDB after completion:
+   ```bash
+   aws dynamodb scan --table-name ExecutionIndex-prod --limit 5
+   ```
+
+## Testing UI Integration
+
+After backfilling:
+
+1. **Open UI** - Go to History page
+2. **Filter by date** - Select date range within backfilled period
+3. **Filter by agent** - Select specific agent from dropdown
+4. **Verify data** - Check executions appear with correct status, duration, etc.
+5. **Test queries** - Try different combinations of filters

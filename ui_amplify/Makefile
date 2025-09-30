@@ -29,6 +29,11 @@ help:
 	@echo "  make test-mcp-server MCP_URL=<url>         - Test MCP server basic endpoints"
 	@echo "  make test-mcp-graphql MCP_URL=<url> API_KEY=<key> - Test MCP with GraphQL auth"
 	@echo ""
+	@echo "Utility commands:"
+	@echo "  make backfill-index               - Backfill execution index (last 30 days)"
+	@echo "  make backfill-index-dry-run       - Dry run of backfill (no writes)"
+	@echo "  make backfill-index DAYS=<n>      - Backfill last N days"
+	@echo ""
 
 # Install dependencies
 install:
@@ -184,3 +189,13 @@ watch:
 	@echo "Watching for changes..."
 	@echo "Run 'make sandbox' in another terminal for backend"
 	npm run dev
+
+# Backfill execution index
+backfill-index:
+	@echo "Backfilling execution index..."
+	@node scripts/backfill-execution-index.js --table-name ExecutionIndex-prod $(if $(DAYS),--days $(DAYS),)
+
+# Dry run of backfill
+backfill-index-dry-run:
+	@echo "Dry run of backfill (no writes)..."
+	@node scripts/backfill-execution-index.js --table-name ExecutionIndex-prod $(if $(DAYS),--days $(DAYS),) --dry-run

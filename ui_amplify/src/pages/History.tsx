@@ -236,16 +236,34 @@ const History: React.FC = () => {
         params.nextToken = nextToken
       }
 
-      const response = await client.queries.listStepFunctionExecutions(params)
+      const response = await client.queries.listExecutionsFromIndex(params)
 
       console.log('Executions response:', response)
 
       if (response.data) {
-        const data = typeof response.data === 'string'
-          ? JSON.parse(response.data)
-          : response.data as ExecutionsResponse
+        // Parse the response - AppSync returns AWSJSON as a string
+        let data: ExecutionsResponse
+        if (typeof response.data === 'string') {
+          try {
+            data = JSON.parse(response.data)
+            // Check if we need to parse again (double-encoded)
+            if (typeof data === 'string') {
+              data = JSON.parse(data as any)
+            }
+          } catch (e) {
+            console.error('Failed to parse response:', e)
+            throw new Error('Invalid response format')
+          }
+        } else {
+          data = response.data as ExecutionsResponse
+        }
 
-        if (data.executions) {
+        console.log('Parsed data:', data)
+        console.log('typeof data:', typeof data)
+        console.log('Has executions?:', 'executions' in data)
+        console.log('Is array?:', Array.isArray((data as any).executions))
+
+        if (data && typeof data === 'object' && 'executions' in data && Array.isArray(data.executions)) {
           if (reset) {
             setExecutions(data.executions)
 
@@ -279,8 +297,10 @@ const History: React.FC = () => {
           if (data.metadata) {
             setFetchMetadata(data.metadata)
           }
-        } else if ('error' in data) {
+        } else if (data && typeof data === 'object' && 'error' in data) {
           setError((data as any).error + ((data as any).details ? ': ' + (data as any).details : ''))
+        } else {
+          console.warn('Unexpected response format:', data)
         }
       }
     } catch (err) {
@@ -332,18 +352,19 @@ const History: React.FC = () => {
   // Visible executions for virtual scrolling
   const visibleExecutions = executions.slice(visibleRange.start, visibleRange.end)
 
-  // Calculate quick preset dates
-  const today = new Date()
-  const yesterday = new Date(today)
-  yesterday.setDate(yesterday.getDate() - 1)
-  const weekAgo = new Date(today)
-  weekAgo.setDate(weekAgo.getDate() - 7)
-  const monthAgo = new Date(today)
-  monthAgo.setMonth(monthAgo.getMonth() - 1)
+  // Calculate quick preset dates using UTC to match AWS timestamps
+  const getUTCDate = (daysOffset: number = 0): string => {
+    const date = new Date()
+    date.setUTCDate(date.getUTCDate() + daysOffset)
+    const year = date.getUTCFullYear()
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+    const day = String(date.getUTCDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
 
-  const applyDatePreset = (from: Date, to: Date) => {
-    const fromStr = formatDateForInput(from)
-    const toStr = formatDateForInput(to)
+  const applyDatePreset = (fromOffset: number, toOffset: number = 0) => {
+    const fromStr = getUTCDate(fromOffset)
+    const toStr = getUTCDate(toOffset)
     setStartDateFrom(fromStr)
     setStartDateTo(toStr)
     updateUrlParams(agentFilter, statusFilter, fromStr, toStr)
@@ -381,14 +402,14 @@ const History: React.FC = () => {
         <Grid
           templateColumns="1fr 1fr 1fr 1fr"
           gap="10px"
-          marginBottom="15px"
+          marginBottom="5px"
         >
           <SelectField
             label="Agent"
             value={agentFilter}
             onChange={(e) => handleAgentFilterChange(e.target.value)}
           >
-            <option value="">All Agents</option>
+            <option value="">All Agents (slower)</option>
 
             {/* Agents with recent executions */}
             {executionAgents.length > 0 && (
@@ -450,19 +471,23 @@ const History: React.FC = () => {
           />
         </Grid>
 
+        <Text fontSize="0.875rem" color="gray" marginBottom="15px">
+          💡 Filtering by agent improves performance
+        </Text>
+
         {/* Date presets */}
         <Flex gap="10px" marginBottom="15px">
-          <Text>Quick filters:</Text>
-          <Button size="small" onClick={() => applyDatePreset(today, today)}>
+          <Text>Quick filters (UTC):</Text>
+          <Button size="small" onClick={() => applyDatePreset(0, 0)}>
             Today
           </Button>
-          <Button size="small" onClick={() => applyDatePreset(yesterday, today)}>
+          <Button size="small" onClick={() => applyDatePreset(-1, 0)}>
             Last 24h
           </Button>
-          <Button size="small" onClick={() => applyDatePreset(weekAgo, today)}>
+          <Button size="small" onClick={() => applyDatePreset(-7, 0)}>
             Last 7 days
           </Button>
-          <Button size="small" onClick={() => applyDatePreset(monthAgo, today)}>
+          <Button size="small" onClick={() => applyDatePreset(-30, 0)}>
             Last 30 days
           </Button>
           <Button size="small" onClick={() => {

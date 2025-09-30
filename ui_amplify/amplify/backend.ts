@@ -30,6 +30,8 @@ import { updateToolSecrets } from './backend/function/updateToolSecrets/resource
 import { getStateMachineInfo } from './backend/function/getStateMachineInfo/resource';
 import { registerMCPServer } from './backend/function/registerMCPServer/resource';
 import { executeHealthTest } from './backend/function/executeHealthTest/resource';
+import { indexStepFunctionExecution } from './backend/function/indexStepFunctionExecution/resource';
+import { listExecutionsFromIndex } from './backend/function/listExecutionsFromIndex/resource';
 // API Key management functions - to be implemented if needed
 // import { generateAPIKey } from './backend/function/generateAPIKey/resource';
 // import { revokeAPIKey } from './backend/function/revokeAPIKey/resource';
@@ -38,6 +40,8 @@ import { executeHealthTest } from './backend/function/executeHealthTest/resource
 import { createMcpServerResources } from './mcp-server/resource';
 import { PolicyStatement, Effect, Policy } from 'aws-cdk-lib/aws-iam';
 import { aws_dynamodb, RemovalPolicy, Fn } from 'aws-cdk-lib';
+import { Rule } from 'aws-cdk-lib/aws-events';
+import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -59,6 +63,8 @@ const backend = defineBackend({
   getStateMachineInfo,
   registerMCPServer,
   executeHealthTest,
+  indexStepFunctionExecution,
+  listExecutionsFromIndex,
   // API key management functions - to be implemented
   // generateAPIKey,
   // revokeAPIKey,
@@ -312,6 +318,75 @@ if (importFromCoreCDK) {
     projectionType: aws_dynamodb.ProjectionType.ALL
   });
 }
+
+// Create ExecutionIndex table for efficient history queries
+const executionIndexTableName = `ExecutionIndex-${tableEnvSuffix}`;
+console.log(`    Creating ExecutionIndex table: ${executionIndexTableName}`);
+
+const executionIndexTable = new aws_dynamodb.Table(externalDataSourcesStack, 'ExecutionIndexTable', {
+  tableName: executionIndexTableName,
+  partitionKey: { name: 'executionArn', type: aws_dynamodb.AttributeType.STRING },
+  billingMode: aws_dynamodb.BillingMode.PAY_PER_REQUEST,
+  pointInTimeRecovery: true,
+  removalPolicy: RemovalPolicy.DESTROY, // Change to RETAIN for production
+  stream: aws_dynamodb.StreamViewType.NEW_AND_OLD_IMAGES, // For future use
+});
+
+// Add GSI for agent + date queries
+executionIndexTable.addGlobalSecondaryIndex({
+  indexName: 'AgentDateIndex',
+  partitionKey: { name: 'agentName', type: aws_dynamodb.AttributeType.STRING },
+  sortKey: { name: 'startDate', type: aws_dynamodb.AttributeType.STRING },
+  projectionType: aws_dynamodb.ProjectionType.ALL,
+});
+
+// Add GSI for status + date queries
+executionIndexTable.addGlobalSecondaryIndex({
+  indexName: 'StatusDateIndex',
+  partitionKey: { name: 'status', type: aws_dynamodb.AttributeType.STRING },
+  sortKey: { name: 'startDate', type: aws_dynamodb.AttributeType.STRING },
+  projectionType: aws_dynamodb.ProjectionType.ALL,
+});
+
+// Grant permissions to indexStepFunctionExecution Lambda
+executionIndexTable.grantWriteData(backend.indexStepFunctionExecution.resources.lambda);
+backend.indexStepFunctionExecution.addEnvironment('EXECUTION_INDEX_TABLE_NAME', executionIndexTable.tableName);
+
+// Grant Step Functions permissions to read tags
+const indexSfnPolicy = new PolicyStatement({
+  effect: Effect.ALLOW,
+  actions: ['states:ListTagsForResource'],
+  resources: ['*'],
+});
+backend.indexStepFunctionExecution.resources.lambda.addToRolePolicy(indexSfnPolicy);
+
+// Grant permissions to listExecutionsFromIndex Lambda
+executionIndexTable.grantReadData(backend.listExecutionsFromIndex.resources.lambda);
+backend.listExecutionsFromIndex.addEnvironment('EXECUTION_INDEX_TABLE_NAME', executionIndexTable.tableName);
+
+// Create EventBridge rule in the data stack to capture ALL Step Functions execution events
+// The Lambda will filter by tags to only index agent executions
+const dataStack = backend.data.resources.cfnResources.cfnGraphqlApi.stack;
+const executionEventRule = new Rule(dataStack, 'ExecutionEventRule', {
+  ruleName: `step-functions-execution-index-${tableEnvSuffix}`,
+  description: 'Capture Step Functions execution events for indexing (filters by tags)',
+  eventPattern: {
+    source: ['aws.states'],
+    detailType: ['Step Functions Execution Status Change'],
+    detail: {
+      status: ['RUNNING', 'SUCCEEDED', 'FAILED', 'TIMED_OUT', 'ABORTED'],
+    },
+  },
+});
+
+// Add Lambda as target
+executionEventRule.addTarget(
+  new LambdaFunction(backend.indexStepFunctionExecution.resources.lambda, {
+    retryAttempts: 2,
+  })
+);
+
+console.log(`    Created EventBridge rule: ${executionEventRule.ruleName}`);
 
 // Add the tables as data sources to the GraphQL API
 backend.data.addDynamoDbDataSource(
