@@ -129,8 +129,14 @@ function filterByDateRange(executions: Execution[], startDateFrom?: string, star
 
   return executions.filter(exec => {
     const execDate = new Date(exec.startDate).getTime();
-    const fromDate = startDateFrom ? new Date(startDateFrom).getTime() : 0;
-    const toDate = startDateTo ? new Date(startDateTo).getTime() : Date.now();
+
+    // For "from" date, start at beginning of day (00:00:00 UTC)
+    const fromDate = startDateFrom ? new Date(startDateFrom + 'T00:00:00.000Z').getTime() : 0;
+
+    // For "to" date, end at end of day (23:59:59.999 UTC)
+    const toDate = startDateTo
+      ? new Date(startDateTo + 'T23:59:59.999Z').getTime()
+      : Date.now();
 
     return execDate >= fromDate && execDate <= toDate;
   });
