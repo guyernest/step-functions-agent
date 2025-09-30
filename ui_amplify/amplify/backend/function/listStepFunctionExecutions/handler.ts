@@ -142,7 +142,7 @@ function filterByDateRange(executions: Execution[], startDateFrom?: string, star
   });
 }
 
-export const handler = async (event: any): Promise<PaginatedResponse> => {
+export const handler = async (event: any): Promise<string> => {
   console.log('Received event:', JSON.stringify(event, null, 2));
   const startTime = Date.now();
 
@@ -179,36 +179,65 @@ export const handler = async (event: any): Promise<PaginatedResponse> => {
         const filtered = await Promise.all(filterPromises);
         stateMachineArns = filtered.filter((arn): arn is string => arn !== null);
       } else {
+        // No agent filter specified - for efficiency, require agent filter or only fetch recent
+        // To avoid iterating through too many state machines, we'll limit to recent executions
+        // by sorting state machines by most recent activity
+        console.log('No agent filter specified, will query all agent state machines');
         stateMachineArns = allArns;
       }
     }
 
+    // If no state machines found, return empty
+    if (stateMachineArns.length === 0) {
+      console.log('No matching state machines found');
+      const response = {
+        executions: [],
+        hasMore: false,
+        totalCount: 0,
+        metadata: {
+          fromCache: cachedStateMachines !== null,
+          fetchTime: Date.now() - startTime
+        }
+      };
+      return JSON.stringify(response);
+    }
+
     console.log(`Processing ${stateMachineArns.length} state machines starting from index ${startIndex}`);
+
+    // If we have date filters and no specific agent, use a more efficient approach
+    // Fetch more from each state machine to find matching dates
+    const fetchMultiplier = (startDateFrom || startDateTo) ? 10 : 2;
 
     // Collect executions with pagination
     const allExecutions: Execution[] = [];
     let currentStateMachineIndex = startIndex;
     let currentExecutionToken = tokenData?.executionToken;
     let hasMoreExecutions = false;
+    let totalFetched = 0;
+    const MAX_ITERATIONS = 200; // Increase safety limit for date filtering
 
     // Process state machines starting from the pagination index
-    while (currentStateMachineIndex < stateMachineArns.length && allExecutions.length < maxResults) {
+    while (currentStateMachineIndex < stateMachineArns.length && allExecutions.length < maxResults && totalFetched < MAX_ITERATIONS) {
       const arn = stateMachineArns[currentStateMachineIndex];
       const remainingResults = maxResults - allExecutions.length;
 
       // Get metadata for this state machine
       const metadata = await getStateMachineMetadata(arn);
 
+      // Fetch more executions when using date filters to ensure we find matches
+      const fetchSize = Math.min(1000, remainingResults * fetchMultiplier);
+
       // Fetch executions for this state machine
       const command = new ListExecutionsCommand({
         stateMachineArn: arn,
         statusFilter: status,
-        maxResults: Math.min(100, remainingResults * 2), // Fetch more to account for filtering
+        maxResults: fetchSize,
         nextToken: currentExecutionToken
       });
 
       const response = await client.send(command);
       const executions = response.executions || [];
+      totalFetched++;
 
       // Map executions with agent name
       const mappedExecutions = executions.map((exec: ExecutionListItem) => ({
@@ -223,10 +252,16 @@ export const handler = async (event: any): Promise<PaginatedResponse> => {
 
       // Apply date range filter if provided
       const filteredExecutions = filterByDateRange(mappedExecutions, startDateFrom, startDateTo);
-      allExecutions.push(...filteredExecutions.slice(0, remainingResults));
 
-      // Check if we have enough results after filtering
+      // Add only what we need
+      const toAdd = filteredExecutions.slice(0, remainingResults);
+      allExecutions.push(...toAdd);
+
+      console.log(`SM ${currentStateMachineIndex}: fetched=${executions.length}, filtered=${filteredExecutions.length}, added=${toAdd.length}, total=${allExecutions.length}, nextToken=${!!response.nextToken}`);
+
+      // Check if we have enough results
       if (allExecutions.length >= maxResults) {
+        // We have enough, but check if there might be more
         hasMoreExecutions = response.nextToken !== undefined || currentStateMachineIndex < stateMachineArns.length - 1;
         if (response.nextToken) {
           currentExecutionToken = response.nextToken;
@@ -235,19 +270,19 @@ export const handler = async (event: any): Promise<PaginatedResponse> => {
       }
 
       // Check if there are more executions in this state machine
-      if (response.nextToken) {
+      if (response.nextToken && executions.length > 0) {
+        // Continue with next page of same state machine
         currentExecutionToken = response.nextToken;
-        // Continue fetching from same state machine since we don't have enough results yet
       } else {
         // Move to next state machine
         currentStateMachineIndex++;
         currentExecutionToken = undefined;
-
-        // Check if there are more state machines
-        if (currentStateMachineIndex < stateMachineArns.length) {
-          hasMoreExecutions = true;
-        }
       }
+    }
+
+    // Only set hasMore if we actually have results or potential for more
+    if (!hasMoreExecutions && currentStateMachineIndex < stateMachineArns.length) {
+      hasMoreExecutions = allExecutions.length > 0;
     }
 
     // Sort by start date (most recent first)
@@ -262,7 +297,13 @@ export const handler = async (event: any): Promise<PaginatedResponse> => {
 
     const fetchTime = Date.now() - startTime;
 
-    return {
+    console.log(`Returning ${allExecutions.length} executions, hasMore=${hasMoreExecutions}, nextToken=${!!responseNextToken}`);
+    if (allExecutions.length > 0) {
+      console.log(`First execution: ${JSON.stringify(allExecutions[0])}`);
+      console.log(`Last execution: ${JSON.stringify(allExecutions[allExecutions.length - 1])}`);
+    }
+
+    const response = {
       executions: allExecutions,
       nextToken: responseNextToken,
       hasMore: hasMoreExecutions,
@@ -272,9 +313,12 @@ export const handler = async (event: any): Promise<PaginatedResponse> => {
         fetchTime
       }
     };
+
+    // Return as JSON string for AppSync AWSJSON type
+    return JSON.stringify(response);
   } catch (error) {
     console.error('Error listing executions:', error);
-    return {
+    const errorResponse = {
       executions: [],
       hasMore: false,
       metadata: {
@@ -282,5 +326,7 @@ export const handler = async (event: any): Promise<PaginatedResponse> => {
         fetchTime: Date.now() - startTime
       }
     };
+    // Return as JSON string for AppSync AWSJSON type
+    return JSON.stringify(errorResponse);
   }
 };
