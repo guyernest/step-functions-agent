@@ -203,7 +203,7 @@ export const handler = async (event: any): Promise<PaginatedResponse> => {
       const command = new ListExecutionsCommand({
         stateMachineArn: arn,
         statusFilter: status,
-        maxResults: Math.min(remainingResults + 1, 100), // Fetch one extra to check if more exist
+        maxResults: Math.min(100, remainingResults * 2), // Fetch more to account for filtering
         nextToken: currentExecutionToken
       });
 
@@ -211,7 +211,7 @@ export const handler = async (event: any): Promise<PaginatedResponse> => {
       const executions = response.executions || [];
 
       // Map executions with agent name
-      const mappedExecutions = executions.slice(0, remainingResults).map((exec: ExecutionListItem) => ({
+      const mappedExecutions = executions.map((exec: ExecutionListItem) => ({
         executionArn: exec.executionArn || '',
         stateMachineArn: exec.stateMachineArn || arn,
         name: exec.name || '',
@@ -223,13 +223,21 @@ export const handler = async (event: any): Promise<PaginatedResponse> => {
 
       // Apply date range filter if provided
       const filteredExecutions = filterByDateRange(mappedExecutions, startDateFrom, startDateTo);
-      allExecutions.push(...filteredExecutions);
+      allExecutions.push(...filteredExecutions.slice(0, remainingResults));
+
+      // Check if we have enough results after filtering
+      if (allExecutions.length >= maxResults) {
+        hasMoreExecutions = response.nextToken !== undefined || currentStateMachineIndex < stateMachineArns.length - 1;
+        if (response.nextToken) {
+          currentExecutionToken = response.nextToken;
+        }
+        break;
+      }
 
       // Check if there are more executions in this state machine
       if (response.nextToken) {
         currentExecutionToken = response.nextToken;
-        hasMoreExecutions = true;
-        break; // We have more from this state machine
+        // Continue fetching from same state machine since we don't have enough results yet
       } else {
         // Move to next state machine
         currentStateMachineIndex++;
