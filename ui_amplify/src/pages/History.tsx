@@ -253,6 +253,13 @@ const History: React.FC = () => {
 
         console.log('Parsed data:', data)
         console.log('typeof data:', typeof data)
+
+        // Ensure data is an object before using 'in' operator
+        if (typeof data === 'string') {
+          console.error('Data is still a string after parsing:', data)
+          throw new Error('Response is not properly formatted JSON')
+        }
+
         console.log('Has executions?:', 'executions' in data)
         console.log('Is array?:', Array.isArray((data as any).executions))
 
