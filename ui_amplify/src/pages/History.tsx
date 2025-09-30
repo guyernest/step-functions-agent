@@ -151,11 +151,12 @@ const History: React.FC = () => {
       const response = await client.queries.listAgentsFromRegistry({})
 
       if (response.data) {
-        const agentNames = response.data
-          .filter(agent => agent !== null && agent !== undefined && agent.name)
-          .map(agent => agent!.name)
-          .filter((name): name is string => typeof name === 'string')
-          .sort()
+        const agentNames = Array.from(new Set(
+          response.data
+            .filter(agent => agent !== null && agent !== undefined && agent.name)
+            .map(agent => agent!.name)
+            .filter((name): name is string => typeof name === 'string')
+        )).sort()
 
         setRegistryAgents(agentNames)
         updateAgentsList(agentNames, executionAgents)
