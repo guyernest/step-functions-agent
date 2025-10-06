@@ -1,316 +1,132 @@
-# AI Agents Framework with AWS Step Functions
+# Step Functions AI Agent Framework
 
-> 🚀 **Enterprise-Grade AI Agent Framework**
+> **Enterprise-Grade Serverless AI Agent Platform**
 >
-> A modular, scalable framework for building production-ready AI agents using AWS Step Functions. Supporting multiple LLM providers, any programming language for tools, human approval workflows, and comprehensive observability.
+> Build production-ready AI agents with complete flexibility in LLM providers and tools, backed by a comprehensive management UI for enterprise operations.
 
-## 🌟 Key Features
+## Overview
 
-- **Multi-Provider LLM Support**: Anthropic Claude, OpenAI GPT, Google Gemini, Amazon Bedrock, xAI Grok, DeepSeek
-- **Unified Rust LLM Service**: High-performance, provider-agnostic LLM interface
-- **Modular Architecture**: Shared infrastructure, reusable tools, and independent agent deployments
-- **Language Agnostic Tools**: Build tools in Python, TypeScript, Rust, Go, Java, or any language
-- **Human-in-the-Loop**: Built-in approval workflows for sensitive operations
-- **Long Content Support**: Handle extensive documents and conversations
-- **Enterprise Ready**: Full observability, cost tracking, and security best practices
+The Step Functions AI Agent Framework consists of two integrated components:
 
-## 📚 Table of Contents
+### 1. **AI Agent Runtime** (Lambda + Step Functions)
+A serverless, highly flexible agent execution platform that provides:
+- **Any LLM Provider**: Anthropic Claude, OpenAI GPT, Google Gemini, Amazon Bedrock, xAI Grok, DeepSeek
+- **Any Programming Language**: Build tools in Python, TypeScript, Rust, Go, Java, or any language
+- **Serverless Scale**: Automatic scaling with AWS Step Functions orchestration
+- **Complete Observability**: Full tracing, metrics, and cost tracking built-in
 
-- [Architecture Overview](#-architecture-overview)
-- [Quick Start](#-quick-start)
-- [Modular Stack Structure](#-modular-stack-structure)
-- [Deployment Guide](#-deployment-guide)
-- [Creating New Agents](#-creating-new-agents)
-- [Building Tools](#-building-tools)
-- [LLM Providers](#-llm-providers)
-- [Monitoring & Observability](#-monitoring--observability)
-- [Documentation](#-documentation)
+### 2. **Management UI** (AWS Amplify)
+A comprehensive admin interface for enterprise operations:
+- **Agent Management**: Configure agents, assign tools, update LLM models
+- **Tool Registry**: Manage and test tools across all agents
+- **Execution Monitoring**: Real-time execution history with filtering and search
+- **Cost Analytics**: Track usage and costs by agent, model, and time period
+- **Enterprise Security**: IAM-integrated access, secret management, audit logging
 
-## 🏗 Architecture Overview
+## Key Features
 
-### Modern Modular Architecture
+### Agent Framework
+- ✅ **Multi-Provider LLM Support** - Switch providers without code changes
+- ✅ **Unified Rust LLM Service** - High-performance, provider-agnostic interface
+- ✅ **Language-Agnostic Tools** - Build tools in any language
+- ✅ **Human-in-the-Loop** - Built-in approval workflows
+- ✅ **Modular Architecture** - Shared infrastructure, reusable tools
+- ✅ **Long Content Support** - Handle extensive documents and conversations
+
+### Management UI
+- 📊 **Execution Dashboard** - Fast, indexed execution history with date/agent filtering
+- 🔧 **Agent Configuration** - Dynamic system prompts, model selection, tool assignment
+- 🧪 **Integrated Testing** - Test agents and tools directly from the UI
+- 📈 **Metrics & Analytics** - CloudWatch integration, token usage, cost tracking
+- 🔐 **Enterprise Security** - Cognito authentication, IAM permissions, secret manager
+- 🚀 **Real-time Updates** - EventBridge-powered execution tracking
+
+## Architecture
+
+### Component Overview
 
 ```mermaid
 graph TB
-    subgraph "Shared Infrastructure Layer"
-        SharedInfra[Shared Infrastructure Stack]
-        AgentRegistry[Agent Registry]
-        ToolRegistry[Tool Registry]
-        LLMModels[LLM Models Table]
+    subgraph UI["Management UI (Amplify)"]
+        Console[Admin Console]
+        ExecutionHistory[Execution History]
+        Analytics[Analytics Dashboard]
     end
 
-    subgraph "LLM Layer"
-        SharedLLM[Shared LLM Stack<br/>Claude, OpenAI, Gemini]
-        UnifiedRust[Unified Rust LLM<br/>High Performance]
+    subgraph Registry["Registries (DynamoDB)"]
+        AgentReg[Agent Registry]
+        ToolReg[Tool Registry]
+        ModelReg[Model Registry]
     end
 
-    subgraph "Tools Layer"
-        DBTool[Database Tool]
-        MapsTool[Google Maps Tool]
-        MSGraphTool[Microsoft Graph Tool]
-        WebTool[Web Research Tool]
-        CodeTool[Code Execution Tool]
+    subgraph Runtime["Agent Runtime"]
+        StepFunctions[Step Functions]
+        LLMService[LLM Service]
+        Tools[Tool Lambdas]
     end
 
-    subgraph "Agent Layer"
-        SQLAgent[SQL Agent]
-        ResearchAgent[Research Agent]
-        AutomationAgent[Automation Agent]
-    end
-
-    Agent Layer --> LLM Layer
-    Agent Layer --> Tools Layer
-    LLM Layer --> SharedInfra
-    Tools Layer --> SharedInfra
+    Console --> AgentReg
+    Console --> ToolReg
+    StepFunctions --> LLMService
+    StepFunctions --> Tools
+    StepFunctions --> AgentReg
+    StepFunctions --> ToolReg
+    ExecutionHistory --> StepFunctions
 ```
 
-### Step Functions Agent Workflow
+### Agent Execution Flow
 
 ```mermaid
 stateDiagram-v2
     [*] --> LoadConfig: Start Execution
-    LoadConfig --> LoadTools: Load Agent Config
-    LoadTools --> CallLLM: Load Tool Definitions
+    LoadConfig --> LoadTools: Load from Registry
+    LoadTools --> CallLLM: Get Tool Definitions
     CallLLM --> UpdateMetrics: LLM Response
     UpdateMetrics --> CheckTools: Record Usage
-    CheckTools --> ExecuteTools: Tools Needed
-    CheckTools --> Success: No Tools
-    ExecuteTools --> CallLLM: Tool Results
-    Success --> [*]: Return Response
+    CheckTools --> ExecuteTools: Tools Requested
+    CheckTools --> Success: No Tools Needed
+    ExecuteTools --> CallLLM: Return Results
+    Success --> [*]: Complete
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
 - AWS Account with appropriate permissions
 - Python 3.12+
-- Node.js 18+ (for CDK)
-- AWS CDK CLI (`npm install -g aws-cdk`)
-- UV for Python dependency management
+- Node.js 18+ (for CDK and Amplify UI)
+- AWS CDK CLI: `npm install -g aws-cdk`
+- UV for Python: `pip install uv`
 
-### Installation
+### Initial Setup
 
 ```bash
 # Clone the repository
 git clone https://github.com/your-org/step-functions-agent.git
 cd step-functions-agent
 
-# Install dependencies using UV
+# Install Python dependencies
 uv pip install -r requirements.txt
 
 # Bootstrap CDK (first time only)
 cdk bootstrap
 
-# Deploy shared infrastructure first
-cdk deploy SharedInfrastructureStack-prod SharedLLMStack-prod AgentRegistryStack-prod
-
-# Deploy tools
-cdk deploy DBInterfaceToolStack-prod GoogleMapsToolStack-prod
-
-# Deploy an agent
-cdk deploy SQLAgentUnifiedLLMStack-prod
-```
-
-## 📦 Modular Stack Structure
-
-### Shared Stacks (Deploy Once)
-
-| Stack | Purpose | Resources |
-|-------|---------|-----------|
-| `SharedInfrastructureStack` | Core infrastructure | Tool Registry, Content Storage |
-| `SharedLLMStack` | Traditional LLM providers | Claude, OpenAI, Gemini Lambda functions |
-| `SharedUnifiedRustLLMStack` | High-performance LLM | Rust-based unified provider |
-| `AgentRegistryStack` | Agent configurations | DynamoDB table for agents |
-
-### Tool Stacks (Deploy as Needed)
-
-| Tool | Stack | Language | Purpose |
-|------|-------|----------|---------|
-| Database | `DBInterfaceToolStack` | Python | SQL database operations |
-| Google Maps | `GoogleMapsToolStack` | TypeScript | Location services |
-| Microsoft Graph | `MicrosoftGraphToolStack` | Python | Office 365 integration |
-| Web Research | `WebResearchToolStack` | Python | Web scraping and research |
-| Code Execution | `E2BToolStack` | Python | Safe code execution |
-| Finance | `FinancialToolStack` | Python | Market data analysis |
-| CloudWatch | `CloudWatchToolStack` | Python | AWS metrics and logs |
-
-### Agent Stacks
-
-| Agent | Stack | Tools Used | Use Case |
-|-------|-------|------------|----------|
-| SQL Agent | `SQLAgentUnifiedLLMStack` | Database, Code | Data analysis & reporting |
-| Research Agent | `WebResearchAgentUnifiedLLMStack` | Web Research, Code | Market research |
-| Automation Agent | `TestAutomationRemoteAgentStack` | Local Execute, MS Graph | Enterprise automation |
-| Maps Agent | `GoogleMapsAgentUnifiedLLMStack` | Google Maps | Location intelligence |
-
-## 🚢 Deployment Guide
-
-### Environment-Based Deployment
-
-```bash
-# Development environment
-export ENVIRONMENT=dev
-cdk deploy SharedInfrastructureStack-dev
-
-# Production environment
+# Set environment
 export ENVIRONMENT=prod
-cdk deploy SharedInfrastructureStack-prod
 ```
 
-### Deployment Order
-
-1. **Shared Infrastructure** (once per environment)
-   ```bash
-   cdk deploy SharedInfrastructureStack-prod
-   cdk deploy AgentRegistryStack-prod
-   ```
-
-2. **LLM Services** (choose one or both)
-   ```bash
-   # Traditional multi-provider
-   cdk deploy SharedLLMStack-prod
-   
-   # OR High-performance unified
-   cdk deploy SharedUnifiedRustLLMStack-prod
-   ```
-
-3. **Tools** (deploy only what you need)
-   ```bash
-   cdk deploy DBInterfaceToolStack-prod
-   cdk deploy GoogleMapsToolStack-prod
-   ```
-
-4. **Agents** (deploy your agents)
-   ```bash
-   cdk deploy SQLAgentUnifiedLLMStack-prod
-   ```
-
-## 🛠 Creating New Agents
-
-### Using the Modular Base Class
-
-```python
-from stacks.agents.modular_base_agent_unified_llm_stack import ModularBaseAgentUnifiedLLMStack
-
-class MyCustomAgentStack(ModularBaseAgentUnifiedLLMStack):
-    def __init__(self, scope, construct_id, env_name="prod", **kwargs):
-        
-        # Import tool ARNs
-        tool1_arn = Fn.import_value(f"Tool1LambdaArn-{env_name}")
-        tool2_arn = Fn.import_value(f"Tool2LambdaArn-{env_name}")
-        
-        # Define tool configurations
-        tool_configs = [
-            {
-                "tool_name": "tool1",
-                "lambda_arn": tool1_arn,
-                "requires_activity": False
-            },
-            {
-                "tool_name": "tool2", 
-                "lambda_arn": tool2_arn,
-                "requires_activity": True,
-                "activity_type": "human_approval"
-            }
-        ]
-        
-        # System prompt
-        system_prompt = "You are a helpful assistant..."
-        
-        # Call parent constructor
-        super().__init__(
-            scope, construct_id,
-            agent_name="my-custom-agent",
-            unified_llm_arn=Fn.import_value(f"SharedUnifiedRustLLMLambdaArn-{env_name}"),
-            tool_configs=tool_configs,
-            env_name=env_name,
-            system_prompt=system_prompt,
-            **kwargs
-        )
-```
-
-## 🔧 Building Tools
-
-### Tool Structure
-
-```
-lambda/tools/my-tool/
-├── index.py           # Lambda handler
-├── requirements.txt   # Dependencies
-└── template.yaml     # SAM template (optional)
-```
-
-### Tool Lambda Handler Example
-
-```python
-def lambda_handler(event, context):
-    """
-    Standard tool interface
-    
-    Args:
-        event: {
-            "name": "tool_name",
-            "id": "unique_id",
-            "input": { ... tool specific input ... }
-        }
-    
-    Returns:
-        {
-            "type": "tool_result",
-            "tool_use_id": event["id"],
-            "name": event["name"],
-            "content": "Tool execution result"
-        }
-    """
-    tool_input = event["input"]
-    
-    # Tool logic here
-    result = perform_tool_action(tool_input)
-    
-    return {
-        "type": "tool_result",
-        "tool_use_id": event["id"],
-        "name": event["name"],
-        "content": result
-    }
-```
-
-### Registering Tools
-
-Tools are automatically registered in the Tool Registry when deployed. The registry entry includes:
-
-```python
-{
-    "tool_name": "my_tool",
-    "description": "Tool description for LLM",
-    "input_schema": {
-        "type": "object",
-        "properties": { ... },
-        "required": [ ... ]
-    },
-    "lambda_arn": "arn:aws:lambda:...",
-    "created_at": "2024-01-01T00:00:00Z"
-}
-```
-
-## 🤖 LLM Providers
-
-### Supported Providers
-
-| Provider | Models | Stack | Notes |
-|----------|--------|-------|-------|
-| Anthropic | Claude 3.5 Sonnet, Claude 3 Opus | SharedLLMStack | Best for complex reasoning |
-| OpenAI | GPT-4o, GPT-4o-mini | SharedLLMStack | Versatile, good for code |
-| Google | Gemini 1.5 Pro, Flash | SharedLLMStack | Multimodal capabilities |
-| Amazon | Nova Pro, Nova Lite | SharedUnifiedRustLLMStack | AWS native, cost-effective |
-| xAI | Grok 2, Grok 2 mini | SharedUnifiedRustLLMStack | Latest models |
-| DeepSeek | DeepSeek V3 | SharedUnifiedRustLLMStack | Specialized capabilities |
-
-### Configuring API Keys
+### Deploy Core Infrastructure
 
 ```bash
-# Store API keys in AWS Secrets Manager
+# 1. Deploy shared infrastructure (once per environment)
+cdk deploy SharedInfrastructureStack-prod
+cdk deploy AgentRegistryStack-prod
+
+# 2. Deploy LLM service (choose one)
+cdk deploy SharedUnifiedRustLLMStack-prod  # Recommended: High-performance unified service
+
+# 3. Configure API keys in AWS Secrets Manager
 aws secretsmanager create-secret \
     --name /ai-agent/llm-secrets/prod \
     --secret-string '{
@@ -320,69 +136,436 @@ aws secretsmanager create-secret \
     }'
 ```
 
-### Dynamic Model Selection
-
-Agents can dynamically select models based on the task:
-
-```python
-# In agent configuration
-self.llm_provider = "anthropic"  # or "openai", "google", etc.
-self.llm_model = "claude-3-5-sonnet-20241022"
-```
-
-## 📊 Monitoring & Observability
-
-### CloudWatch Metrics
-
-- **Token Usage**: Input/output tokens per model
-- **Execution Time**: Agent and tool execution duration
-- **Error Rates**: Failed executions and retries
-- **Cost Tracking**: Estimated costs per execution
-
-### X-Ray Tracing
-
-All Step Functions executions include X-Ray tracing for detailed performance analysis:
+### Deploy Management UI
 
 ```bash
-# View traces in AWS Console
-AWS Console > CloudWatch > Service Map
+cd ui_amplify
+
+# Install dependencies
+npm install
+
+# Deploy to Amplify (creates hosted UI)
+npx ampx sandbox  # For development
+# OR
+npx ampx pipeline-deploy --branch main  # For production
 ```
 
-### Cost Analysis
+The UI will be available at your Amplify app URL (e.g., `https://main.xxxx.amplifyapp.com`)
+
+## Building Your First Agent
+
+### 1. Create Agent Stack
+
+Create a new file `stacks/agents/my_agent_stack.py`:
+
+```python
+from aws_cdk import Fn
+from stacks.agents.modular_base_agent_unified_llm_stack import ModularBaseAgentUnifiedLLMStack
+
+class MyAgentStack(ModularBaseAgentUnifiedLLMStack):
+    def __init__(self, scope, construct_id, env_name="prod", **kwargs):
+
+        # Import required tools from registry
+        db_tool_arn = Fn.import_value(f"DBInterfaceToolLambdaArn-{env_name}")
+
+        # Configure tools for this agent
+        tool_configs = [
+            {
+                "tool_name": "query_database",
+                "lambda_arn": db_tool_arn,
+                "requires_activity": False
+            }
+        ]
+
+        # Define agent behavior
+        system_prompt = """You are a data analyst assistant.
+        Help users query and analyze database information.
+        Always explain your findings clearly."""
+
+        # Initialize agent with Unified LLM
+        super().__init__(
+            scope, construct_id,
+            agent_name="data-analyst",
+            unified_llm_arn=Fn.import_value(f"SharedUnifiedRustLLMLambdaArn-{env_name}"),
+            tool_configs=tool_configs,
+            env_name=env_name,
+            system_prompt=system_prompt,
+            **kwargs
+        )
+```
+
+### 2. Register in app.py
+
+Add to `app.py`:
+
+```python
+from stacks.agents.my_agent_stack import MyAgentStack
+
+# Deploy your agent
+MyAgentStack(app, "DataAnalystAgentStack-prod", env_name="prod")
+```
+
+### 3. Deploy
+
+```bash
+cdk deploy DataAnalystAgentStack-prod
+```
+
+The agent will automatically register in the Agent Registry and appear in the Management UI!
+
+## Building Tools
+
+### Tool Structure
+
+```
+lambda/tools/my-tool/
+├── index.py              # Lambda handler
+├── requirements.txt      # Dependencies
+└── tool_definition.json  # Tool schema for LLM
+```
+
+### Tool Lambda Handler
+
+```python
+def lambda_handler(event, context):
+    """
+    Standard tool interface compatible with all LLM providers
+
+    Args:
+        event: {
+            "name": "tool_name",
+            "id": "unique_tool_use_id",
+            "input": {
+                # Tool-specific parameters
+            }
+        }
+
+    Returns:
+        {
+            "type": "tool_result",
+            "tool_use_id": event["id"],
+            "name": event["name"],
+            "content": "Result as string or JSON"
+        }
+    """
+    tool_input = event["input"]
+
+    # Implement tool logic
+    result = perform_action(tool_input)
+
+    return {
+        "type": "tool_result",
+        "tool_use_id": event["id"],
+        "name": event["name"],
+        "content": result
+    }
+```
+
+### Tool Definition
+
+Create `tool_definition.json`:
+
+```json
+{
+  "name": "my_tool",
+  "description": "Clear description of what the tool does for the LLM",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "parameter1": {
+        "type": "string",
+        "description": "Description of parameter1"
+      },
+      "parameter2": {
+        "type": "number",
+        "description": "Description of parameter2"
+      }
+    },
+    "required": ["parameter1"]
+  }
+}
+```
+
+### Create Tool Stack
+
+```python
+from aws_cdk import aws_lambda as lambda_, Duration
+from constructs import Construct
+from .base_tool_stack import BaseToolStack
+
+class MyToolStack(BaseToolStack):
+    def __init__(self, scope: Construct, construct_id: str, env_name: str = "prod", **kwargs):
+        super().__init__(scope, construct_id, env_name=env_name, **kwargs)
+
+        # Create Lambda function
+        tool_lambda = lambda_.Function(
+            self, "MyToolFunction",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="index.lambda_handler",
+            code=lambda_.Code.from_asset("lambda/tools/my-tool"),
+            timeout=Duration.seconds(30),
+            environment={
+                "LOG_LEVEL": "INFO"
+            }
+        )
+
+        # Register in Tool Registry
+        self.register_tool(
+            tool_name="my_tool",
+            tool_lambda=tool_lambda,
+            tool_definition_path="lambda/tools/my-tool/tool_definition.json"
+        )
+```
+
+### Deploy Tool
+
+```bash
+cdk deploy MyToolStack-prod
+```
+
+The tool is now available for any agent to use!
+
+## Built-in Tools
+
+The framework includes production-ready tools you can use immediately:
+
+### Data & Query Tools
+- **SQL Database Tool** (`DBInterfaceToolStack`) - Query databases, execute SQL, analyze data
+- **GraphQL Tool** (`GraphQLToolStack`) - Query GraphQL APIs with type safety
+- **Web Research Tool** (`WebResearchToolStack`) - Web scraping and research
+
+### Integration Tools
+- **Microsoft Graph Tool** (`MicrosoftGraphToolStack`) - Office 365, Teams, SharePoint integration
+- **Google Maps Tool** (`GoogleMapsToolStack`) - Location services, geocoding, directions
+- **Firecrawl Tool** - Advanced web scraping with AI
+
+### Compute Tools
+- **Code Execution Tool** (`E2BToolStack`) - Safe Python/JavaScript code execution
+- **Batch Processor Tool** - Process large datasets in parallel
+- **Local Agent Tool** - Execute commands on remote machines securely
+
+### Monitoring Tools
+- **CloudWatch Tool** (`CloudWatchToolStack`) - AWS metrics, logs, and alarms
+- **Sagemaker Tool** - ML model deployment and inference
+
+Deploy any tool:
+```bash
+cdk deploy DBInterfaceToolStack-prod
+cdk deploy GoogleMapsToolStack-prod
+```
+
+## Management UI Features
+
+### Execution History
+- **Fast Indexed Search** - DynamoDB-backed execution index for instant queries
+- **Advanced Filtering** - Filter by agent, status, date range (UTC-aware)
+- **Real-time Updates** - EventBridge integration for live execution tracking
+- **Detailed Views** - Full execution trace, token usage, cost breakdown
+
+### Agent Management
+- **Dynamic Configuration** - Update system prompts without redeployment
+- **Model Selection** - Switch LLM providers and models on the fly
+- **Tool Assignment** - Add/remove tools from agents via UI
+- **Version Control** - Track configuration changes over time
+
+### Testing & Validation
+- **Agent Testing** - Execute test prompts with custom inputs
+- **Tool Testing** - Validate tool functionality independently
+- **Execution Replay** - Re-run failed executions with same inputs
+- **Health Checks** - Automated validation of agent configurations
+
+### Analytics & Monitoring
+- **Cost Tracking** - Real-time cost estimates per execution
+- **Token Usage** - Input/output token metrics by model
+- **Performance Metrics** - Execution duration, error rates, trends
+- **CloudWatch Integration** - Deep-dive into logs and traces
+
+## Enterprise Features
+
+### Security
+- ✅ **IAM Integration** - Fine-grained access control with AWS IAM
+- ✅ **Cognito Authentication** - Secure user authentication for UI
+- ✅ **Secrets Manager** - Encrypted storage for API keys and credentials
+- ✅ **VPC Support** - Deploy in private subnets with VPC endpoints
+- ✅ **Audit Logging** - Complete audit trail via CloudWatch and CloudTrail
+- ✅ **Resource Tags** - Automatic tagging for compliance and cost allocation
+
+### Observability
+- ✅ **X-Ray Tracing** - End-to-end distributed tracing
+- ✅ **CloudWatch Metrics** - Custom metrics for all operations
+- ✅ **Structured Logging** - JSON logs with correlation IDs
+- ✅ **Execution Index** - Fast searchable execution history
+- ✅ **Cost Attribution** - Track costs by agent, model, and execution
+
+### Reliability
+- ✅ **Automatic Retries** - Built-in retry logic with exponential backoff
+- ✅ **Error Handling** - Graceful degradation and error recovery
+- ✅ **Circuit Breakers** - Protect downstream services
+- ✅ **Rate Limiting** - Prevent API quota exhaustion
+- ✅ **Health Checks** - Automated monitoring and alerting
+
+### Cost Management
+- ✅ **Token Tracking** - Real-time token usage monitoring
+- ✅ **Cost Estimation** - Predict execution costs before running
+- ✅ **Budget Alerts** - CloudWatch alarms for cost thresholds
+- ✅ **Model Optimization** - Automatic model selection for cost/quality trade-offs
+- ✅ **Execution Limits** - Configurable limits per agent
+
+## LLM Providers
+
+### Supported Providers
+
+| Provider | Models | Best For | Pricing |
+|----------|--------|----------|---------|
+| **Anthropic Claude** | Sonnet 4, Opus 3.5 | Complex reasoning, long context | $$$ |
+| **OpenAI** | GPT-4o, GPT-4o-mini | Versatile, code generation | $$$ |
+| **Google Gemini** | 1.5 Pro, Flash | Multimodal, fast responses | $$ |
+| **Amazon Bedrock** | Nova Pro, Nova Lite | AWS native, cost-effective | $$ |
+| **xAI** | Grok 2, Grok 2 mini | Latest capabilities | $$ |
+| **DeepSeek** | DeepSeek V3 | Specialized tasks | $ |
+
+### Provider Configuration
+
+All providers are configured through the Unified Rust LLM Service or individual provider Lambdas. API keys are stored in AWS Secrets Manager.
+
+Update API keys:
+```bash
+aws secretsmanager update-secret \
+    --secret-id /ai-agent/llm-secrets/prod \
+    --secret-string '{
+        "ANTHROPIC_API_KEY": "sk-ant-new-key",
+        "OPENAI_API_KEY": "sk-new-key"
+    }'
+```
+
+### Dynamic Model Selection
+
+Change models via Management UI or agent configuration:
+
+```python
+# In agent stack
+self.llm_provider = "anthropic"
+self.llm_model = "claude-sonnet-4-20250514"
+
+# Or via UI: Agent Management > Select Agent > Update Model
+```
+
+## Deployment Patterns
+
+### Multi-Environment Strategy
+
+```bash
+# Development environment
+export ENVIRONMENT=dev
+cdk deploy SharedInfrastructureStack-dev
+cdk deploy MyAgentStack-dev
+
+# Production environment
+export ENVIRONMENT=prod
+cdk deploy SharedInfrastructureStack-prod
+cdk deploy MyAgentStack-prod
+```
+
+### Recommended Deployment Order
+
+1. **Core Infrastructure** (once per environment)
+   ```bash
+   cdk deploy SharedInfrastructureStack-prod
+   cdk deploy AgentRegistryStack-prod
+   ```
+
+2. **LLM Service** (choose based on needs)
+   ```bash
+   # High-performance unified service (recommended)
+   cdk deploy SharedUnifiedRustLLMStack-prod
+
+   # OR traditional multi-provider
+   cdk deploy SharedLLMStack-prod
+   ```
+
+3. **Tools** (deploy only what you need)
+   ```bash
+   cdk deploy DBInterfaceToolStack-prod
+   cdk deploy GoogleMapsToolStack-prod
+   cdk deploy WebResearchToolStack-prod
+   ```
+
+4. **Agents** (your custom agents)
+   ```bash
+   cdk deploy MyAgentStack-prod
+   ```
+
+5. **Management UI** (Amplify)
+   ```bash
+   cd ui_amplify
+   npx ampx pipeline-deploy --branch main
+   ```
+
+## Monitoring & Operations
+
+### CloudWatch Dashboards
+
+Access pre-built dashboards:
+- **Execution Overview** - All agent executions, success rates, duration
+- **Cost Analysis** - Token usage and estimated costs by model
+- **Error Tracking** - Failed executions, error patterns, retry metrics
+
+### Example Queries
 
 ```sql
--- CloudWatch Insights query for cost analysis
-fields @timestamp, agent, model, input_tokens, output_tokens
-| stats sum(input_tokens) as total_input,
-        sum(output_tokens) as total_output
-        by model
+-- Cost analysis by agent
+fields @timestamp, agent_name, model, input_tokens, output_tokens
+| stats sum(input_tokens * 0.003 / 1000) as input_cost,
+        sum(output_tokens * 0.015 / 1000) as output_cost
+  by agent_name, model
+
+-- Execution performance
+fields @timestamp, agent_name, duration
+| stats avg(duration) as avg_duration,
+        max(duration) as max_duration,
+        count() as total_executions
+  by agent_name
 ```
 
-## 📖 Documentation
+### Alerts
 
-### Core Documentation
+Configure CloudWatch Alarms:
+- High error rate (>5% failures)
+- Slow executions (>30s duration)
+- High costs (>$100/day)
+- Token limit warnings
 
-- [Deployment Guide](docs/DEPLOYMENT_GUIDE.md) - Detailed deployment instructions
-- [Architecture Overview](docs/MODULAR_ARCHITECTURE.md) - System design and patterns
+## Documentation
+
+### Getting Started
+- [Deployment Guide](docs/DEPLOYMENT_GUIDE.md) - Complete deployment walkthrough
+- [Quick Start Tutorial](docs/QUICK_START.md) - Build your first agent in 10 minutes
+
+### Development Guides
 - [Agent Development](docs/AGENT_DEVELOPMENT.md) - Creating custom agents
 - [Tool Development](docs/TOOL_DEVELOPMENT.md) - Building new tools
-- [LLM Provider Setup](docs/LLM_PROVIDER_SETUP.md) - Configuring providers
+- [Testing Guide](docs/TESTING_GUIDE.md) - Testing strategies
 
 ### Advanced Topics
-
+- [Modular Architecture](docs/MODULAR_ARCHITECTURE.md) - System design patterns
 - [Long Content Support](docs/LONG_CONTENT_FEATURE.md) - Handling large documents
 - [Human Approval Workflows](docs/HUMAN_APPROVAL.md) - Adding approval steps
 - [Activity Testing](docs/ACTIVITY_TESTING_GUIDE.md) - Testing remote activities
-- [Security Best Practices](docs/SECURITY.md) - Security considerations
 
-### Migration Guides
+### Operations
+- [Monitoring Guide](docs/MONITORING.md) - Observability setup
+- [Security Best Practices](docs/SECURITY.md) - Security hardening
+- [Cost Optimization](docs/COST_OPTIMIZATION.md) - Reducing operational costs
+- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
 
-- [Legacy Migration](docs/MIGRATION_GUIDE.md) - Migrating from old architecture
-- [Provider Migration](docs/PROVIDER_MIGRATION.md) - Switching LLM providers
+### Management UI
+- [UI User Guide](ui_amplify/README.md) - Using the admin interface
+- [Execution Index](ui_amplify/EXECUTION_INDEX_SUMMARY.md) - Fast execution queries
+- [Analytics Dashboard](ui_amplify/docs/ANALYTICS.md) - Using metrics and analytics
 
-## 🤝 Contributing
+## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ### Development Setup
 
@@ -399,24 +582,64 @@ pytest
 
 # Format code
 black .
+ruff check .
 ```
 
-## 📜 License
+### UI Development
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+```bash
+cd ui_amplify
 
-## 🙏 Acknowledgments
+# Install dependencies
+npm install
 
-- AWS Step Functions team for the serverless orchestration platform
-- Anthropic, OpenAI, and Google for their LLM APIs
-- The open-source community for various tools and libraries
+# Run local development server
+npm run dev
 
-## 📞 Support
+# Run tests
+npm test
+```
+
+## Project Structure
+
+```
+step-functions-agent/
+├── app.py                      # CDK app entry point
+├── stacks/
+│   ├── agents/                 # Agent stack definitions
+│   ├── tools/                  # Tool stack definitions
+│   ├── shared_llm/             # LLM service stacks
+│   └── infrastructure/         # Core infrastructure
+├── lambda/
+│   ├── tools/                  # Tool Lambda functions
+│   │   ├── db-interface/
+│   │   ├── google-maps/
+│   │   └── web-research/
+│   └── unified_llm/            # Unified LLM service (Rust)
+├── ui_amplify/                 # Management UI (Amplify Gen 2)
+│   ├── amplify/                # Backend configuration
+│   ├── src/                    # React frontend
+│   └── scripts/                # Utility scripts
+└── docs/                       # Documentation
+```
+
+## Support
 
 - **Issues**: [GitHub Issues](https://github.com/your-org/step-functions-agent/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/your-org/step-functions-agent/discussions)
-- **Documentation**: [Full Documentation](https://your-docs-site.com)
+- **Documentation**: [docs.your-project.com](https://docs.your-project.com)
+
+## License
+
+This project is licensed under the MIT License - see [LICENSE](LICENSE) for details.
+
+## Acknowledgments
+
+- AWS Step Functions team for serverless orchestration
+- Anthropic, OpenAI, Google, Amazon, xAI, and DeepSeek for LLM APIs
+- AWS Amplify team for the Gen 2 framework
+- Open-source community for tools and libraries
 
 ---
 
-Built with ❤️ using AWS CDK and Step Functions
+**Built with ❤️ using AWS CDK, Step Functions, and Amplify**
