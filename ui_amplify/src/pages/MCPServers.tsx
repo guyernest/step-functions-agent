@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Card,
   Heading,
@@ -51,20 +52,13 @@ interface MCPServer {
   created_by?: string
 }
 
-interface ConnectionResult {
-  success: boolean
-  message: string
-  response_time?: number
-}
-
 const MCPServers: React.FC = () => {
+  const navigate = useNavigate()
   const [servers, setServers] = useState<MCPServer[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set())
-  const [testingConnection, setTestingConnection] = useState<string | null>(null)
-  const [connectionResults, setConnectionResults] = useState<Record<string, ConnectionResult>>({})
 
   useEffect(() => {
     fetchServers()
@@ -85,39 +79,12 @@ const MCPServers: React.FC = () => {
     }
   }
 
-  const testConnection = async (serverId: string) => {
+  const testConnection = (serverId: string) => {
     const server = servers.find(s => s.server_id === serverId)
-    if (!server) return
+    if (!server || !server.endpoint_url) return
 
-    setTestingConnection(serverId)
-    try {
-      const startTime = Date.now()
-      const response = await client.queries.testMCPServerConnection({ server_id: serverId })
-      const endTime = Date.now()
-      
-      if (response.data) {
-        const result = typeof response.data === 'string' ? JSON.parse(response.data) : response.data
-        setConnectionResults({
-          ...connectionResults,
-          [serverId]: {
-            success: result.success,
-            message: result.message,
-            response_time: endTime - startTime
-          }
-        })
-      }
-    } catch (err) {
-      console.error('Error testing connection:', err)
-      setConnectionResults({
-        ...connectionResults,
-        [serverId]: {
-          success: false,
-          message: `Connection test failed: ${err}`
-        }
-      })
-    } finally {
-      setTestingConnection(null)
-    }
+    // Navigate to MCP test page with server URL
+    navigate(`/mcp-test?url=${encodeURIComponent(server.endpoint_url)}`)
   }
 
   const toggleServerExpansion = (serverId: string) => {
@@ -268,9 +235,8 @@ const MCPServers: React.FC = () => {
                             <Flex gap="0.5rem">
                               <Button
                                 size="small"
-                                variation={testingConnection === server.server_id ? "primary" : "link"}
+                                variation="link"
                                 onClick={() => testConnection(server.server_id)}
-                                isLoading={testingConnection === server.server_id}
                               >
                                 Test Connection
                               </Button>
@@ -282,30 +248,6 @@ const MCPServers: React.FC = () => {
                               </Button>
                             </Flex>
                           </Flex>
-
-                          {connectionResults[server.server_id] && (
-                            <Alert
-                              variation={connectionResults[server.server_id].success ? 'success' : 'error'}
-                              isDismissible={true}
-                              onDismiss={() => {
-                                const newResults = { ...connectionResults }
-                                delete newResults[server.server_id]
-                                setConnectionResults(newResults)
-                              }}
-                            >
-                              <Flex direction="column" gap="0.25rem">
-                                <Text fontWeight="bold">
-                                  {connectionResults[server.server_id].success ? 'Connection Successful' : 'Connection Failed'}
-                                </Text>
-                                <Text>{connectionResults[server.server_id].message}</Text>
-                                {connectionResults[server.server_id].response_time && (
-                                  <Text fontSize="0.875rem">
-                                    Response time: {connectionResults[server.server_id].response_time}ms
-                                  </Text>
-                                )}
-                              </Flex>
-                            </Alert>
-                          )}
 
                           {expandedServers.has(server.server_id) && (
                             <>

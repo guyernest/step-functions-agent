@@ -1,10 +1,12 @@
-.PHONY: build deploy test clean install sandbox build-mcp build-frontend codegen lint format help
+.PHONY: build deploy test clean install sandbox build-mcp build-frontend build-wasm codegen lint format help
 
 # Default target
 .DEFAULT_GOAL := help
 
 # Variables
 MCP_SERVER_DIR = amplify/mcp-server/rust-mcp-server
+WASM_CLIENT_DIR = ../wasm-mcp-client
+UI_WASM_DIR = src/wasm
 
 # Help target
 help:
@@ -15,8 +17,9 @@ help:
 	@echo "  make sandbox       - Start Amplify sandbox (with sandbox-USER tables)"
 	@echo "  make sandbox-dev   - Start Amplify sandbox (with dev tables)"
 	@echo "  make sandbox-prod  - Start Amplify sandbox (WARNING: uses PROD tables)"
-	@echo "  make build         - Build everything (MCP server + frontend)"
+	@echo "  make build         - Build everything (MCP server + frontend + WASM client)"
 	@echo "  make build-mcp     - Build MCP server (Rust Lambda function)"
+	@echo "  make build-wasm    - Build WASM MCP client for browser testing"
 	@echo "  make build-frontend - Build frontend application"
 	@echo "  make codegen       - Generate GraphQL client code"
 	@echo "  make deploy        - Deploy to AWS"
@@ -64,7 +67,7 @@ sandbox-prod:
 	npx ampx sandbox
 
 # Build everything
-build: build-mcp build-frontend
+build: build-mcp build-wasm build-frontend
 	@echo "Build complete!"
 
 # Build MCP server (Rust Lambda function)
@@ -72,6 +75,17 @@ build-mcp:
 	@echo "Building MCP server..."
 	@cd $(MCP_SERVER_DIR) && make build
 	@echo "MCP server built successfully!"
+
+# Build WASM MCP client
+build-wasm:
+	@echo "Building WASM MCP client..."
+	@cd $(WASM_CLIENT_DIR) && wasm-pack build --target web
+	@echo "Copying WASM artifacts to UI..."
+	@mkdir -p $(UI_WASM_DIR)
+	@mkdir -p public
+	@cp -r $(WASM_CLIENT_DIR)/pkg/* $(UI_WASM_DIR)/
+	@cp $(WASM_CLIENT_DIR)/pkg/mcp_management_wasm_client_bg.wasm public/
+	@echo "WASM client built successfully!"
 
 # Build frontend
 build-frontend: codegen

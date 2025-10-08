@@ -1,0 +1,15 @@
+{
+  "name": "mcp-management-wasm-client",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "mcp_management_wasm_client_bg.wasm",
+    "mcp_management_wasm_client.js",
+    "mcp_management_wasm_client.d.ts"
+  ],
+  "main": "mcp_management_wasm_client.js",
+  "types": "mcp_management_wasm_client.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
