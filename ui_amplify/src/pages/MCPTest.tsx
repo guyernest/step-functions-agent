@@ -16,7 +16,6 @@ export default function MCPTest() {
   const urlParam = searchParams.get('url');
   const [serverUrl, setServerUrl] = useState(urlParam || 'https://dkheh7ufl9.execute-api.us-west-2.amazonaws.com/');
   const [showClient, setShowClient] = useState(!!urlParam);
-  const [toolsCount, setToolsCount] = useState(0);
 
   // Auto-connect if URL is provided
   useEffect(() => {
@@ -28,10 +27,6 @@ export default function MCPTest() {
 
   const handleConnect = () => {
     setShowClient(true);
-  };
-
-  const handleToolsLoaded = (tools: any[]) => {
-    setToolsCount(tools.length);
   };
 
   return (
@@ -76,17 +71,13 @@ export default function MCPTest() {
                 <Text fontWeight="bold">Connected to:</Text>
                 <Text fontSize="0.875rem" color="gray">{serverUrl}</Text>
               </View>
-              <View>
-                <Text fontWeight="bold">Tools Found:</Text>
-                <Text fontSize="1.25rem">{toolsCount}</Text>
-              </View>
               <Button onClick={() => setShowClient(false)} variation="link">
                 Disconnect
               </Button>
             </Flex>
           </Card>
 
-          <WasmMcpClient serverUrl={serverUrl} onToolsLoaded={handleToolsLoaded} />
+          <WasmMcpClient serverUrl={serverUrl} />
         </View>
       )}
     </View>

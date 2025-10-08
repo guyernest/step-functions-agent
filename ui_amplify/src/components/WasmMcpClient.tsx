@@ -27,6 +27,24 @@ interface ResourceDefinition {
   mimeType?: string;
 }
 
+interface PromptDefinition {
+  name: string;
+  description?: string;
+  arguments?: Array<{
+    name: string;
+    description?: string;
+    required?: boolean;
+  }>;
+}
+
+interface PromptMessage {
+  role: 'user' | 'assistant';
+  content: {
+    type: string;
+    text: string;
+  };
+}
+
 interface FormField {
   name: string;
   label: string;
@@ -55,6 +73,13 @@ interface ResourceContent {
   error?: string;
 }
 
+interface PromptResult {
+  messages?: PromptMessage[];
+  description?: string;
+  isError?: boolean;
+  error?: string;
+}
+
 interface WasmMcpClientProps {
   serverUrl: string;
   onToolsLoaded?: (tools: ToolDefinition[]) => void;
@@ -74,6 +99,11 @@ export default function WasmMcpClient({ serverUrl, onToolsLoaded }: WasmMcpClien
   const [selectedResource, setSelectedResource] = useState<ResourceDefinition | null>(null);
   const [resourceContent, setResourceContent] = useState<ResourceContent | null>(null);
   const [loadingResource, setLoadingResource] = useState(false);
+  const [prompts, setPrompts] = useState<PromptDefinition[]>([]);
+  const [selectedPrompt, setSelectedPrompt] = useState<PromptDefinition | null>(null);
+  const [promptFormData, setPromptFormData] = useState<Record<string, any>>({});
+  const [promptResult, setPromptResult] = useState<PromptResult | null>(null);
+  const [executingPrompt, setExecutingPrompt] = useState(false);
   const wasmModule = useRef<any>(null);
 
   // Debug resources state
@@ -166,6 +196,34 @@ export default function WasmMcpClient({ serverUrl, onToolsLoaded }: WasmMcpClien
           // Don't fail initialization if resources fail
         }
 
+        // List available prompts
+        try {
+          const promptsList = await wasmClient.list_prompts();
+          console.log('Raw prompts response:', promptsList);
+
+          // Process prompts list
+          let processedPrompts: PromptDefinition[] = [];
+
+          if (Array.isArray(promptsList)) {
+            processedPrompts = promptsList.map((prompt: any) => {
+              if (prompt instanceof Map) {
+                const obj: any = {};
+                prompt.forEach((value: any, key: string) => {
+                  obj[key] = value;
+                });
+                return obj;
+              }
+              return prompt;
+            });
+          }
+
+          console.log('Processed prompts:', processedPrompts);
+          setPrompts(processedPrompts);
+        } catch (promptErr) {
+          console.error('Failed to load prompts:', promptErr);
+          // Don't fail initialization if prompts fail
+        }
+
       } catch (err) {
         console.error('Failed to initialize WASM client:', err);
         setError(err instanceof Error ? err.message : 'Failed to initialize WASM client');
@@ -255,6 +313,42 @@ export default function WasmMcpClient({ serverUrl, onToolsLoaded }: WasmMcpClien
       setLoadingResource(false);
     }
   }, [client, selectedResource]);
+
+  // Handle prompt selection
+  const handlePromptSelect = useCallback((prompt: PromptDefinition) => {
+    setSelectedPrompt(prompt);
+    setPromptFormData({});
+    setPromptResult(null);
+  }, []);
+
+  // Handle prompt form input changes
+  const handlePromptInputChange = useCallback((fieldName: string, value: any) => {
+    setPromptFormData(prev => ({
+      ...prev,
+      [fieldName]: value
+    }));
+  }, []);
+
+  // Execute the selected prompt
+  const executePrompt = useCallback(async () => {
+    if (!client || !selectedPrompt) return;
+
+    setExecutingPrompt(true);
+    setPromptResult(null);
+
+    try {
+      const result = await client.get_prompt(selectedPrompt.name, promptFormData);
+      setPromptResult(result as PromptResult);
+    } catch (err) {
+      console.error('Prompt execution failed:', err);
+      setPromptResult({
+        isError: true,
+        error: err instanceof Error ? err.message : 'Prompt execution failed'
+      });
+    } finally {
+      setExecutingPrompt(false);
+    }
+  }, [client, selectedPrompt, promptFormData]);
 
   // Render form field
   const renderFormField = (field: FormField) => {
@@ -425,6 +519,107 @@ export default function WasmMcpClient({ serverUrl, onToolsLoaded }: WasmMcpClien
     );
   };
 
+  // Get form fields from prompt arguments
+  const getPromptFormFields = useCallback((prompt: PromptDefinition): FormField[] => {
+    if (!prompt.arguments || prompt.arguments.length === 0) {
+      return [];
+    }
+
+    return prompt.arguments.map((arg) => ({
+      name: arg.name,
+      label: arg.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      field_type: 'string',
+      required: arg.required || false,
+      description: arg.description,
+      default_value: ''
+    }));
+  }, []);
+
+  // Render prompt form field
+  const renderPromptFormField = (field: FormField) => {
+    const value = promptFormData[field.name] ?? field.default_value ?? '';
+
+    return (
+      <View key={field.name} marginBottom="1rem">
+        <Text fontWeight="bold">
+          {field.label}
+          {field.required && <Text as="span" color="red"> *</Text>}
+        </Text>
+        {field.description && (
+          <Text fontSize="0.875rem" color="gray">{field.description}</Text>
+        )}
+        <TextField
+          label=""
+          value={value}
+          onChange={(e) => handlePromptInputChange(field.name, e.target.value)}
+          placeholder={field.description || field.label}
+        />
+      </View>
+    );
+  };
+
+  // Render prompt result (messages)
+  const renderPromptResult = () => {
+    if (!promptResult) return null;
+
+    if (promptResult.isError || promptResult.error) {
+      return (
+        <Alert variation="error" marginTop="1rem">
+          <Heading level={6}>Error</Heading>
+          <Text>{promptResult.error}</Text>
+        </Alert>
+      );
+    }
+
+    if (promptResult.messages && promptResult.messages.length > 0) {
+      return (
+        <Card variation="outlined" marginTop="1rem">
+          <Heading level={6}>Messages</Heading>
+          {promptResult.description && (
+            <Text fontSize="0.875rem" color="gray" marginBottom="1rem">
+              {promptResult.description}
+            </Text>
+          )}
+          <Divider marginBottom="1rem" />
+          <View>
+            {promptResult.messages.map((message, index) => (
+              <Card
+                key={index}
+                variation={message.role === 'user' ? 'outlined' : 'elevated'}
+                marginBottom="1rem"
+              >
+                <Badge variation={message.role === 'user' ? 'info' : 'success'}>
+                  {message.role}
+                </Badge>
+                <Text
+                  marginTop="0.5rem"
+                  style={{
+                    whiteSpace: 'pre-wrap',
+                    fontFamily: 'monospace',
+                    fontSize: '0.875rem',
+                    lineHeight: '1.5'
+                  }}
+                >
+                  {message.content.text}
+                </Text>
+              </Card>
+            ))}
+          </View>
+        </Card>
+      );
+    }
+
+    // Fallback: show raw result
+    return (
+      <Card variation="outlined" marginTop="1rem">
+        <Heading level={6}>Result</Heading>
+        <pre style={{ overflow: 'auto', fontSize: '0.875rem' }}>
+          {JSON.stringify(promptResult, null, 2)}
+        </pre>
+      </Card>
+    );
+  };
+
   if (loading) {
     return (
       <Flex direction="column" alignItems="center" padding="2rem">
@@ -577,6 +772,74 @@ export default function WasmMcpClient({ serverUrl, onToolsLoaded }: WasmMcpClien
 
                 {/* Resource Content Display */}
                 {renderResourceContent()}
+              </Card>
+            )}
+              </Flex>
+            )
+          },
+          {
+            label: `Prompts (${prompts.length})`,
+            value: 'prompts',
+            content: (
+              <Flex direction="row" gap="1rem" marginTop="1rem">
+            {/* Prompt List */}
+            <Card flex="1" variation="outlined">
+              <Heading level={5}>Available Prompts</Heading>
+              <Divider marginTop="0.5rem" marginBottom="0.5rem" />
+              {prompts.length === 0 ? (
+                <Text color="gray" padding="1rem">No prompts available</Text>
+              ) : (
+                <View>
+                  {prompts.map((prompt) => (
+                  <Card
+                    key={prompt.name}
+                    variation={selectedPrompt?.name === prompt.name ? 'elevated' : 'outlined'}
+                    marginBottom="0.5rem"
+                    onClick={() => handlePromptSelect(prompt)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <Text fontWeight="bold">{prompt.name}</Text>
+                    {prompt.description && (
+                      <Text fontSize="0.875rem" color="gray">{prompt.description}</Text>
+                    )}
+                    {prompt.arguments && prompt.arguments.length > 0 && (
+                      <Text fontSize="0.75rem" color="gray" marginTop="0.25rem">
+                        Arguments: {prompt.arguments.map(a => a.name).join(', ')}
+                      </Text>
+                    )}
+                  </Card>
+                  ))}
+                </View>
+              )}
+            </Card>
+
+            {/* Prompt Details */}
+            {selectedPrompt && (
+              <Card flex="2" variation="outlined">
+                <Heading level={5}>{selectedPrompt.name}</Heading>
+                {selectedPrompt.description && (
+                  <Text color="gray" marginBottom="1rem">{selectedPrompt.description}</Text>
+                )}
+                <Divider marginBottom="1rem" />
+
+                {/* Prompt Arguments Form */}
+                <View>
+                  {getPromptFormFields(selectedPrompt).map(field => renderPromptFormField(field))}
+                </View>
+
+                {/* Execute Button */}
+                <Button
+                  onClick={executePrompt}
+                  isLoading={executingPrompt}
+                  loadingText="Executing..."
+                  variation="primary"
+                  marginTop="1rem"
+                >
+                  Get Prompt
+                </Button>
+
+                {/* Prompt Result Display */}
+                {renderPromptResult()}
               </Card>
             )}
               </Flex>

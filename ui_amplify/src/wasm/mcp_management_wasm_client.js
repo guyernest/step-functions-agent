@@ -220,7 +220,7 @@ export function init_panic_hook() {
     wasm.init_panic_hook();
 }
 
-function __wbg_adapter_8(arg0, arg1, arg2) {
+function __wbg_adapter_10(arg0, arg1, arg2) {
     wasm.closure110_externref_shim(arg0, arg1, arg2);
 }
 
@@ -717,7 +717,7 @@ function __wbg_get_imports() {
     };
     imports.wbg.__wbindgen_cast_77878eef07e6a99a = function(arg0, arg1) {
         // Cast intrinsic for `Closure(Closure { dtor_idx: 109, function: Function { arguments: [Externref], shim_idx: 110, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-        const ret = makeMutClosure(arg0, arg1, 109, __wbg_adapter_8);
+        const ret = makeMutClosure(arg0, arg1, 109, __wbg_adapter_10);
         return ret;
     };
     imports.wbg.__wbindgen_cast_9ae0607507abb057 = function(arg0) {
