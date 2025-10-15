@@ -36,10 +36,11 @@ impl NovaActExecutor {
             .context("Failed to get current directory")?;
 
         // Dev mode: current dir might be ui/ or project root
+        // Use Path::join which handles platform-specific separators automatically
         let locations = vec![
-            current_dir.join("python/nova_act_wrapper.py"),
-            current_dir.join("../python/nova_act_wrapper.py"),
-            current_dir.join("../../python/nova_act_wrapper.py"),
+            current_dir.join("python").join("nova_act_wrapper.py"),
+            current_dir.join("..").join("python").join("nova_act_wrapper.py"),
+            current_dir.join("..").join("..").join("python").join("nova_act_wrapper.py"),
         ];
 
         for path in &locations {
@@ -52,7 +53,7 @@ impl NovaActExecutor {
         // Try relative path from executable (for release builds)
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_dir) = exe_path.parent() {
-                let wrapper_path = exe_dir.join("../python/nova_act_wrapper.py");
+                let wrapper_path = exe_dir.join("..").join("python").join("nova_act_wrapper.py");
                 if wrapper_path.exists() {
                     debug!("Found Python wrapper at: {}", wrapper_path.display());
                     return Ok(wrapper_path.canonicalize()?);
@@ -86,14 +87,22 @@ impl NovaActExecutor {
         let current_dir = std::env::current_dir()
             .context("Failed to get current directory")?;
 
-        // Dev mode: current dir might be ui/ or project root
-        let locations = vec![
+        // Platform-specific venv paths
+        #[cfg(target_os = "windows")]
+        let venv_paths = vec![
+            current_dir.join("python\\.venv\\Scripts\\python.exe"),
+            current_dir.join("..\\python\\.venv\\Scripts\\python.exe"),
+            current_dir.join("..\\..\\python\\.venv\\Scripts\\python.exe"),
+        ];
+
+        #[cfg(not(target_os = "windows"))]
+        let venv_paths = vec![
             current_dir.join("python/.venv/bin/python"),
             current_dir.join("../python/.venv/bin/python"),
             current_dir.join("../../python/.venv/bin/python"),
         ];
 
-        for path in &locations {
+        for path in &venv_paths {
             if path.exists() {
                 debug!("Found Python venv at: {}", path.display());
                 return Ok(path.canonicalize()?);
@@ -103,7 +112,12 @@ impl NovaActExecutor {
         // Try relative to executable (for release builds)
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_dir) = exe_path.parent() {
+                #[cfg(target_os = "windows")]
+                let venv_python = exe_dir.join("..\\python\\.venv\\Scripts\\python.exe");
+
+                #[cfg(not(target_os = "windows"))]
                 let venv_python = exe_dir.join("../python/.venv/bin/python");
+
                 if venv_python.exists() {
                     debug!("Found Python venv at: {}", venv_python.display());
                     return Ok(venv_python.canonicalize()?);
@@ -111,9 +125,18 @@ impl NovaActExecutor {
             }
         }
 
-        // Fallback to system python3
-        debug!("Using system python3");
-        Ok(PathBuf::from("python3"))
+        // Fallback to system python (platform-specific command)
+        #[cfg(target_os = "windows")]
+        {
+            debug!("Using system python");
+            Ok(PathBuf::from("python"))
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            debug!("Using system python3");
+            Ok(PathBuf::from("python3"))
+        }
     }
 
     /// Execute a browser automation command

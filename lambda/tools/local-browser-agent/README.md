@@ -87,13 +87,31 @@ The Local Browser Agent solves the bot detection problem inherent in cloud-based
 
 ## Prerequisites
 
-- **Operating System**: macOS, Linux, or Windows (WSL2)
-- **Python**: 3.11 (managed via `uv` venv)
-- **uv**: Fast Python package installer ([install](https://docs.astral.sh/uv/))
+- **Operating System**: macOS, Linux, or Windows
+- **Python**: 3.11+ (managed via `uv` or direct installation)
+- **uv** (recommended): Fast Python package installer ([install](https://docs.astral.sh/uv/))
 - **Rust**: Latest stable ([install](https://rustup.rs/))
 - **Node.js**: 16+ (for Tauri frontend)
 - **AWS Account**: With Step Functions and S3 access
 - **Chrome**: Google Chrome browser
+
+### Platform-Specific Notes
+
+**Windows**:
+- Use `python` command (not `python3`)
+- Chrome typically installed at `C:\Program Files\Google\Chrome\Application\chrome.exe`
+- User data directory at `%LOCALAPPDATA%\Google\Chrome\User Data`
+- AWS credentials at `%USERPROFILE%\.aws\credentials`
+
+**macOS**:
+- Use `python3` command
+- Chrome at `/Applications/Google Chrome.app`
+- User data directory at `~/Library/Application Support/Google/Chrome`
+
+**Linux**:
+- Use `python3` command
+- Chrome at `/usr/bin/google-chrome`
+- User data directory at `~/.config/google-chrome`
 
 ## Quick Start
 
@@ -328,6 +346,90 @@ All browser sessions are automatically recorded and uploaded to S3:
 - **Metadata**: Session info, timestamps
 
 Access recordings via S3 URI returned in tool response.
+
+## Windows-Specific Setup
+
+### Building on Windows
+
+```powershell
+# Install Rust from https://rustup.rs/
+# Install Node.js from https://nodejs.org/
+# Install Python 3.11+ from https://www.python.org/
+
+# Navigate to the local-browser-agent directory
+cd lambda\tools\local-browser-agent
+
+# Install Python dependencies with uv (recommended)
+pip install uv
+uv venv python\.venv
+python\.venv\Scripts\activate
+uv pip install -r python\requirements.txt
+
+# Or install manually
+python -m venv python\.venv
+python\.venv\Scripts\activate
+pip install -r python\requirements.txt
+
+# Install Node.js dependencies
+cd ui
+npm install
+cd ..
+
+# Build the Tauri application
+cd src-tauri
+cargo build --release
+```
+
+### Running on Windows
+
+```powershell
+# Set Nova Act API key
+$env:NOVA_ACT_API_KEY = "your-api-key"
+
+# Configure AWS credentials
+aws configure --profile browser-agent
+
+# Run the application
+.\target\release\local-browser-agent.exe
+
+# Or in development mode
+cd src-tauri
+cargo run
+```
+
+### Windows-Specific Notes
+
+1. **Python Command**: Windows uses `python` instead of `python3`
+2. **Path Separators**: The application automatically handles Windows backslashes
+3. **Chrome Detection**: Will look for Chrome at:
+   - `C:\Program Files\Google\Chrome\Application\chrome.exe`
+   - `C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`
+4. **User Data Directory**: Default location is `%LOCALAPPDATA%\Google\Chrome\User Data`
+5. **AWS Credentials**: Located at `%USERPROFILE%\.aws\credentials`
+6. **Firewall**: Ensure Windows Firewall allows outbound HTTPS connections to AWS
+
+### Common Windows Issues
+
+**Issue**: Python not found
+```powershell
+# Add Python to PATH or use full path
+$env:PATH += ";C:\Python311"
+```
+
+**Issue**: Chrome not found
+```powershell
+# Verify Chrome installation
+Get-Command chrome
+# Or check manually
+Test-Path "C:\Program Files\Google\Chrome\Application\chrome.exe"
+```
+
+**Issue**: AWS credentials not loading
+```powershell
+# Verify AWS CLI configuration
+aws configure list --profile browser-agent
+aws sts get-caller-identity --profile browser-agent
+```
 
 ## Troubleshooting
 
