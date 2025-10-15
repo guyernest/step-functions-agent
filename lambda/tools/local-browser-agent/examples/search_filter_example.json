@@ -1,0 +1,120 @@
+{
+  "name": "Search and Filter Demo",
+  "description": "Demonstrates search operations, applying filters, sorting results, and extracting structured data from search results",
+  "starting_page": "https://books.toscrape.com/",
+  "abort_on_error": false,
+  "steps": [
+    {
+      "action": "act",
+      "prompt": "Look at the available book categories on the left sidebar and count how many categories there are",
+      "description": "Analyze available categories"
+    },
+    {
+      "action": "act",
+      "prompt": "Navigate to the 'Travel' category by clicking on it",
+      "description": "Filter by category"
+    },
+    {
+      "action": "act_with_schema",
+      "prompt": "How many books are shown in the Travel category?",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "book_count": {"type": "number"},
+          "category_name": {"type": "string"}
+        },
+        "required": ["book_count", "category_name"]
+      },
+      "description": "Count filtered results"
+    },
+    {
+      "action": "act_with_schema",
+      "prompt": "Extract information about all the travel books shown including title, price, rating, and availability",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "books": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {"type": "string"},
+                "price": {"type": "string"},
+                "rating": {"type": "string"},
+                "in_stock": {"type": "boolean"}
+              },
+              "required": ["title", "price"]
+            }
+          },
+          "total_books": {"type": "number"}
+        },
+        "required": ["books"]
+      },
+      "description": "Extract filtered search results"
+    },
+    {
+      "action": "act",
+      "prompt": "Go back to all books by clicking on 'Books' or the home link",
+      "description": "Reset filters"
+    },
+    {
+      "action": "act",
+      "prompt": "Navigate to the 'Fiction' category",
+      "description": "Apply different filter"
+    },
+    {
+      "action": "act_with_schema",
+      "prompt": "Compare the Fiction category: how many books and what's the price range?",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "category": {"type": "string"},
+          "book_count": {"type": "number"},
+          "lowest_price": {"type": "string"},
+          "highest_price": {"type": "string"}
+        },
+        "required": ["category", "book_count"]
+      },
+      "description": "Analyze different category results"
+    },
+    {
+      "action": "act_with_schema",
+      "prompt": "Find all books with a 5-star rating in this category",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "five_star_books": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {"type": "string"},
+                "price": {"type": "string"}
+              },
+              "required": ["title"]
+            }
+          },
+          "count": {"type": "number"}
+        },
+        "required": ["five_star_books", "count"]
+      },
+      "description": "Filter by rating"
+    },
+    {
+      "action": "act_with_schema",
+      "prompt": "Are there any books priced under £20 in this category?",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "has_books_under_20": {"type": "boolean"},
+          "example_titles": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        },
+        "required": ["has_books_under_20"]
+      },
+      "description": "Price-based filtering"
+    }
+  ]
+}

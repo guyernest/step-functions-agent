@@ -1,0 +1,101 @@
+{
+  "name": "Form Filling Demo",
+  "description": "Demonstrates form field detection, filling with test data, and validation - uses HTTPBin test form for safe practice",
+  "starting_page": "https://httpbin.org/forms/post",
+  "abort_on_error": false,
+  "steps": [
+    {
+      "action": "act_with_schema",
+      "prompt": "Analyze the form and tell me what fields are available. List each field name and type.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "form_fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field_name": {"type": "string"},
+                "field_type": {"type": "string"},
+                "is_required": {"type": "boolean"}
+              },
+              "required": ["field_name", "field_type"]
+            }
+          },
+          "has_submit_button": {"type": "boolean"}
+        },
+        "required": ["form_fields"]
+      },
+      "description": "Detect and analyze form structure"
+    },
+    {
+      "action": "act",
+      "prompt": "Fill in the 'custname' field with 'John Doe'",
+      "description": "Fill customer name field"
+    },
+    {
+      "action": "act",
+      "prompt": "Fill in the 'custtel' field with '555-0123'",
+      "description": "Fill customer telephone field"
+    },
+    {
+      "action": "act",
+      "prompt": "Fill in the 'custemail' field with 'john.doe@example.com'",
+      "description": "Fill customer email field"
+    },
+    {
+      "action": "act",
+      "prompt": "Select 'Medium' for the pizza size",
+      "description": "Select pizza size"
+    },
+    {
+      "action": "act",
+      "prompt": "Select 'Bacon' as a topping",
+      "description": "Select topping option"
+    },
+    {
+      "action": "act",
+      "prompt": "Fill in the delivery time field with '7:00 PM'",
+      "description": "Fill delivery time"
+    },
+    {
+      "action": "act",
+      "prompt": "Fill in the delivery instructions textarea with 'Please ring doorbell twice and leave at door'",
+      "description": "Fill delivery instructions"
+    },
+    {
+      "action": "act_with_schema",
+      "prompt": "Verify that all the form fields appear to be filled correctly. Check if the submit button is now enabled.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "all_fields_filled": {"type": "boolean"},
+          "submit_button_enabled": {"type": "boolean"},
+          "any_validation_errors": {"type": "boolean"}
+        },
+        "required": ["all_fields_filled", "submit_button_enabled"]
+      },
+      "description": "Validate form completion"
+    },
+    {
+      "action": "act_with_schema",
+      "prompt": "Extract all the filled form data to confirm what was entered",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "customer_name": {"type": "string"},
+          "customer_email": {"type": "string"},
+          "customer_phone": {"type": "string"},
+          "pizza_size": {"type": "string"},
+          "selected_toppings": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "delivery_time": {"type": "string"}
+        },
+        "required": ["customer_name", "customer_email"]
+      },
+      "description": "Extract and verify filled data"
+    }
+  ]
+}
