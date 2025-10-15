@@ -1,0 +1,30 @@
+# Local Browser Agent Configuration
+# Copy this file to config.yaml and fill in your values
+
+# AWS Step Functions Activity ARN (from CDK deployment)
+activity_arn: "arn:aws:states:us-west-2:123456789:activity:browser-remote-prod"
+
+# AWS Profile to use for credentials
+aws_profile: "browser-agent"
+
+# Optional: AWS Region (leave empty to use profile default)
+aws_region: null
+
+# S3 Bucket for recordings (from CDK deployment)
+s3_bucket: "browser-agent-recordings-prod-123456789"
+
+# Optional: Chrome user data directory for persistent sessions
+# Leave null to use temporary profile
+user_data_dir: null
+
+# UI Port
+ui_port: 3030
+
+# Optional: Nova Act API key (can also use NOVA_ACT_API_KEY env var)
+nova_act_api_key: null
+
+# Run browser in headless mode (not recommended for bot detection avoidance)
+headless: false
+
+# Heartbeat interval in seconds (how often to send heartbeat to Step Functions)
+heartbeat_interval: 60

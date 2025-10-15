@@ -1,0 +1,22 @@
+# Python
+python/.venv/
+python/__pycache__/
+python/*.pyc
+python/.pytest_cache/
+# Note: python/requirements.txt is generated from requirements.in and should be committed
+
+# Rust
+src-tauri/target/
+
+# Node
+ui/node_modules/
+ui/dist/
+
+# Config
+config.yaml
+
+# Logs
+*.log
+
+# OS
+.DS_Store

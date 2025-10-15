@@ -34,7 +34,9 @@ from stacks.tools.graphql_interface_tool_stack import GraphQLInterfaceToolStack
 from stacks.tools.image_analysis_tool_stack import ImageAnalysisToolStack
 from stacks.tools.nova_act_browser_tool_stack import NovaActBrowserToolStack
 from stacks.tools.agentcore_browser_tool_stack import AgentCoreBrowserToolStack
+from stacks.tools.browser_remote_tool_stack import BrowserRemoteToolStack
 from stacks.tools.address_search_batch_tool_stack import AddressSearchBatchToolStack
+from stacks.mcp.agentcore_browser_runtime_stack import AgentCoreBrowserRuntimeStack
 from stacks.tools.batch_processor_tool_stack import BatchProcessorToolStack
 from stacks.agents.sql_agent_with_base_construct import SQLAgentStack
 from stacks.agents.batch_orchestrator_agent_stack import BatchOrchestratorAgentStack
@@ -50,6 +52,7 @@ from stacks.agents.web_research_agent_unified_llm_stack import WebResearchAgentU
 from stacks.agents.web_search_agent_unified_llm_stack import WebSearchAgentUnifiedLLMStack
 from stacks.agents.google_maps_agent_unified_llm_stack import GoogleMapsAgentUnifiedLLMStack
 from stacks.agents.test_automation_remote_agent_unified_llm_stack import TestAutomationRemoteAgentUnifiedLLMStack
+from stacks.agents.browser_automation_agent_unified_llm_stack import BrowserAutomationAgentUnifiedLLMStack
 from stacks.agents.broadband_agent_unified_llm_stack import BroadbandAgentUnifiedLLMStack
 from stacks.agents.broadband_checker_structured_stack import BroadbandCheckerStructuredStack
 from stacks.agents.travel_time_checker_structured_stack import TravelTimeCheckerStructuredStack
@@ -61,6 +64,10 @@ from stacks.shared.shared_long_content_infrastructure_stack import SharedLongCon
 from stacks.shared.shared_unified_rust_llm_long_content_stack import SharedUnifiedRustLLMWithLongContentStack
 from stacks.tools.microsoft_graph_long_content_tool_stack import MicrosoftGraphLongContentToolStack
 from stacks.agents.test_automation_remote_agent_rust_long_content_stack import TestAutomationRemoteAgentRustLongContentStack
+
+# MCP Server stacks
+from stacks.mcp.reinvent_mcp_stack import ReinventMcpStack
+from stacks.mcp.wikipedia_mcp_stack import WikipediaMcpStack
 
 
 def main():
@@ -318,17 +325,51 @@ def main():
         description=f"Nova Act browser automation tools for {environment} environment"
     )
     nova_act_browser_tools.add_dependency(shared_infrastructure_stack)
-    
-    # Agent Core Browser Tools - browser automation with Agent Core runtime
+
+    # Agent Core Browser Runtime - DEPRECATED: Use manual deployment instead
+    # CDK support for AWS::BedrockAgentCore::Runtime is immature and causes CloudFormation stuck states
+    # Use the AgentCore starter toolkit CLI for runtime management instead
+    # See docs/AGENTCORE_BROWSER_SIMPLIFIED_DEPLOYMENT.md for details
+    #
+    # Deployment workflow:
+    # 1. Build containers: make build-agentcore-containers-codebuild
+    # 2. Deploy runtimes manually: make deploy-agentcore-runtimes-manual
+    # 3. Update Lambda ARNs: make update-agentcore-lambda-arns
+    #
+    # agentcore_browser_runtime = AgentCoreBrowserRuntimeStack(
+    #     app,
+    #     f"AgentCoreBrowserRuntimeStack-{environment}",
+    #     env_name=environment,
+    #     env=env,
+    #     description=f"AgentCore runtimes for browser automation agents in {environment} environment"
+    # )
+
+    # Agent Core Browser Tools - Lambda that routes to AgentCore runtime agents
+    # Runtime ARNs are now set via environment variables (updated by make update-agentcore-lambda-arns)
+    # Not passed from CDK stack since runtimes are deployed manually
+    agent_arns = None  # ARNs are set via Lambda environment variables
+
     agentcore_browser_tools = AgentCoreBrowserToolStack(
         app,
         f"AgentCoreBrowserToolStack-{environment}",
         env_name=environment,
+        agent_arns=agent_arns,  # Pass agent ARNs from runtime stack
         env=env,
         description=f"Agent Core browser automation tool for {environment} environment"
     )
     agentcore_browser_tools.add_dependency(shared_infrastructure_stack)
-    
+    # Note: AgentCore runtimes are deployed separately via agentcore CLI (see Makefile)
+
+    # Browser Remote Tool - Activity-based browser automation on local machine
+    browser_remote_tool = BrowserRemoteToolStack(
+        app,
+        f"BrowserRemoteToolStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Browser remote tool (Activity pattern) for {environment} environment"
+    )
+    browser_remote_tool.add_dependency(shared_infrastructure_stack)
+
     # Address Search Batch Tool - First Step Functions-based tool for batch processing
     address_search_batch = AddressSearchBatchToolStack(
         app,
@@ -443,7 +484,17 @@ def main():
         env=env,
         description=f"Test automation agent with remote execution using unified Rust LLM for {environment} environment"
     )
-    
+
+    # Browser Automation Agent with Unified Rust LLM - Nova Act browser automation
+    browser_automation_agent_rust = BrowserAutomationAgentUnifiedLLMStack(
+        app,
+        f"BrowserAutomationAgentUnifiedLLMStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Browser automation agent with Nova Act remote execution using unified Rust LLM for {environment} environment"
+    )
+    browser_automation_agent_rust.add_dependency(browser_remote_tool)  # Depends on browser remote tool
+
     # ==========================
     # Long Content Support Stacks
     # ==========================
@@ -532,6 +583,33 @@ def main():
     )
     batch_orchestrator_agent.add_dependency(batch_processor_tool)
     batch_orchestrator_agent.add_dependency(agent_registry_stack)
+
+    # ======================================================================
+    # MCP SERVERS
+    # ======================================================================
+
+    # Reinvent MCP Server - AWS re:Invent conference planning
+    reinvent_mcp = ReinventMcpStack(
+        app,
+        f"ReinventMcpStack-{environment}",
+        env_name=environment,
+        enable_control_plane=True,  # Set to False for standalone deployment
+        env=env,
+        description=f"AWS re:Invent Conference Planner MCP Server for {environment}"
+    )
+    # Depends on MCP Registry for control plane integration
+    reinvent_mcp.add_dependency(mcp_registry_stack)
+
+    # Wikipedia MCP Server - Wikipedia search and reference
+    wikipedia_mcp = WikipediaMcpStack(
+        app,
+        f"WikipediaMcpStack-{environment}",
+        env_name=environment,
+        enable_control_plane=True,
+        env=env,
+        description=f"Wikipedia Search & Reference MCP Server for {environment}"
+    )
+    wikipedia_mcp.add_dependency(mcp_registry_stack)
 
     # Image Analysis Agent - uses Gemini LLM for multimodal image analysis
     image_analysis_agent = ImageAnalysisAgentStack(
@@ -678,12 +756,14 @@ def main():
                   web_research_tools, cloudwatch_tools, clustering_tools, stock_analysis_tools,
                   earthquake_monitoring_tools, book_recommendation_tools, local_automation_tools,
                   microsoft_graph_tools, web_automation_tools, graphql_interface_tools,
-                  image_analysis_tools, nova_act_browser_tools, agentcore_browser_tools, sql_agent, google_maps_agent, research_agent,
+                  image_analysis_tools, nova_act_browser_tools, agentcore_browser_tools,
+                  browser_remote_tool,
+                  sql_agent, google_maps_agent, research_agent,
                   cloudwatch_agent, graphql_agent, image_analysis_agent,
                   test_sql_approval_agent, test_automation_remote_agent, web_search_agent_rust,
                   broadband_checker,
                   long_content_infrastructure, microsoft_graph_long_content,
-                  test_automation_remote_agent_rust_long]:
+                  test_automation_remote_agent_rust_long, reinvent_mcp, wikipedia_mcp]:
         for key, value in tags.items():
             cdk.Tags.of(stack).add(key, value)
     

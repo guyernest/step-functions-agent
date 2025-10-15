@@ -1,0 +1,56 @@
+[package]
+name = "local-browser-agent"
+version = "0.1.0"
+description = "Local browser agent for Step Functions Activity-based browser automation"
+authors = ["Your Name"]
+license = "MIT"
+repository = "https://github.com/yourusername/step-functions-agent"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+tauri-build = { version = "1.5", features = [] }
+
+[dependencies]
+tauri = { version = "1.5", features = [
+    "shell-open",
+    "window-close",
+    "window-hide",
+    "window-maximize",
+    "window-minimize",
+    "window-show",
+    "window-start-dragging",
+    "window-unmaximize",
+    "window-unminimize"
+] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.35", features = ["full"] }
+aws-config = { version = "1.1", features = ["behavior-version-latest"] }
+aws-sdk-sfn = "1.12"
+anyhow = "1.0"
+thiserror = "1.0"
+log = "0.4"
+env_logger = "0.11"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.6", features = ["v4", "serde"] }
+parking_lot = "0.12"
+serde_yaml = "0.9.34"
+lazy_static = "1.4"
+schemars = { version = "0.8", features = ["url"] }
+jsonschema = "0.18"
+url = "2.5"
+tempfile = "3.8"
+
+[features]
+# This feature is used for production builds or when `devPath` points to the filesystem
+# DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "z"
+strip = true
