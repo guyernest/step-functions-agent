@@ -1,0 +1,42 @@
+{
+  "session": {
+    "profile_name": "{{browser_config.profile_name}}",
+    "mode": "use_profile",
+    "clone_for_parallel": {{browser_config.clone_for_parallel}}
+  },
+  "steps": [
+    {
+      "type": "navigate",
+      "url": "{{browser_config.starting_url}}",
+      "description": "Navigate to starting URL"
+    },
+    {
+      "type": "act",
+      "goal": "Perform extraction task with the provided input parameters",
+      "description": "Main extraction step - fill in with actual user inputs"
+    },
+    {
+      "type": "act_with_schema",
+      "goal": "Extract all required information from the page",
+      "schema": {
+        "type": "{{output_schema.type}}",
+        "properties": {
+          {{#each output_schema.properties}}
+          "{{@key}}": {
+            "type": "{{this.property_type}}"{{#if this.description}},
+            "description": "{{this.description}}"{{/if}}{{#if this.required}},
+            "required": {{this.required}}{{/if}}{{#if this.enum_values}},
+            "enum": [{{#each this.enum_values}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}]{{/if}}
+          }{{#unless @last}},{{/unless}}
+          {{/each}}
+        }
+      },
+      "description": "Extract structured output matching the schema"
+    }
+  ],
+  "placeholders": {
+    {{#each input_schema.properties}}
+    "{{@key}}": "{{this.property_type}} - {{#if this.description}}{{this.description}}{{else}}input field{{/if}}"{{#unless @last}},{{/unless}}
+    {{/each}}
+  }
+}

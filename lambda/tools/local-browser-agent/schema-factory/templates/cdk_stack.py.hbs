@@ -1,0 +1,42 @@
+"""
+CDK Stack for {{extraction_name}} Agent
+Auto-generated from canonical schema version {{version}}
+"""
+
+from aws_cdk import (
+    Stack,
+    aws_stepfunctions as sfn,
+    aws_iam as iam,
+    Duration,
+    CfnOutput,
+)
+from constructs import Construct
+
+
+class {{agent_name}}Stack(Stack):
+    """
+    {{description}}
+
+    Schema ID: {{schema_id}}
+    Version: {{version}}
+    """
+
+    def __init__(self, scope: Construct, construct_id: str, env_name: str = "prod", **kwargs) -> None:
+        super().__init__(scope, construct_id, **kwargs)
+
+        self.env_name = env_name
+
+        # TODO: Implement agent stack
+        # This is a template - customize based on your agent requirements
+
+        # Import local browser tool
+        # Import batch processor if needed
+        # Create state machine
+        # Register agent in registry
+
+        CfnOutput(
+            self,
+            "AgentName",
+            value="{{agent_name}}",
+            description="Agent name for {{extraction_name}}"
+        )

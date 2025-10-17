@@ -1,0 +1,18 @@
+{
+  "tool_name": "print_output",
+  "description": "Output structured {{extraction_name}} results",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      {{#each output_schema.properties}}
+      "{{@key}}": {
+        "type": "{{this.property_type}}"{{#if this.description}},
+        "description": "{{this.description}}"{{/if}}{{#if this.pattern}},
+        "pattern": "{{this.pattern}}"{{/if}}{{#if this.enum_values}},
+        "enum": [{{#each this.enum_values}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}]{{/if}}
+      }{{#unless @last}},{{/unless}}
+      {{/each}}
+    },
+    "required": [{{#each required_output_fields}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}]
+  }
+}

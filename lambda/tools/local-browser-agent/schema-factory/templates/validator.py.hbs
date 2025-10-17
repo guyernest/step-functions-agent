@@ -1,0 +1,89 @@
+"""
+Validator for {{extraction_name}} schema
+Auto-generated from canonical schema version {{version}}
+"""
+
+from jsonschema import validate, ValidationError
+from typing import Dict, Any
+import json
+
+
+class {{extraction_name}}Validator:
+    """Validator for {{extraction_name}} inputs and outputs"""
+
+    INPUT_SCHEMA = {
+        "type": "object",
+        "properties": {
+            {{#each input_schema.properties}}
+            "{{@key}}": {
+                "type": "{{this.property_type}}"{{#if this.description}},
+                "description": "{{this.description}}"{{/if}}{{#if this.pattern}},
+                "pattern": "{{this.pattern}}"{{/if}}
+            }{{#unless @last}},{{/unless}}
+            {{/each}}
+        },
+        "required": [{{#each required_input_fields}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}]
+    }
+
+    OUTPUT_SCHEMA = {
+        "type": "object",
+        "properties": {
+            {{#each output_schema.properties}}
+            "{{@key}}": {
+                "type": "{{this.property_type}}"{{#if this.description}},
+                "description": "{{this.description}}"{{/if}}{{#if this.pattern}},
+                "pattern": "{{this.pattern}}"{{/if}}
+            }{{#unless @last}},{{/unless}}
+            {{/each}}
+        },
+        "required": [{{#each required_output_fields}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}]
+    }
+
+    @classmethod
+    def validate_input(cls, data: Dict[str, Any]) -> bool:
+        """Validate input data against schema"""
+        try:
+            validate(instance=data, schema=cls.INPUT_SCHEMA)
+            return True
+        except ValidationError as e:
+            print(f"Input validation error: {e.message}")
+            return False
+
+    @classmethod
+    def validate_output(cls, data: Dict[str, Any]) -> bool:
+        """Validate output data against schema"""
+        try:
+            validate(instance=data, schema=cls.OUTPUT_SCHEMA)
+            return True
+        except ValidationError as e:
+            print(f"Output validation error: {e.message}")
+            return False
+
+
+if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) < 3:
+        print("Usage: python validator.py --input <input.json> --output <output.json>")
+        sys.exit(1)
+
+    # Simple CLI for testing
+    if "--input" in sys.argv:
+        idx = sys.argv.index("--input")
+        with open(sys.argv[idx + 1]) as f:
+            input_data = json.load(f)
+        if {{extraction_name}}Validator.validate_input(input_data):
+            print("✓ Input validation passed")
+        else:
+            print("✗ Input validation failed")
+            sys.exit(1)
+
+    if "--output" in sys.argv:
+        idx = sys.argv.index("--output")
+        with open(sys.argv[idx + 1]) as f:
+            output_data = json.load(f)
+        if {{extraction_name}}Validator.validate_output(output_data):
+            print("✓ Output validation passed")
+        else:
+            print("✗ Output validation failed")
+            sys.exit(1)

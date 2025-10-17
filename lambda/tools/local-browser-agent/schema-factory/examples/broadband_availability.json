@@ -1,0 +1,78 @@
+{
+  "extraction_name": "broadband_availability_check",
+  "version": "1.0.0",
+  "description": "Check broadband availability for UK addresses using BT Wholesale portal",
+
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "address": {
+        "type": "string",
+        "description": "Full street address including building number",
+        "required": true
+      },
+      "postcode": {
+        "type": "string",
+        "pattern": "^[A-Z]{1,2}[0-9][A-Z0-9]? [0-9][A-Z]{2}$",
+        "description": "UK postcode in format like SW1A 1AA",
+        "required": true
+      },
+      "building_number": {
+        "type": "string",
+        "description": "Building number or name (optional)",
+        "required": false
+      }
+    }
+  },
+
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "available": {
+        "type": "boolean",
+        "description": "Whether broadband service is available at this address",
+        "required": true
+      },
+      "service_type": {
+        "type": "string",
+        "enum": ["fibre", "copper", "fttc", "fttp", "unknown"],
+        "description": "Type of broadband service available"
+      },
+      "max_download_speed": {
+        "type": "string",
+        "description": "Maximum download speed (e.g., '80 Mbps', '330 Mbps')"
+      },
+      "max_upload_speed": {
+        "type": "string",
+        "description": "Maximum upload speed (e.g., '20 Mbps', '50 Mbps')"
+      },
+      "installation_cost": {
+        "type": "string",
+        "description": "Installation cost if available (e.g., '£0', '£150')"
+      },
+      "availability_date": {
+        "type": "string",
+        "description": "Expected availability date if not currently available (ISO format or human readable)"
+      },
+      "provider_notes": {
+        "type": "string",
+        "description": "Any additional notes or restrictions from the provider"
+      }
+    }
+  },
+
+  "browser_config": {
+    "profile_name": "Bt_broadband",
+    "starting_url": "https://my.btwholesale.com/",
+    "timeout": 300,
+    "requires_login": false,
+    "clone_for_parallel": false
+  },
+
+  "metadata": {
+    "author": "system",
+    "created_at": "2025-10-17",
+    "tags": ["broadband", "availability", "uk", "bt-wholesale", "infrastructure"],
+    "use_cases": ["batch-processing", "api-integration", "address-validation"]
+  }
+}

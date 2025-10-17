@@ -1,0 +1,21 @@
+{
+  "input_mapping": {
+    "csv_columns_to_agent_input": {
+      {{#each input_schema.properties}}
+      "{{@key}}": "{{@key}}"{{#unless @last}},{{/unless}}
+      {{/each}}
+    }
+  },
+  "output_mapping": {
+    "structured_output_fields": [
+      {{#each output_schema.properties}}
+      "{{@key}}"{{#unless @last}},{{/unless}}
+      {{/each}}
+    ],
+    "csv_column_mapping": {
+      {{#each output_schema.properties}}
+      "{{@key}}": "{{@key}}"{{#unless @last}},{{/unless}}
+      {{/each}}
+    }
+  }
+}
