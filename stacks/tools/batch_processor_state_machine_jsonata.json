@@ -1,0 +1,217 @@
+{
+  "Comment": "Generic batch processor for CSV files with structured output agents - JSONata version",
+  "QueryLanguage": "JSONata",
+  "StartAt": "ValidateInput",
+  "States": {
+    "ValidateInput": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Arguments": {
+        "FunctionName": "FUNCTION_ARN_PLACEHOLDER_INPUT_MAPPER",
+        "Payload": {
+          "action": "validate",
+          "csv_s3_uri": "{% $states.input.csv_s3_uri %}",
+          "target": "{% $states.input.target %}",
+          "output_mapping": "{% $states.input.output_mapping %}"
+        }
+      },
+      "Assign": {
+        "validation": "{% $states.result %}",
+        "input_mapping": "{% $states.input.input_mapping %}",
+        "output_mapping": "{% $states.input.output_mapping %}"
+      },
+      "Next": "CheckValidation"
+    },
+    "CheckValidation": {
+      "Type": "Choice",
+      "Choices": [{
+        "Condition": "{% $validation.Payload.valid = true %}",
+        "Next": "LoadCSVData"
+      }],
+      "Default": "ValidationFailed"
+    },
+    "ValidationFailed": {
+      "Type": "Fail",
+      "Error": "ValidationError",
+      "Cause": "Input validation failed. Check that output_mapping.structured_output_fields is provided and agent has structured output enabled."
+    },
+    "LoadCSVData": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Arguments": {
+        "FunctionName": "FUNCTION_ARN_PLACEHOLDER_INPUT_MAPPER",
+        "Payload": {
+          "action": "load_csv",
+          "csv_bucket": "{% $validation.Payload.csv_bucket %}",
+          "csv_key": "{% $validation.Payload.csv_key %}"
+        }
+      },
+      "Assign": {
+        "csv_data": "{% $states.result %}"
+      },
+      "Next": "ProcessCSV"
+    },
+    "ProcessCSV": {
+      "Type": "Map",
+      "Label": "ProcessRows",
+      "MaxConcurrency": 10,
+      "Items": "{% $csv_data.Payload.rows %}",
+      "ItemSelector": {
+        "row": "{% $states.context.Map.Item.Value %}",
+        "input_mapping": "{% $input_mapping %}",
+        "target": "{% $validation.Payload.target %}",
+        "output_mapping": "{% $output_mapping %}"
+      },
+      "ItemProcessor": {
+        "ProcessorConfig": {
+          "Mode": "INLINE"
+        },
+        "StartAt": "TransformInput",
+        "States": {
+          "TransformInput": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Arguments": {
+              "FunctionName": "FUNCTION_ARN_PLACEHOLDER_INPUT_MAPPER",
+              "Payload": {
+                "action": "transform",
+                "row": "{% $states.input.row %}",
+                "mapping_config": "{% $states.input.input_mapping %}",
+                "target": "{% $states.input.target %}"
+              }
+            },
+            "Assign": {
+              "agent_input": "{% $states.result %}",
+              "current_row": "{% $states.input.row %}",
+              "target_arn": "{% $states.input.target.arn %}"
+            },
+            "Next": "InvokeAgent"
+          },
+          "InvokeAgent": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::states:startExecution.sync",
+            "Arguments": {
+              "StateMachineArn": "{% $target_arn %}",
+              "Input": {
+                "messages": [{
+                  "role": "user",
+                  "content": "{% $agent_input.Payload.prompt %}"
+                }],
+                "input": "{% $agent_input.Payload.data %}"
+              }
+            },
+            "Assign": {
+              "agent_output": "{% $states.result %}"
+            },
+            "Retry": [{
+              "ErrorEquals": ["States.TaskFailed"],
+              "MaxAttempts": 2,
+              "BackoffRate": 2.0
+            }],
+            "Catch": [{
+              "ErrorEquals": ["States.ALL"],
+              "Assign": {
+                "error": "{% $states.errorOutput %}"
+              },
+              "Next": "HandleError"
+            }],
+            "Next": "ExtractStructuredOutput"
+          },
+          "ExtractStructuredOutput": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Arguments": {
+              "FunctionName": "FUNCTION_ARN_PLACEHOLDER_OUTPUT_MAPPER",
+              "Payload": {
+                "action": "extract",
+                "agent_output": "{% $agent_output.Output %}",
+                "output_mapping": "{% $output_mapping %}",
+                "original_row": "{% $current_row %}"
+              }
+            },
+            "Assign": {
+              "structured_result": "{% $states.result %}"
+            },
+            "End": true
+          },
+          "HandleError": {
+            "Type": "Pass",
+            "Output": {
+              "structured_result": {
+                "original_row": "{% $current_row %}",
+                "error": "{% $error %}",
+                "_status": "FAILED",
+                "_error_message": "{% $error.Cause %}"
+              }
+            },
+            "End": true
+          }
+        }
+      },
+      "Assign": {
+        "processing_results": "{% $states.result %}"
+      },
+      "Next": "AggregateResults"
+    },
+    "AggregateResults": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Arguments": {
+        "FunctionName": "FUNCTION_ARN_PLACEHOLDER_RESULT_AGGREGATOR",
+        "Payload": {
+          "execution_id": "{% $states.context.Execution.Name %}",
+          "processing_results": "{% $processing_results %}",
+          "output_key": "{% 'results/' & $states.context.Execution.Name & '/output.csv' %}",
+          "include_original": true,
+          "add_metadata": true
+        }
+      },
+      "Assign": {
+        "final_output": "{% $states.result %}"
+      },
+      "Next": "PublishNotification"
+    },
+    "PublishNotification": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Arguments": {
+        "TopicArn": "TOPIC_ARN_PLACEHOLDER",
+        "Subject": "Batch Processing Completed",
+        "Message": "{% 'Batch processing completed successfully.\\n\\n' & 'Execution ID: ' & $states.context.Execution.Name & '\\n' & 'Target Agent: ' & $validation.Payload.target.name & '\\n' & 'Rows Processed: ' & $string($final_output.Payload.total_rows) & '\\n' & 'Rows Successful: ' & $string($final_output.Payload.successful_rows) & '\\n' & 'Rows Failed: ' & $string($final_output.Payload.failed_rows) & '\\n' & 'Result S3 URI: ' & $final_output.Payload.result_s3_uri & '\\n' & 'Duration: ' & $string($final_output.Payload.duration_seconds) & ' seconds\\n\\n' & 'Started: ' & $states.context.Execution.StartTime & '\\n' & 'Completed: ' & $final_output.Payload.completed_at %}",
+        "MessageAttributes": {
+          "execution_id": {
+            "DataType": "String",
+            "StringValue": "{% $states.context.Execution.Name %}"
+          },
+          "status": {
+            "DataType": "String",
+            "StringValue": "SUCCESS"
+          },
+          "target_agent": {
+            "DataType": "String",
+            "StringValue": "{% $validation.Payload.target.name %}"
+          },
+          "rows_processed": {
+            "DataType": "Number",
+            "StringValue": "{% $string($final_output.Payload.total_rows) %}"
+          }
+        }
+      },
+      "Assign": {
+        "notification_result": "{% $states.result %}"
+      },
+      "Catch": [{
+        "ErrorEquals": ["States.ALL"],
+        "Assign": {
+          "notification_error": "{% $states.errorOutput %}"
+        },
+        "Next": "Success"
+      }],
+      "Next": "Success"
+    },
+    "Success": {
+      "Type": "Succeed",
+      "Output": "{% $final_output.Payload %}"
+    }
+  }
+}

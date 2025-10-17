@@ -13,6 +13,7 @@ from aws_cdk import (
     aws_dynamodb as dynamodb,
     aws_logs as logs,
     aws_ssm as ssm,
+    aws_sns as sns,
     CfnOutput,
     Duration,
     RemovalPolicy,
@@ -55,6 +56,14 @@ class BatchProcessorToolStack(Stack):
             versioned=True  # Enable versioning for data safety
         )
 
+        # Create SNS topic for batch completion notifications
+        self.notification_topic = sns.Topic(
+            self, "BatchCompletionNotifications",
+            topic_name=f"batch-processor-notifications-{env_name}",
+            display_name="Batch Processor Completion Notifications",
+            fifo=False
+        )
+
         # Create SSM parameter for the results bucket name
         self.results_bucket_param = ssm.StringParameter(
             self, "ResultsBucketParameter",
@@ -82,6 +91,16 @@ class BatchProcessorToolStack(Stack):
                  value=self.results_bucket.bucket_name,
                  export_name=f"BatchProcessorResultsBucket-{env_name}",
                  description="S3 bucket for batch processing results")
+
+        CfnOutput(self, "NotificationTopicArn",
+                 value=self.notification_topic.topic_arn,
+                 export_name=f"BatchProcessorNotificationTopicArn-{env_name}",
+                 description="SNS topic ARN for batch completion notifications")
+
+        CfnOutput(self, "NotificationTopicName",
+                 value=self.notification_topic.topic_name,
+                 export_name=f"BatchProcessorNotificationTopicName-{env_name}",
+                 description="SNS topic name for batch completion notifications")
 
     def _import_shared_resources(self):
         """Import shared resources from other stacks"""
@@ -181,176 +200,34 @@ class BatchProcessorToolStack(Stack):
         )
 
     def _create_state_machine(self):
-        """Create the Step Functions state machine for batch processing"""
+        """Create the Step Functions state machine for batch processing using JSONata"""
 
-        # State machine definition with structured output focus
-        definition = {
-            "Comment": "Generic batch processor for CSV files with structured output agents",
-            "StartAt": "ValidateInput",
-            "States": {
-                "ValidateInput": {
-                    "Type": "Task",
-                    "Resource": "arn:aws:states:::lambda:invoke",
-                    "Parameters": {
-                        "FunctionName": self.input_mapper.function_arn,
-                        "Payload": {
-                            "action": "validate",
-                            "csv_s3_uri.$": "$.csv_s3_uri",
-                            "target.$": "$.target",
-                            "output_mapping.$": "$.output_mapping"
-                        }
-                    },
-                    "ResultPath": "$.validation",
-                    "Next": "CheckValidation"
-                },
+        # Load JSONata state machine definition from file
+        jsonata_def_path = Path(__file__).parent / 'batch_processor_state_machine_jsonata.json'
+        with open(jsonata_def_path, 'r') as f:
+            definition = json.load(f)
 
-                "CheckValidation": {
-                    "Type": "Choice",
-                    "Choices": [{
-                        "Variable": "$.validation.Payload.valid",
-                        "BooleanEquals": True,
-                        "Next": "LoadCSVData"
-                    }],
-                    "Default": "ValidationFailed"
-                },
+        # Replace placeholders with actual ARNs
+        definition_str = json.dumps(definition)
+        definition_str = definition_str.replace(
+            'FUNCTION_ARN_PLACEHOLDER_INPUT_MAPPER',
+            self.input_mapper.function_arn
+        )
+        definition_str = definition_str.replace(
+            'FUNCTION_ARN_PLACEHOLDER_OUTPUT_MAPPER',
+            self.output_mapper.function_arn
+        )
+        definition_str = definition_str.replace(
+            'FUNCTION_ARN_PLACEHOLDER_RESULT_AGGREGATOR',
+            self.result_aggregator.function_arn
+        )
+        definition_str = definition_str.replace(
+            'TOPIC_ARN_PLACEHOLDER',
+            self.notification_topic.topic_arn
+        )
 
-                "ValidationFailed": {
-                    "Type": "Fail",
-                    "Error": "ValidationError",
-                    "Cause": "Input validation failed. Check that output_mapping.structured_output_fields is provided and agent has structured output enabled."
-                },
-
-                "LoadCSVData": {
-                    "Type": "Task",
-                    "Resource": "arn:aws:states:::lambda:invoke",
-                    "Parameters": {
-                        "FunctionName": self.input_mapper.function_arn,
-                        "Payload": {
-                            "action": "load_csv",
-                            "csv_bucket.$": "$.validation.Payload.csv_bucket",
-                            "csv_key.$": "$.validation.Payload.csv_key"
-                        }
-                    },
-                    "ResultPath": "$.csv_data",
-                    "Next": "ProcessCSV"
-                },
-
-                "ProcessCSV": {
-                    "Type": "Map",
-                    "ItemsPath": "$.csv_data.Payload.rows",
-                    "ItemSelector": {
-                        "row.$": "$$.Map.Item.Value",
-                        "input_mapping.$": "$.input_mapping",
-                        "target.$": "$.validation.Payload.target",
-                        "output_mapping.$": "$.output_mapping"
-                    },
-                    "ItemProcessor": {
-                        "ProcessorConfig": {
-                            "Mode": "INLINE"
-                        },
-                        "StartAt": "TransformInput",
-                        "States": {
-                            "TransformInput": {
-                                "Type": "Task",
-                                "Resource": "arn:aws:states:::lambda:invoke",
-                                "Parameters": {
-                                    "FunctionName": self.input_mapper.function_arn,
-                                    "Payload": {
-                                        "action": "transform",
-                                        "row.$": "$.row",
-                                        "mapping_config.$": "$.input_mapping",
-                                        "target.$": "$.target"
-                                    }
-                                },
-                                "ResultPath": "$.agent_input",
-                                "Next": "InvokeAgent"
-                            },
-
-                            "InvokeAgent": {
-                                "Type": "Task",
-                                "Resource": "arn:aws:states:::states:startExecution.sync",
-                                "Parameters": {
-                                    "StateMachineArn.$": "$.target.arn",
-                                    "Input": {
-                                        "messages": [{
-                                            "role": "user",
-                                            "content.$": "$.agent_input.Payload.prompt"
-                                        }],
-                                        "input.$": "$.agent_input.Payload.data"
-                                    }
-                                },
-                                "ResultPath": "$.agent_output",
-                                "Retry": [{
-                                    "ErrorEquals": ["States.TaskFailed"],
-                                    "MaxAttempts": 2,
-                                    "BackoffRate": 2.0
-                                }],
-                                "Catch": [{
-                                    "ErrorEquals": ["States.ALL"],
-                                    "ResultPath": "$.error",
-                                    "Next": "HandleError"
-                                }],
-                                "Next": "ExtractStructuredOutput"
-                            },
-
-                            "ExtractStructuredOutput": {
-                                "Type": "Task",
-                                "Resource": "arn:aws:states:::lambda:invoke",
-                                "Parameters": {
-                                    "FunctionName": self.output_mapper.function_arn,
-                                    "Payload": {
-                                        "action": "extract",
-                                        "agent_output.$": "$.agent_output.Output",
-                                        "output_mapping.$": "$.output_mapping",
-                                        "original_row.$": "$.row"
-                                    }
-                                },
-                                "ResultPath": "$.structured_result",
-                                "End": True
-                            },
-
-                            "HandleError": {
-                                "Type": "Pass",
-                                "Parameters": {
-                                    "original_row.$": "$.row",
-                                    "error.$": "$.error",
-                                    "_status": "FAILED",
-                                    "_error_message.$": "$.error.Cause"
-                                },
-                                "ResultPath": "$.structured_result",
-                                "End": True
-                            }
-                        }
-                    },
-                    "MaxConcurrency": 10,
-                    "Label": "ProcessRows",
-                    "ResultPath": "$.processing_results",
-                    "Next": "AggregateResults"
-                },
-
-                "AggregateResults": {
-                    "Type": "Task",
-                    "Resource": "arn:aws:states:::lambda:invoke",
-                    "Parameters": {
-                        "FunctionName": self.result_aggregator.function_arn,
-                        "Payload": {
-                            "execution_id.$": "$$.Execution.Name",
-                            "processing_results.$": "$.processing_results",
-                            "output_key.$": "States.Format('results/{}/output.csv', $$.Execution.Name)",
-                            "include_original": True,
-                            "add_metadata": True
-                        }
-                    },
-                    "ResultPath": "$.final_output",
-                    "Next": "Success"
-                },
-
-                "Success": {
-                    "Type": "Succeed",
-                    "OutputPath": "$.final_output.Payload"
-                }
-            }
-        }
+        # Parse back to dict for validation
+        definition = json.loads(definition_str)
 
         # Create execution role
         self.execution_role = iam.Role(
@@ -407,17 +284,26 @@ class BatchProcessorToolStack(Stack):
                                 self.agent_registry_table_arn,
                                 self.tool_registry_table_arn
                             ]
+                        ),
+                        iam.PolicyStatement(
+                            actions=[
+                                "sns:Publish"
+                            ],
+                            resources=[
+                                self.notification_topic.topic_arn
+                            ]
                         )
                     ]
                 )
             }
         )
 
-        # Create state machine - simplified without tracing and logging to avoid managed rule issues
+        # Create state machine using JSONata query language
+        # The QueryLanguage is specified in the definition itself
         self.state_machine = sfn.StateMachine(
             self, "BatchProcessorStateMachine",
             state_machine_name=f"batch-processor-{self.env_name}",
-            definition_body=sfn.DefinitionBody.from_string(json.dumps(definition)),
+            definition_body=sfn.DefinitionBody.from_string(definition_str),
             role=self.execution_role,
             state_machine_type=sfn.StateMachineType.STANDARD
         )
@@ -460,6 +346,22 @@ class BatchProcessorToolStack(Stack):
                             "max_concurrency": {"type": "integer", "default": 10},
                             "timeout_seconds": {"type": "integer", "default": 300}
                         }
+                    },
+                    "notification_config": {
+                        "type": "object",
+                        "description": "Configuration for SNS notifications on completion",
+                        "properties": {
+                            "batch_name": {
+                                "type": "string",
+                                "description": "Identifier for this batch (used for SNS message filtering)"
+                            },
+                            "include_details": {
+                                "type": "boolean",
+                                "default": True,
+                                "description": "Whether to include detailed statistics in notification"
+                            }
+                        },
+                        "required": ["batch_name"]
                     }
                 },
                 "required": ["csv_s3_uri", "target"]
