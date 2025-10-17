@@ -145,17 +145,16 @@ class ScriptExecutor:
         clone_user_data_dir = False
         profile_info = {}
 
-        # Default to Bt_broadband profile for demo if no session config or profile specified
-        default_profile_name = "Bt_broadband"
+        # HARDCODED FOR DEMO: Always use Bt_broadband profile
+        # TODO: Remove this hardcoding and use session_config.profile_name after demo
+        profile_name = "Bt_broadband"
+        mode = "use_profile"
 
-        if session_config:
-            profile_name = session_config.get("profile_name") or default_profile_name
-            mode = session_config.get("mode", "use_profile")
-        else:
-            # No session config provided, use default profile
-            profile_name = default_profile_name
+        # Create minimal session config if not provided
+        if not session_config:
             session_config = {"profile_name": profile_name}
-            mode = "use_profile"
+
+        print(f"[DEMO MODE] Forcing profile to: {profile_name}", file=sys.stderr)
 
         if mode == "create_profile" and profile_name:
             # Create a new profile for manual login
