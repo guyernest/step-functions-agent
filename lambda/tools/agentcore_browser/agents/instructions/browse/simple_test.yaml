@@ -1,0 +1,16 @@
+name: Simple Test
+description: Basic test instruction for debugging
+version: 1.0.0
+starting_url: https://example.com
+
+instructions: |
+  1. Observe the page title
+  2. Extract the main heading text
+  
+parameters: {}
+
+extract_fields:
+  - page_title
+  - main_heading
+
+timeout: 30

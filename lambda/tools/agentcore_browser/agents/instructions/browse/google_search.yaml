@@ -1,0 +1,57 @@
+name: Google Search
+description: Search Google and extract results
+version: 1.0.0
+starting_url: https://google.com
+
+instructions: |
+  Perform a Google search and extract results:
+  1. Wait for the search box to be visible
+  2. Click on the search box to focus it
+  3. Type "{query}" in the search box
+  4. Press Enter to submit the search
+  5. Wait for search results to load (look for result links)
+  6. Extract the following from the first {num_results} results:
+     - Title of each result
+     - URL/link of each result
+     - Description/snippet text
+     - Any special result features (featured snippets, knowledge panels, etc.)
+
+parameters:
+  query:
+    type: string
+    required: true
+    description: Search query terms
+    example: "Nova Act automation"
+  num_results:
+    type: integer
+    required: false
+    default: 5
+    description: Number of results to extract
+    min: 1
+    max: 10
+
+extract_fields:
+  - result_titles
+  - result_urls
+  - result_descriptions
+  - featured_snippet
+  - knowledge_panel
+  - people_also_ask
+  - related_searches
+
+validation:
+  - check: results_found
+    condition: "at least 1 result"
+    error_message: "No search results found"
+  - check: page_loaded
+    element_exists: "search result links"
+    error_message: "Search results page did not load properly"
+
+timeout: 30
+retry_on_failure: true
+max_retries: 2
+
+notes: |
+  - Google may show CAPTCHA if too many requests are made
+  - Results may vary based on location and search history
+  - Consider using incognito mode for consistent results

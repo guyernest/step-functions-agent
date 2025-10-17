@@ -1,0 +1,60 @@
+name: Login Flow
+description: Generic login flow for web applications
+version: 1.0.0
+
+instructions: |
+  Perform login to web application:
+  1. Navigate to the login page if not already there
+  2. Wait for the login form to be visible
+  3. Look for username/email field and type "{username}"
+  4. Look for password field and type "{password}"
+  5. If there's a "Remember me" checkbox and {remember_me} is true, check it
+  6. Click the Login/Sign In button
+  7. Wait for either:
+     - Successful login (redirect to dashboard/home)
+     - Error message (invalid credentials)
+  8. Extract the result:
+     - If successful: current page URL and user display name
+     - If failed: error message text
+
+parameters:
+  username:
+    type: string
+    required: true
+    description: Username or email address
+    example: "user@example.com"
+  password:
+    type: string
+    required: true
+    description: User password
+    sensitive: true
+  remember_me:
+    type: boolean
+    required: false
+    default: false
+    description: Whether to check "Remember me" option
+
+extract_fields:
+  - login_success
+  - user_display_name
+  - dashboard_url
+  - error_message
+  - session_id
+
+validation:
+  - check: form_found
+    element_exists: "login form with username and password fields"
+    error_message: "Login form not found"
+  - check: action_completed
+    condition: "either successful login or error message displayed"
+    error_message: "Login action did not complete"
+
+timeout: 45
+retry_on_failure: false  # Don't retry login attempts
+max_retries: 1
+
+security_notes: |
+  - Never log or store passwords in plain text
+  - Use secure credential storage in production
+  - Consider using OAuth/SSO when available
+  - Be aware of rate limiting and account lockout policies

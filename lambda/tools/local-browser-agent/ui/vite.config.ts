@@ -10,6 +10,16 @@ export default defineConfig({
     strictPort: true,
     host: 'localhost',
     cors: true,
+    watch: {
+      // Ignore browser profiles to prevent rebuild loops when sessions are created/updated
+      ignored: [
+        '**/browser-profiles/**',
+        '**/src-tauri/browser-profiles/**',
+        '**/python/browser-profiles/**',
+        '**/node_modules/**',
+        '**/target/**'
+      ]
+    }
   },
   envPrefix: ['VITE_', 'TAURI_'],
   build: {

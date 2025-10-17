@@ -413,6 +413,9 @@ pub async fn execute_browser_script(
         cmd.arg("--script").arg(temp_file.path());
         cmd.arg("--aws-profile").arg(&aws_profile);
 
+        // Set navigation timeout to 60 seconds (60000 milliseconds)
+        cmd.arg("--navigation-timeout").arg("60000");
+
         // Only add --headless if config says to run headless
         if headless {
             cmd.arg("--headless");

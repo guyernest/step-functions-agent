@@ -6,34 +6,44 @@ Maps tool names to Agent Core agent IDs and provides transformation functions
 from typing import Dict, Any, Optional
 import json
 import logging
+import os
 
 logger = logging.getLogger()
 
 # Agent Core runtime configurations
+# All tools route to the unified cdk_browser_agent which handles all three functions
 AGENT_CONFIGS = {
     'browser_broadband': {
-        'agent_id': 'broadband_checker_agent-KcXxkNFCkG',
-        'agent_arn_suffix': 'runtime/broadband_checker_agent-KcXxkNFCkG',
+        'agent_id': 'cdk_browser_agent-KevJztCRbt',
+        'agent_arn_suffix': 'runtime/cdk_browser_agent-KevJztCRbt',
         'description': 'UK broadband availability checker',
         'capabilities': ['broadband', 'telecom', 'uk-addresses', 'bt-wholesale'],
         'transform_input': 'transform_broadband_input',
         'transform_output': 'transform_broadband_output'
     },
     'browser_shopping': {
-        'agent_id': 'shopping_agent-aw6O6r7uk5',
-        'agent_arn_suffix': 'runtime/shopping_agent-aw6O6r7uk5',
+        'agent_id': 'cdk_browser_agent-KevJztCRbt',
+        'agent_arn_suffix': 'runtime/cdk_browser_agent-KevJztCRbt',
         'description': 'E-commerce product search and price comparison',
         'capabilities': ['shopping', 'prices', 'products', 'amazon', 'ebay'],
         'transform_input': 'transform_shopping_input',
         'transform_output': 'transform_shopping_output'
     },
     'browser_search': {
-        'agent_id': 'web_search_agent-3dH6uJ84DT',
-        'agent_arn_suffix': 'runtime/web_search_agent-3dH6uJ84DT',
+        'agent_id': 'cdk_browser_agent-KevJztCRbt',
+        'agent_arn_suffix': 'runtime/cdk_browser_agent-KevJztCRbt',
         'description': 'General web search and information extraction',
         'capabilities': ['search', 'extraction', 'web-scraping', 'research'],
         'transform_input': 'transform_search_input',
         'transform_output': 'transform_search_output'
+    },
+    'browser_apartments': {
+        'agent_id': 'cdk_browser_agent-KevJztCRbt',
+        'agent_arn_suffix': 'runtime/cdk_browser_agent-KevJztCRbt',
+        'description': 'Apartment search using Zumper',
+        'capabilities': ['apartments', 'real-estate', 'rentals', 'zumper'],
+        'transform_input': 'transform_apartments_input',
+        'transform_output': 'transform_apartments_output'
     }
 }
 
@@ -54,20 +64,71 @@ def get_agent_config(tool_name: str) -> Optional[Dict[str, Any]]:
 def get_agent_arn(tool_name: str, region: str = 'us-west-2', account_id: str = '672915487120') -> Optional[str]:
     """
     Build the full Agent Core runtime ARN for a tool
-    
+
+    Supports three modes (in priority order):
+    1. Parameter Store (recommended for multi-region/account deployments)
+    2. Environment variables (CDK-deployed agents)
+    3. Hardcoded ARN suffixes (legacy mode)
+
     Args:
         tool_name: Name of the tool
         region: AWS region
         account_id: AWS account ID
-        
+
     Returns:
         Full ARN or None if tool not found
     """
+    # Priority 1: Check Parameter Store
+    if os.environ.get('USE_PARAMETER_STORE_ARNS') == 'true':
+        logger.info(f"Attempting to retrieve agent ARN from Parameter Store for {tool_name}")
+        try:
+            from aws_lambda_powertools.utilities import parameters
+
+            # Parameter path: /agentcore/tools/{tool_name}/agent_arn
+            param_name = f"/agentcore/tools/{tool_name}/agent_arn"
+            arn = parameters.get_parameter(param_name, transform='auto')
+
+            if arn:
+                logger.info(f"Found agent ARN in Parameter Store {param_name}: {arn}")
+                return arn
+            else:
+                logger.warning(f"Parameter {param_name} not found or empty")
+        except Exception as e:
+            logger.warning(f"Error retrieving agent ARN from Parameter Store: {e}")
+            # Fall through to next mode
+
+    # Priority 2: Check if we should use dynamic ARNs from environment variables
+    if os.environ.get('USE_DYNAMIC_AGENT_ARNS') == 'true':
+        logger.info(f"Using dynamic agent ARN from environment for {tool_name}")
+
+        # Map tool names to environment variable names
+        env_var_map = {
+            'browser_broadband': 'AGENT_ARN_BROADBAND',
+            'browser_shopping': 'AGENT_ARN_SHOPPING',
+            'browser_search': 'AGENT_ARN_SEARCH',
+            'browser_apartments': 'AGENT_ARN_APARTMENTS'
+        }
+
+        env_var = env_var_map.get(tool_name)
+        if env_var:
+            arn = os.environ.get(env_var)
+            if arn:
+                logger.info(f"Found agent ARN in {env_var}: {arn}")
+                return arn
+            else:
+                logger.warning(f"Environment variable {env_var} not set for {tool_name}")
+
+        # Fall through to legacy mode if env var not found
+        logger.warning(f"No dynamic ARN found for {tool_name}, falling back to legacy mode")
+
+    # Legacy mode: construct ARN from hardcoded suffix
     config = get_agent_config(tool_name)
     if not config:
         return None
-    
-    return f"arn:aws:bedrock-agentcore:{region}:{account_id}:{config['agent_arn_suffix']}"
+
+    legacy_arn = f"arn:aws:bedrock-agentcore:{region}:{account_id}:{config['agent_arn_suffix']}"
+    logger.info(f"Using legacy hardcoded ARN for {tool_name}: {legacy_arn}")
+    return legacy_arn
 
 
 def transform_broadband_input(tool_input: Dict[str, Any]) -> Dict[str, Any]:
@@ -119,89 +180,110 @@ def transform_broadband_input(tool_input: Dict[str, Any]) -> Dict[str, Any]:
     # Validate required field
     if not address.get('postcode'):
         raise ValueError("Postcode is required for broadband checks")
-    
-    # Use test mode to ensure Lambda waits for completion
-    # The agent's test handler will process the address and return results
+
+    # Build a prompt for the broadband check
+    prompt = f"Check broadband availability for {address.get('building_number', '')} {address.get('street', '')}, {address.get('town', '')}, {address.get('postcode', '')}"
+
     return {
-        "test": True,
-        "address": address,
-        "max_steps": 10  # Allow more steps for complex addresses
+        "prompt": prompt,
+        "input": address
     }
 
 
 def transform_shopping_input(tool_input: Dict[str, Any]) -> Dict[str, Any]:
     """
     Transform browser_shopping input to Agent Core format
-    
+
     Expected input:
     {
         "query": "gaming laptops",
         "site": "amazon",
         "max_results": 10
     }
-    
+
     Agent Core payload:
     {
-        "prompt": "Search for gaming laptops on amazon",
-        "test_mode": true
+        "prompt": "Search for gaming laptops on amazon (show up to 10 results)",
+        "input": {
+            "query": "gaming laptops",
+            "site": "amazon",
+            "max_results": 10
+        }
     }
     """
     query = tool_input.get('query', '')
     site = tool_input.get('site', 'amazon')
     max_results = tool_input.get('max_results', 10)
-    
+
     if not query:
         raise ValueError("Query is required for shopping searches")
-    
+
     # Build the prompt based on site selection
     if site == 'all':
         prompt = f"Search for {query} on multiple shopping sites and compare prices"
     else:
         prompt = f"Search for {query} on {site}"
-    
+
     if max_results:
         prompt += f" (show up to {max_results} results)"
-    
+
     return {
-        "test": prompt  # Use test mode for immediate execution
+        "prompt": prompt,
+        "input": {
+            "query": query,
+            "site": site,
+            "max_results": max_results
+        }
     }
 
 
 def transform_search_input(tool_input: Dict[str, Any]) -> Dict[str, Any]:
     """
     Transform browser_search input to Agent Core format
-    
+
     Expected input:
     {
         "query": "AI research papers",
         "url": "https://arxiv.org",
         "extract_fields": ["title", "authors", "date"]
     }
-    
+
     Agent Core payload:
     {
-        "prompt": "Search for AI research papers on https://arxiv.org and extract title, authors, date"
+        "prompt": "Search for AI research papers on https://arxiv.org and extract title, authors, date",
+        "input": {
+            "url": "https://arxiv.org",
+            "query": "AI research papers",
+            "extract_fields": ["title", "authors", "date"]
+        }
     }
     """
     query = tool_input.get('query', '')
     url = tool_input.get('url', '')
     extract_fields = tool_input.get('extract_fields', [])
-    
-    if not query:
-        raise ValueError("Query is required for web searches")
-    
+
+    if not query and not url:
+        raise ValueError("Either query or url is required for web searches")
+
     # Build the prompt
-    if url:
+    if url and query:
         prompt = f"Search for {query} on {url}"
+    elif url:
+        prompt = f"Navigate to {url} and extract information"
     else:
         prompt = f"Search the web for {query}"
-    
+
     if extract_fields:
         fields_str = ", ".join(extract_fields)
         prompt += f" and extract the following information: {fields_str}"
-    
+
     return {
-        "prompt": prompt
+        "prompt": prompt,
+        "input": {
+            "url": url,
+            "query": query,
+            "extract_fields": extract_fields
+        }
     }
 
 
@@ -540,6 +622,104 @@ def transform_search_output(agent_response: Any) -> str:
     return str(agent_response)
 
 
+def transform_apartments_input(tool_input: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Transform browser_apartments input to Agent Core format
+
+    Expected input:
+    {
+        "city": "Redwood City",
+        "bedrooms": 2,
+        "baths": 1,
+        "min_results": 5
+    }
+
+    Agent Core payload:
+    {
+        "prompt": "Search for 2 bedroom, 1 bath apartments in Redwood City (show at least 5 results)",
+        "input": {
+            "city": "Redwood City",
+            "bedrooms": 2,
+            "baths": 1,
+            "min_results": 5
+        }
+    }
+    """
+    city = tool_input.get('city', 'Redwood City')
+    bedrooms = tool_input.get('bedrooms', 2)
+    baths = tool_input.get('baths', 1)
+    min_results = tool_input.get('min_results', 5)
+
+    prompt = f"Search for {bedrooms} bedroom, {baths} bath apartments in {city}"
+    if min_results:
+        prompt += f" (show at least {min_results} results)"
+
+    return {
+        "prompt": prompt,
+        "input": {
+            "city": city,
+            "bedrooms": bedrooms,
+            "baths": baths,
+            "min_results": min_results
+        }
+    }
+
+
+def transform_apartments_output(agent_response: Any) -> str:
+    """
+    Transform apartment search agent response to standard format
+    """
+    logger.info(f"Transforming apartments output: {type(agent_response)}: {str(agent_response)[:500]}")
+
+    if isinstance(agent_response, dict):
+        # Check for data nested structure
+        data = agent_response.get('data', agent_response)
+
+        result_parts = []
+
+        # Add search parameters
+        if 'city' in data:
+            result_parts.append(f"Searched in: {data['city']}")
+        if 'bedrooms' in data:
+            result_parts.append(f"Bedrooms: {data['bedrooms']}")
+        if 'baths' in data:
+            result_parts.append(f"Baths: {data['baths']}")
+
+        # Add apartments list
+        apartments = data.get('apartments', [])
+        if apartments:
+            result_parts.append(f"\nFound {len(apartments)} apartments:")
+            for i, apt in enumerate(apartments, 1):
+                apt_info = f"{i}. {apt.get('address', 'Unknown address')}"
+                if 'price' in apt:
+                    apt_info += f" - {apt['price']}"
+                if 'beds' in apt and 'baths' in apt:
+                    apt_info += f" ({apt['beds']} bed, {apt['baths']} bath)"
+                result_parts.append(apt_info)
+        else:
+            result_parts.append("No apartments found")
+
+        # Add recording URL
+        recording_url = data.get('recording_url', '')
+        if recording_url:
+            result_parts.append(f"\nRecording: {recording_url}")
+
+        # Add session ID
+        session_id = data.get('session_id', '')
+        if session_id:
+            result_parts.append(f"Session ID: {session_id}")
+
+        if result_parts:
+            return "\n".join(result_parts)
+
+    # If response is a string, return it
+    if isinstance(agent_response, str):
+        return agent_response
+
+    # Default: return as JSON string
+    return json.dumps(agent_response, indent=2) if isinstance(agent_response, dict) else str(agent_response)
+
+
 # Export transformation functions for dynamic lookup
 TRANSFORMERS = {
     'transform_broadband_input': transform_broadband_input,
@@ -547,7 +727,9 @@ TRANSFORMERS = {
     'transform_shopping_input': transform_shopping_input,
     'transform_shopping_output': transform_shopping_output,
     'transform_search_input': transform_search_input,
-    'transform_search_output': transform_search_output
+    'transform_search_output': transform_search_output,
+    'transform_apartments_input': transform_apartments_input,
+    'transform_apartments_output': transform_apartments_output
 }
 
 

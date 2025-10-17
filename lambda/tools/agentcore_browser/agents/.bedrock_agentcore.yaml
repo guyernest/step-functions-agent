@@ -1,0 +1,192 @@
+default_agent: browser_agent
+agents:
+  cdk_broadband_checker_agent:
+    name: cdk_broadband_checker_agent
+    entrypoint: broadband_agent.py
+    platform: linux/arm64
+    container_runtime: docker
+    source_path: null
+    aws:
+      execution_role: arn:aws:iam::672915487120:role/AmazonBedrockAgentCoreSDKRuntime-us-west-2-067647e706
+      execution_role_auto_create: false
+      account: '672915487120'
+      region: us-west-2
+      ecr_repository: 672915487120.dkr.ecr.us-west-2.amazonaws.com/bedrock-agentcore-cdk_broadband_checker_agent
+      ecr_auto_create: false
+      network_configuration:
+        network_mode: PUBLIC
+        network_mode_config: null
+      protocol_configuration:
+        server_protocol: HTTP
+      observability:
+        enabled: true
+    bedrock_agentcore:
+      agent_id: cdk_broadband_checker_agent-dYiBm6CMsh
+      agent_arn: arn:aws:bedrock-agentcore:us-west-2:672915487120:runtime/cdk_broadband_checker_agent-dYiBm6CMsh
+      agent_session_id: null
+    codebuild:
+      project_name: bedrock-agentcore-cdk_broadband_checker_agent-builder
+      execution_role: arn:aws:iam::672915487120:role/AmazonBedrockAgentCoreSDKCodeBuild-us-west-2-067647e706
+      source_bucket: bedrock-agentcore-codebuild-sources-672915487120-us-west-2
+    memory:
+      mode: STM_ONLY
+      memory_id: cdk_broadband_checker_agent_mem-aJmJJLDLAl
+      memory_arn: arn:aws:bedrock-agentcore:us-west-2:672915487120:memory/cdk_broadband_checker_agent_mem-aJmJJLDLAl
+      memory_name: cdk_broadband_checker_agent_mem
+      event_expiry_days: 30
+      first_invoke_memory_check_done: false
+    authorizer_configuration: null
+    request_header_configuration: null
+    oauth_configuration: null
+  cdk_shopping_agent:
+    name: cdk_shopping_agent
+    entrypoint: shopping_agent.py
+    platform: linux/arm64
+    container_runtime: docker
+    source_path: null
+    aws:
+      execution_role: arn:aws:iam::672915487120:role/AmazonBedrockAgentCoreSDKRuntime-us-west-2-e963e045d4
+      execution_role_auto_create: false
+      account: '672915487120'
+      region: us-west-2
+      ecr_repository: 672915487120.dkr.ecr.us-west-2.amazonaws.com/bedrock-agentcore-cdk_shopping_agent
+      ecr_auto_create: false
+      network_configuration:
+        network_mode: PUBLIC
+        network_mode_config: null
+      protocol_configuration:
+        server_protocol: HTTP
+      observability:
+        enabled: true
+    bedrock_agentcore:
+      agent_id: cdk_shopping_agent-IHQwE1EMY3
+      agent_arn: arn:aws:bedrock-agentcore:us-west-2:672915487120:runtime/cdk_shopping_agent-IHQwE1EMY3
+      agent_session_id: null
+    codebuild:
+      project_name: null
+      execution_role: null
+      source_bucket: null
+    memory:
+      mode: STM_ONLY
+      memory_id: cdk_shopping_agent_mem-vjCscv2gDl
+      memory_arn: arn:aws:bedrock-agentcore:us-west-2:672915487120:memory/cdk_shopping_agent_mem-vjCscv2gDl
+      memory_name: cdk_shopping_agent_mem
+      event_expiry_days: 30
+      first_invoke_memory_check_done: false
+    authorizer_configuration: null
+    request_header_configuration: null
+    oauth_configuration: null
+  cdk_web_search_agent:
+    name: cdk_web_search_agent
+    entrypoint: search_agent.py
+    platform: linux/arm64
+    container_runtime: docker
+    source_path: null
+    aws:
+      execution_role: arn:aws:iam::672915487120:role/AmazonBedrockAgentCoreSDKRuntime-us-west-2-623164d85f
+      execution_role_auto_create: false
+      account: '672915487120'
+      region: us-west-2
+      ecr_repository: 672915487120.dkr.ecr.us-west-2.amazonaws.com/bedrock-agentcore-cdk_web_search_agent
+      ecr_auto_create: false
+      network_configuration:
+        network_mode: PUBLIC
+        network_mode_config: null
+      protocol_configuration:
+        server_protocol: HTTP
+      observability:
+        enabled: true
+    bedrock_agentcore:
+      agent_id: cdk_web_search_agent-szPpHlGiSQ
+      agent_arn: arn:aws:bedrock-agentcore:us-west-2:672915487120:runtime/cdk_web_search_agent-szPpHlGiSQ
+      agent_session_id: null
+    codebuild:
+      project_name: bedrock-agentcore-cdk_web_search_agent-builder
+      execution_role: arn:aws:iam::672915487120:role/AmazonBedrockAgentCoreSDKCodeBuild-us-west-2-623164d85f
+      source_bucket: bedrock-agentcore-codebuild-sources-672915487120-us-west-2
+    memory:
+      mode: STM_ONLY
+      memory_id: cdk_web_search_agent_mem-DYBaTcGxm1
+      memory_arn: arn:aws:bedrock-agentcore:us-west-2:672915487120:memory/cdk_web_search_agent_mem-DYBaTcGxm1
+      memory_name: cdk_web_search_agent_mem
+      event_expiry_days: 30
+      first_invoke_memory_check_done: false
+    authorizer_configuration: null
+    request_header_configuration: null
+    oauth_configuration: null
+  cdk_browser_agent:
+    name: cdk_browser_agent
+    entrypoint: browser_agent.py
+    platform: linux/arm64
+    container_runtime: docker
+    source_path: null
+    aws:
+      execution_role: arn:aws:iam::672915487120:role/AmazonBedrockAgentCoreSDKRuntime-us-west-2-067647e706
+      execution_role_auto_create: true
+      account: '672915487120'
+      region: us-west-2
+      ecr_repository: 672915487120.dkr.ecr.us-west-2.amazonaws.com/bedrock-agentcore-cdk_browser_agent
+      ecr_auto_create: false
+      network_configuration:
+        network_mode: PUBLIC
+        network_mode_config: null
+      protocol_configuration:
+        server_protocol: HTTP
+      observability:
+        enabled: true
+    bedrock_agentcore:
+      agent_id: cdk_browser_agent-KevJztCRbt
+      agent_arn: arn:aws:bedrock-agentcore:us-west-2:672915487120:runtime/cdk_browser_agent-KevJztCRbt
+      agent_session_id: null
+    codebuild:
+      project_name: bedrock-agentcore-cdk_browser_agent-builder
+      execution_role: arn:aws:iam::672915487120:role/AmazonBedrockAgentCoreSDKCodeBuild-us-west-2-5eca489804
+      source_bucket: bedrock-agentcore-codebuild-sources-672915487120-us-west-2
+    memory:
+      mode: STM_ONLY
+      memory_id: cdk_browser_agent_mem-pwzRNvBJhF
+      memory_arn: arn:aws:bedrock-agentcore:us-west-2:672915487120:memory/cdk_browser_agent_mem-pwzRNvBJhF
+      memory_name: cdk_browser_agent_mem
+      event_expiry_days: 30
+      first_invoke_memory_check_done: false
+    authorizer_configuration: null
+    request_header_configuration: null
+    oauth_configuration: null
+  browser_agent:
+    name: browser_agent
+    entrypoint: browser_agent.py
+    platform: linux/arm64
+    container_runtime: docker
+    source_path: null
+    aws:
+      execution_role: arn:aws:iam::145023107515:role/AmazonBedrockAgentCoreSDKRuntime-eu-west-1-30f67190a9
+      execution_role_auto_create: false
+      account: '145023107515'
+      region: eu-west-1
+      ecr_repository: 145023107515.dkr.ecr.eu-west-1.amazonaws.com/bedrock-agentcore-browser_agent
+      ecr_auto_create: false
+      network_configuration:
+        network_mode: PUBLIC
+        network_mode_config: null
+      protocol_configuration:
+        server_protocol: HTTP
+      observability:
+        enabled: true
+    bedrock_agentcore:
+      agent_id: browser_agent-KDLx4JCoxg
+      agent_arn: arn:aws:bedrock-agentcore:eu-west-1:145023107515:runtime/browser_agent-KDLx4JCoxg
+      agent_session_id: null
+    codebuild:
+      project_name: bedrock-agentcore-browser_agent-builder
+      execution_role: arn:aws:iam::145023107515:role/AmazonBedrockAgentCoreSDKCodeBuild-eu-west-1-30f67190a9
+      source_bucket: bedrock-agentcore-codebuild-sources-145023107515-eu-west-1
+    memory:
+      mode: STM_ONLY
+      memory_id: browser_agent_mem-CbTJvY9VlN
+      memory_arn: arn:aws:bedrock-agentcore:eu-west-1:145023107515:memory/browser_agent_mem-CbTJvY9VlN
+      memory_name: browser_agent_mem
+      event_expiry_days: 30
+      first_invoke_memory_check_done: false
+    authorizer_configuration: null
+    request_header_configuration: null
+    oauth_configuration: null

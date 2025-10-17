@@ -123,13 +123,12 @@ help:
 	@echo "  make deploy-tools      - Deploy all tool stacks"
 	@echo "  make deploy-agents     - Deploy all agent stacks"
 	@echo ""
-	@echo "🤖 Agent Core Commands:"
-	@echo "  make deploy-agent-core CONFIG=<file> - Deploy agent to Agent Core service"
-	@echo "  make deploy-agent-wrapper AGENT=<name> - Deploy Step Functions wrapper"
-	@echo "  make deploy-agent-full CONFIG=<file> - Full deployment (Core + wrapper)"
-	@echo "  make list-agent-core   - List all Agent Core agents"
-	@echo "  make test-agent-core AGENT=<name> - Test an Agent Core agent"
-	@echo "  make delete-agent-core AGENT_ID=<id> - Delete an Agent Core agent"
+	@echo "🤖 AgentCore Browser Commands (CDK-based):"
+	@echo "  make create-agentcore-ecr-repos      - Create ECR repositories"
+	@echo "  make build-agentcore-containers      - Build and push Docker containers to ECR"
+	@echo "  make deploy-agentcore-full           - Full deployment (repos + images + CDK)"
+	@echo "  make test-agentcore-browser          - Test browser tool invocation"
+	@echo "  make logs-agentcore-browser          - View Lambda logs"
 	@echo ""
 	@echo "📱 UI Commands:"
 	@echo "  make ui-build          - Build Amplify UI"
@@ -255,6 +254,39 @@ clean-llm-rust:
 	@cd $(CALL_LLM_RUST_DIR) && \
 		$(CARGO) clean && \
 		rm -rf deployment
+
+# ============================================
+# MCP Server Build Commands
+# ============================================
+
+MCP_TEMPLATE_DIR := $(HOME)/Development/Xecutive-AI/general-mcp-examples/mcp-template
+MCP_SERVERS_DIR := lambda/mcp-servers
+
+.PHONY: build-mcp-reinvent
+build-mcp-reinvent:
+	@echo "🦀 Building re:Invent MCP server..."
+	@cd $(MCP_TEMPLATE_DIR) && \
+		$(CARGO_LAMBDA) build --release --arm64 -p reinvent-server
+	@echo "📦 Copying bootstrap to lambda directory..."
+	@mkdir -p $(MCP_SERVERS_DIR)/reinvent
+	@cp $(MCP_TEMPLATE_DIR)/target/lambda/reinvent-server/bootstrap $(MCP_SERVERS_DIR)/reinvent/
+	@echo "✅ re:Invent MCP server built and ready for deployment"
+	@echo "Deploy with: cdk deploy ReinventMcpStack-prod"
+
+.PHONY: clean-mcp-reinvent
+clean-mcp-reinvent:
+	@echo "🧹 Cleaning re:Invent MCP server build artifacts..."
+	@rm -rf $(MCP_SERVERS_DIR)/reinvent
+	@cd $(MCP_TEMPLATE_DIR) && \
+		$(CARGO) clean -p reinvent-server
+
+.PHONY: build-mcp-all
+build-mcp-all: build-mcp-reinvent
+	@echo "✅ All MCP servers built"
+
+.PHONY: clean-mcp-all
+clean-mcp-all: clean-mcp-reinvent
+	@echo "✅ All MCP server artifacts cleaned"
 
 # ============================================
 # Setup Commands
@@ -827,7 +859,7 @@ agentcore-broadband-test-deployed:
 .PHONY: agentcore-broadband-logs
 agentcore-broadband-logs:
 	@echo "📋 Viewing Broadband Checker Agent logs (full)..."
-	@aws logs tail /aws/bedrock-agentcore/runtimes/broadband_checker_agent-KcXxkNFCkG-DEFAULT \
+	@aws logs tail /aws/agentcore/runtimes/broadband_checker_agent-KcXxkNFCkG-DEFAULT \
 		--profile $(AWS_PROFILE) \
 		--region $(AWS_REGION) \
 		--follow
@@ -835,10 +867,10 @@ agentcore-broadband-logs:
 .PHONY: agentcore-broadband-logs-body
 agentcore-broadband-logs-body:
 	@echo "📋 Viewing Broadband Checker Agent logs (body field only with timestamp)..."
-	@echo "📍 Log group: /aws/bedrock-agentcore/runtimes/broadband_checker_agent-KcXxkNFCkG-DEFAULT"
+	@echo "📍 Log group: /aws/agentcore/runtimes/broadband_checker_agent-KcXxkNFCkG-DEFAULT"
 	@echo "⏰ Following new logs as they arrive..."
 	@echo "----------------------------------------"
-	@aws logs tail /aws/bedrock-agentcore/runtimes/broadband_checker_agent-KcXxkNFCkG-DEFAULT --follow | \
+	@aws logs tail /aws/agentcore/runtimes/broadband_checker_agent-KcXxkNFCkG-DEFAULT --follow | \
 	awk '{ts=$$1; $$1=""; stream=$$2; $$2=""; sub(/^  */,""); print ts "|" $$0}' | \
 	while IFS="|" read -r ts json; do \
 		body=$$(printf "%s\n" "$$json" | jq -r 'try .body // empty' 2>/dev/null); \
@@ -1007,7 +1039,7 @@ agentcore-invoke:
 	fi
 	@echo "🔄 Invoking Agent Core agent: $(AGENTCORE_NAME)"
 	@AGENT_ARN=$$(cat $(AGENTCORE_DIR)/agentcore-deployment-$(AGENTCORE_NAME).json | jq -r '.agent_arn') && \
-	aws bedrock-agentcore invoke-agent-runtime \
+	aws agentcore invoke-agent-runtime \
 		--agent-runtime-arn "$$AGENT_ARN" \
 		--qualifier "DEFAULT" \
 		--payload '{"prompt": "$(PROMPT)", "test": true}' \
@@ -1017,7 +1049,7 @@ agentcore-invoke:
 .PHONY: agentcore-logs
 agentcore-logs:
 	@echo "📜 Viewing Agent Core logs for: $(AGENTCORE_NAME)"
-	@aws logs tail /aws/bedrock-agentcore/$(AGENTCORE_NAME) \
+	@aws logs tail /aws/agentcore/$(AGENTCORE_NAME) \
 		--region $(AWS_REGION) \
 		--follow
 
@@ -1029,7 +1061,7 @@ agentcore-clean:
 		ECR_URI=$$(cat $(AGENTCORE_DIR)/agentcore-deployment-$(AGENTCORE_NAME).json | jq -r '.ecr_uri'); \
 		ROLE_NAME="AgentCoreRuntime-$(AGENTCORE_NAME)"; \
 		echo "Deleting Agent Core runtime..."; \
-		aws bedrock-agentcore-control delete-agent-runtime \
+		aws agentcore-control delete-agent-runtime \
 			--agent-runtime-id "$$AGENT_ID" \
 			--region $(AWS_REGION) 2>/dev/null || true; \
 		echo "Deleting ECR repository..."; \
@@ -1093,12 +1125,359 @@ agentcore-full: agentcore-deploy agentcore-wrapper
 		--output text \
 		--region $(AWS_REGION)
 
-NEW_AGENTCORE_REMOVED
+# ============================================
+# AgentCore Browser Deployment Commands (CDK-based)
+# ============================================
 
-# This target remains as it deploys the Lambda tool that calls Agent Core runtime
+.PHONY: create-agentcore-ecr-repos
+create-agentcore-ecr-repos:
+	@echo "📦 Creating AgentCore ECR repositories..."
+	@echo ""
+	@for repo in agentcore-cdk_broadband_checker_agent agentcore-cdk_shopping_agent agentcore-cdk_web_search_agent; do \
+		echo "Creating repository: $$repo" && \
+		aws ecr create-repository \
+			--repository-name $$repo \
+			--region $(AWS_REGION) \
+			--image-scanning-configuration scanOnPush=true \
+			--encryption-configuration encryptionType=AES256 2>/dev/null || echo "  (already exists, skipping)"; \
+	done && \
+	echo "" && \
+	echo "✅ ECR repositories created!" && \
+	echo "" && \
+	echo "Next step: make build-agentcore-containers ENV_NAME=prod"
+
+.PHONY: build-agentcore-containers
+build-agentcore-containers:
+	@echo "🐳 Building AgentCore browser agent containers..."
+	@echo ""
+	@echo "This will build Docker containers for each browser agent and push to ECR"
+	@echo "Agents: broadband_checker_agent, shopping_agent, web_search_agent"
+	@echo ""
+	@# Get ECR repository URIs - try from CloudFormation first, fallback to direct repo names
+	@ACCOUNT_ID=$$(aws sts get-caller-identity --query Account --output text) && \
+	BROADBAND_REPO=$$(aws cloudformation describe-stacks \
+		--stack-name "AgentCoreBrowserRuntimeStack-$(ENV_NAME)" \
+		--region "$(AWS_REGION)" \
+		--query "Stacks[0].Outputs[?OutputKey=='BroadbandRepositoryUri'].OutputValue" \
+		--output text 2>/dev/null || echo "$$ACCOUNT_ID.dkr.ecr.$(AWS_REGION).amazonaws.com/agentcore-cdk_broadband_checker_agent") && \
+	SHOPPING_REPO=$$(aws cloudformation describe-stacks \
+		--stack-name "AgentCoreBrowserRuntimeStack-$(ENV_NAME)" \
+		--region "$(AWS_REGION)" \
+		--query "Stacks[0].Outputs[?OutputKey=='ShoppingRepositoryUri'].OutputValue" \
+		--output text 2>/dev/null || echo "$$ACCOUNT_ID.dkr.ecr.$(AWS_REGION).amazonaws.com/agentcore-cdk_shopping_agent") && \
+	SEARCH_REPO=$$(aws cloudformation describe-stacks \
+		--stack-name "AgentCoreBrowserRuntimeStack-$(ENV_NAME)" \
+		--region "$(AWS_REGION)" \
+		--query "Stacks[0].Outputs[?OutputKey=='SearchRepositoryUri'].OutputValue" \
+		--output text 2>/dev/null || echo "$$ACCOUNT_ID.dkr.ecr.$(AWS_REGION).amazonaws.com/agentcore-cdk_web_search_agent") && \
+	echo "📦 ECR Repositories:" && \
+	echo "  Broadband: $$BROADBAND_REPO" && \
+	echo "  Shopping: $$SHOPPING_REPO" && \
+	echo "  Search: $$SEARCH_REPO" && \
+	echo "" && \
+	echo "🔑 Logging in to ECR..." && \
+	aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $$(echo $$BROADBAND_REPO | cut -d'/' -f1) && \
+	echo "" && \
+	echo "🔨 Building and pushing containers..." && \
+	echo "  Source: lambda/tools/agentcore_browser/agents" && \
+	cd lambda/tools/agentcore_browser/agents && \
+	docker build --platform linux/amd64 -t $$BROADBAND_REPO:latest -f Dockerfile . && \
+	docker push $$BROADBAND_REPO:latest && \
+	docker tag $$BROADBAND_REPO:latest $$SHOPPING_REPO:latest && \
+	docker push $$SHOPPING_REPO:latest && \
+	docker tag $$BROADBAND_REPO:latest $$SEARCH_REPO:latest && \
+	docker push $$SEARCH_REPO:latest && \
+	echo "" && \
+	echo "✅ All AgentCore containers built and pushed to ECR!"
+
+.PHONY: deploy-agentcore-runtime
+deploy-agentcore-runtime:
+	@echo "🚀 Deploying AgentCore Browser Runtime Stack..."
+	@echo "This creates ECR repositories and AgentCore runtimes"
+	$(CDK) deploy AgentCoreBrowserRuntimeStack-$(ENV_NAME) \
+		--require-approval never --profile $(AWS_PROFILE)
+	@echo "✅ AgentCore runtimes deployed!"
+	@echo ""
+	@echo "⚠️  Next steps:"
+	@echo "  1. Build and push containers: make build-agentcore-containers"
+	@echo "  2. Deploy Lambda tool: make deploy-agentcore-tool"
+
 .PHONY: deploy-agentcore-tool
 deploy-agentcore-tool:
 	@echo "🚀 Deploying Agent Core Browser Tool Stack..."
+	@echo "This deploys the Lambda that routes to AgentCore runtimes"
 	$(CDK) deploy AgentCoreBrowserToolStack-$(ENV_NAME) \
-		--require-approval never
+		--require-approval never --profile $(AWS_PROFILE)
 	@echo "✅ Agent Core Browser Tool deployed!"
+
+.PHONY: deploy-agentcore-full
+deploy-agentcore-full: create-agentcore-ecr-repos build-agentcore-containers deploy-agentcore-runtime deploy-agentcore-tool
+	@echo ""
+	@echo "✅ Full AgentCore Browser deployment complete!"
+	@echo ""
+	@echo "Deployed components:"
+	@echo "  ✓ ECR repositories (created manually)"
+	@echo "  ✓ Docker containers (real images)"
+	@echo "  ✓ AgentCore runtimes"
+	@echo "  ✓ Lambda routing tool"
+	@echo ""
+	@echo "The browser tools are now registered in DynamoDB:"
+	@echo "  - browser_broadband"
+	@echo "  - browser_shopping"
+	@echo "  - browser_search"
+
+
+.PHONY: test-agentcore-browser
+test-agentcore-browser:
+	@echo "🧪 Testing AgentCore browser tool..."
+	@FUNCTION_NAME=$$(aws cloudformation describe-stacks \
+		--stack-name "AgentCoreBrowserToolStack-$(ENV_NAME)" \
+		--region "$(AWS_REGION)" \
+		--query "Stacks[0].Outputs[?OutputKey=='LambdaFunctionName'].OutputValue" \
+		--output text 2>/dev/null) && \
+	if [ -z "$$FUNCTION_NAME" ]; then \
+		echo "❌ AgentCoreBrowserToolStack not found"; \
+		exit 1; \
+	fi && \
+	echo "Invoking $$FUNCTION_NAME with test payload..." && \
+	aws lambda invoke \
+		--function-name $$FUNCTION_NAME \
+		--payload '{"name":"browser_search","input":{"query":"test query"}}' \
+		--region $(AWS_REGION) \
+		--profile $(AWS_PROFILE) \
+		/tmp/agentcore-test-response.json && \
+	echo "Response:" && \
+	cat /tmp/agentcore-test-response.json | python3 -m json.tool
+
+.PHONY: logs-agentcore-browser
+logs-agentcore-browser:
+	@echo "📋 Tailing AgentCore browser Lambda logs..."
+	@FUNCTION_NAME=$$(aws cloudformation describe-stacks \
+		--stack-name "AgentCoreBrowserToolStack-$(ENV_NAME)" \
+		--region "$(AWS_REGION)" \
+		--query "Stacks[0].Outputs[?OutputKey=='LambdaFunctionName'].OutputValue" \
+		--output text 2>/dev/null) && \
+	aws logs tail /aws/lambda/$$FUNCTION_NAME --follow --region $(AWS_REGION) --profile $(AWS_PROFILE)
+
+# AgentCore Browser Deployment using AgentCore CLI
+# Uses the official agentcore CLI for simplified deployment
+
+.PHONY: agentcore-configure-broadband
+agentcore-configure-broadband:
+	@echo "🔧 Configuring broadband checker agent..."
+	@cd lambda/tools/agentcore_browser/agents && \
+	source ../../../../.venv/bin/activate && \
+	AWS_REGION=$(AWS_REGION) agentcore configure \
+		--entrypoint broadband_agent.py \
+		--name cdk_broadband_checker_agent \
+		--non-interactive
+
+.PHONY: agentcore-configure-shopping
+agentcore-configure-shopping:
+	@echo "🔧 Configuring shopping agent..."
+	@cd lambda/tools/agentcore_browser/agents && \
+	source ../../../../.venv/bin/activate && AWS_REGION=$(AWS_REGION) agentcore configure \
+		--entrypoint shopping_agent.py \
+		--name cdk_shopping_agent \
+		--non-interactive
+
+.PHONY: agentcore-configure-search
+agentcore-configure-search:
+	@echo "🔧 Configuring search agent..."
+	@cd lambda/tools/agentcore_browser/agents && \
+	source ../../../../.venv/bin/activate && AWS_REGION=$(AWS_REGION) agentcore configure \
+		--entrypoint search_agent.py \
+		--name cdk_web_search_agent \
+		--non-interactive
+
+.PHONY: agentcore-configure-all
+agentcore-configure-all: agentcore-configure-broadband agentcore-configure-shopping agentcore-configure-search
+	@echo "✅ All agents configured!"
+
+.PHONY: agentcore-launch-broadband
+agentcore-launch-broadband:
+	@echo "🚀 Launching broadband checker agent..."
+	@echo "   (Uses CodeBuild - no Docker needed)"
+	@cd lambda/tools/agentcore_browser/agents && \
+	source ../../../../.venv/bin/activate && AWS_REGION=$(AWS_REGION) agentcore launch \
+		--agent cdk_broadband_checker_agent \
+		--auto-update-on-conflict
+
+.PHONY: agentcore-launch-shopping
+agentcore-launch-shopping:
+	@echo "🚀 Launching shopping agent..."
+	@echo "   (Uses CodeBuild - no Docker needed)"
+	@cd lambda/tools/agentcore_browser/agents && \
+	source ../../../../.venv/bin/activate && AWS_REGION=$(AWS_REGION) agentcore launch \
+		--agent cdk_shopping_agent \
+		--auto-update-on-conflict
+
+.PHONY: agentcore-launch-search
+agentcore-launch-search:
+	@echo "🚀 Launching search agent..."
+	@echo "   (Uses CodeBuild - no Docker needed)"
+	@cd lambda/tools/agentcore_browser/agents && \
+	source ../../../../.venv/bin/activate && AWS_REGION=$(AWS_REGION) agentcore launch \
+		--agent cdk_web_search_agent \
+		--auto-update-on-conflict
+
+.PHONY: agentcore-launch-all
+agentcore-launch-all: agentcore-launch-broadband agentcore-launch-shopping agentcore-launch-search
+	@echo ""
+	@echo "✅ All AgentCore browser agents launched!"
+
+# Legacy manual deployment targets (DEPRECATED - use agentcore-launch-all instead)
+# Kept for backward compatibility
+
+.PHONY: deploy-agentcore-runtimes-manual-legacy
+deploy-agentcore-runtimes-manual-legacy:
+	@echo "🚀 Deploying AgentCore Runtimes Manually using starter toolkit"
+	@echo ""
+	@echo "⚠️  Prerequisite: agentcore CLI must be installed:"
+	@echo "   pip install agentcore"
+	@echo ""
+	@ACCOUNT_ID=$$(aws sts get-caller-identity --query Account --output text) && \
+	AWS_REGION=$(AWS_REGION) && \
+	RUNTIMES="cdk_broadband_checker_agent cdk_shopping_agent cdk_web_search_agent" && \
+	echo "📦 Deploying runtimes: $$RUNTIMES" && \
+	echo "" && \
+	for RUNTIME in $$RUNTIMES; do \
+		echo "Deploying $$RUNTIME..." && \
+		CONTAINER_URI="$$ACCOUNT_ID.dkr.ecr.$$AWS_REGION.amazonaws.com/agentcore-$$RUNTIME:latest" && \
+		agentcore deploy-runtime \
+			--runtime-name $$RUNTIME \
+			--container-uri $$CONTAINER_URI \
+			--network-mode PUBLIC \
+			--protocol HTTP \
+			--region $$AWS_REGION && \
+		echo "  ✅ $$RUNTIME deployed successfully" && \
+		echo ""; \
+	done && \
+	echo "✅ All AgentCore runtimes deployed!"
+
+.PHONY: list-agentcore-runtimes
+list-agentcore-runtimes:
+	@echo "📋 Listing AgentCore Runtimes..."
+	@cd lambda/tools/agentcore_browser/agents && \
+	source ../../../../.venv/bin/activate && AWS_REGION=$(AWS_REGION) agentcore list
+
+.PHONY: agentcore-status
+agentcore-status:
+	@echo "📊 Checking AgentCore agent status..."
+	@echo ""
+	@echo "Broadband Agent:"
+	@cd lambda/tools/agentcore_browser/agents && \
+	source ../../../../.venv/bin/activate && AWS_REGION=$(AWS_REGION) agentcore status --runtime-name cdk_broadband_checker_agent 2>/dev/null || echo "  Not deployed"
+	@echo ""
+	@echo "Shopping Agent:"
+	@cd lambda/tools/agentcore_browser/agents && \
+	source ../../../../.venv/bin/activate && AWS_REGION=$(AWS_REGION) agentcore status --runtime-name cdk_shopping_agent 2>/dev/null || echo "  Not deployed"
+	@echo ""
+	@echo "Search Agent:"
+	@cd lambda/tools/agentcore_browser/agents && \
+	source ../../../../.venv/bin/activate && AWS_REGION=$(AWS_REGION) agentcore status --runtime-name cdk_web_search_agent 2>/dev/null || echo "  Not deployed"
+
+.PHONY: get-agentcore-runtime-arns
+get-agentcore-runtime-arns:
+	@echo "🔍 Getting AgentCore Runtime ARNs..."
+	@echo ""
+	@cd lambda/tools/agentcore_browser/agents && \
+	echo "Broadband Agent:" && \
+	source ../../../../.venv/bin/activate && AWS_REGION=$(AWS_REGION) agentcore describe --runtime-name cdk_broadband_checker_agent 2>/dev/null | grep -i arn || echo "  Not deployed" && \
+	echo "" && \
+	echo "Shopping Agent:" && \
+	source ../../../../.venv/bin/activate && AWS_REGION=$(AWS_REGION) agentcore describe --runtime-name cdk_shopping_agent 2>/dev/null | grep -i arn || echo "  Not deployed" && \
+	echo "" && \
+	echo "Search Agent:" && \
+	source ../../../../.venv/bin/activate && AWS_REGION=$(AWS_REGION) agentcore describe --runtime-name cdk_web_search_agent 2>/dev/null | grep -i arn || echo "  Not deployed"
+
+.PHONY: update-agentcore-runtimes-manual
+update-agentcore-runtimes-manual:
+	@echo "🔄 Updating AgentCore Runtimes to latest container images..."
+	@echo ""
+	@ACCOUNT_ID=$$(aws sts get-caller-identity --query Account --output text) && \
+	AWS_REGION=$(AWS_REGION) && \
+	RUNTIMES="cdk_broadband_checker_agent cdk_shopping_agent cdk_web_search_agent" && \
+	for RUNTIME in $$RUNTIMES; do \
+		echo "Updating $$RUNTIME..." && \
+		CONTAINER_URI="$$ACCOUNT_ID.dkr.ecr.$$AWS_REGION.amazonaws.com/agentcore-$$RUNTIME:latest" && \
+		agentcore update-runtime \
+			--runtime-name $$RUNTIME \
+			--container-uri $$CONTAINER_URI \
+			--region $$AWS_REGION && \
+		echo "  ✅ $$RUNTIME updated" && \
+		echo ""; \
+	done && \
+	echo "✅ All runtimes updated!"
+
+.PHONY: delete-agentcore-runtimes-manual
+delete-agentcore-runtimes-manual:
+	@echo "🗑️  Deleting AgentCore Runtimes..."
+	@echo ""
+	@read -p "Are you sure you want to delete all AgentCore runtimes? (yes/no): " confirm && \
+	if [ "$$confirm" = "yes" ]; then \
+		RUNTIMES="cdk_broadband_checker_agent cdk_shopping_agent cdk_web_search_agent" && \
+		for RUNTIME in $$RUNTIMES; do \
+			echo "Deleting $$RUNTIME..." && \
+			agentcore delete-runtime \
+				--runtime-name $$RUNTIME \
+				--region $(AWS_REGION) 2>/dev/null && \
+			echo "  ✅ $$RUNTIME deleted" || echo "  ⚠️  $$RUNTIME not found or already deleted"; \
+			echo ""; \
+		done && \
+		echo "✅ Deletion complete!"; \
+	else \
+		echo "❌ Deletion cancelled"; \
+	fi
+
+.PHONY: update-agentcore-lambda-arns
+update-agentcore-lambda-arns:
+	@echo "🔄 Updating Lambda function with AgentCore runtime ARNs..."
+	@echo ""
+	@FUNCTION_NAME="agentcore-browser-tool-$(ENV_NAME)" && \
+	BROADBAND_ARN=$$(agentcore describe-runtime --runtime-name cdk_broadband_checker_agent --region $(AWS_REGION) --query 'runtimeArn' --output text 2>/dev/null) && \
+	SHOPPING_ARN=$$(agentcore describe-runtime --runtime-name cdk_shopping_agent --region $(AWS_REGION) --query 'runtimeArn' --output text 2>/dev/null) && \
+	SEARCH_ARN=$$(agentcore describe-runtime --runtime-name cdk_web_search_agent --region $(AWS_REGION) --query 'runtimeArn' --output text 2>/dev/null) && \
+	if [ -z "$$BROADBAND_ARN" ] || [ -z "$$SHOPPING_ARN" ] || [ -z "$$SEARCH_ARN" ]; then \
+		echo "❌ Error: Could not find all runtime ARNs. Please deploy runtimes first."; \
+		exit 1; \
+	fi && \
+	echo "Found ARNs:" && \
+	echo "  Broadband: $$BROADBAND_ARN" && \
+	echo "  Shopping:  $$SHOPPING_ARN" && \
+	echo "  Search:    $$SEARCH_ARN" && \
+	echo "" && \
+	aws lambda update-function-configuration \
+		--function-name $$FUNCTION_NAME \
+		--environment Variables="{\"BROADBAND_AGENT_ARN\":\"$$BROADBAND_ARN\",\"SHOPPING_AGENT_ARN\":\"$$SHOPPING_ARN\",\"SEARCH_AGENT_ARN\":\"$$SEARCH_ARN\"}" \
+		--region $(AWS_REGION) \
+		--query 'Environment.Variables' \
+		--output json && \
+	echo "" && \
+	echo "✅ Lambda environment variables updated!"
+
+# Simplified full workflow using agentcore CLI (RECOMMENDED)
+.PHONY: deploy-agentcore-browser-tools
+deploy-agentcore-browser-tools: agentcore-configure-all agentcore-launch-all update-agentcore-lambda-arns
+	@echo ""
+	@echo "✅ Full AgentCore browser tool deployment complete!"
+	@echo ""
+	@echo "📝 Next steps:"
+	@echo "  1. Test: make test-agentcore-broadband"
+	@echo "  2. Check status: make agentcore-status"
+	@echo "  3. View logs: make tail-agentcore-browser-logs"
+	@echo "  4. Modify instructions in lambda/tools/agentcore_browser/agents/instructions/"
+	@echo ""
+	@echo "📚 Documentation: docs/AGENTCORE_BROWSER_QUICK_START.md"
+
+# Test the broadband agent
+.PHONY: test-agentcore-broadband
+test-agentcore-broadband:
+	@echo "🧪 Testing broadband agent..."
+	@aws lambda invoke \
+		--function-name agentcore-browser-tool-$(ENV_NAME) \
+		--payload '{"id":"test1","name":"browser_broadband","input":{"postcode":"E8 4LX","building_number":"13"}}' \
+		--region $(AWS_REGION) \
+		/tmp/agentcore-test-response.json && \
+	cat /tmp/agentcore-test-response.json | jq && \
+	rm /tmp/agentcore-test-response.json

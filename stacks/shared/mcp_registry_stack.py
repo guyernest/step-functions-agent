@@ -50,7 +50,10 @@ class MCPRegistryStack(Stack):
             stream=dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,  # For future event-driven updates
         )
         
-        # Add Global Secondary Index for querying by status
+        # GSIs for common query patterns
+        # Note: These already exist from previous deployment, keeping them as-is
+
+        # Query by status (most common)
         self.mcp_registry_table.add_global_secondary_index(
             index_name="MCPServersByStatus",
             partition_key=dynamodb.Attribute(
@@ -63,8 +66,8 @@ class MCPRegistryStack(Stack):
             ),
             projection_type=dynamodb.ProjectionType.ALL
         )
-        
-        # Add GSI for querying by protocol type
+
+        # Query by protocol type
         self.mcp_registry_table.add_global_secondary_index(
             index_name="MCPServersByProtocol",
             partition_key=dynamodb.Attribute(
@@ -77,8 +80,8 @@ class MCPRegistryStack(Stack):
             ),
             projection_type=dynamodb.ProjectionType.ALL
         )
-        
-        # Add GSI for querying by deployment stack (for CDK tracking)
+
+        # Query by deployment stack (for CDK tracking)
         self.mcp_registry_table.add_global_secondary_index(
             index_name="MCPServersByStack",
             partition_key=dynamodb.Attribute(
@@ -181,14 +184,25 @@ def handler(event, context):
                 'version': '1.0.0',
                 'server_name': 'Step Functions Agent MCP Server',
                 'description': 'MCP server for managing Step Functions agents, providing tools for agent execution and monitoring',
+                'protocol_version': '2024-11-05',
                 'endpoint_url': mcp_endpoint,
                 'protocol_type': 'jsonrpc',
                 'authentication_type': 'api_key',
                 'api_key_header': 'x-api-key',
-                'available_tools': [
+
+                # Deployment information
+                'deployment_type': 'aws-lambda',
+                'deployment_region': os.environ.get('AWS_REGION', 'us-east-1'),
+                'deployment_stack': f'step-functions-agents-{environment}',
+                'lambda_arn': '',  # To be filled by actual deployment
+                'function_url': mcp_endpoint,
+
+                # Tool specifications with implementation type
+                'available_tools': json.dumps([
                     {
                         'name': 'start_agent',
                         'description': 'Start execution of a Step Functions agent',
+                        'implementation': 'local',
                         'inputSchema': {
                             'type': 'object',
                             'properties': {
@@ -211,6 +225,7 @@ def handler(event, context):
                     {
                         'name': 'get_execution_status',
                         'description': 'Get status of an agent execution',
+                        'implementation': 'local',
                         'inputSchema': {
                             'type': 'object',
                             'properties': {
@@ -225,28 +240,48 @@ def handler(event, context):
                     {
                         'name': 'list_available_agents',
                         'description': 'List all available agents from the registry',
+                        'implementation': 'local',
                         'inputSchema': {
                             'type': 'object',
                             'properties': {}
                         }
                     }
-                ],
+                ]),
+                'available_resources': json.dumps([]),
+                'available_prompts': json.dumps([]),
+
+                # Status and health
                 'status': 'active',
+                'health_status': 'unknown',  # healthy, degraded, unhealthy, unknown
                 'health_check_url': mcp_endpoint.replace('/mcp', '/health'),
                 'health_check_interval': 300,
+                'last_health_check': datetime.utcnow().isoformat(),
+
+                # Observability configuration
+                'cloudwatch_log_group': f'/mcp-servers/step-functions-agent-{environment}',
+                'metrics_namespace': 'MCP/StepFunctionsAgent',
+                'traces_enabled': True,
+                'log_level': 'INFO',
+
+                # Configuration
                 'configuration': json.dumps({
                     'timeout_seconds': 30,
                     'max_retries': 3,
                     'supports_batch': False
                 }),
+
+                # Environment variables (if any)
+                'environment_variables': json.dumps({}),
+
+                # Metadata
                 'metadata': json.dumps({
                     'managed_by': 'cdk',
                     'team': 'platform',
                     'cost_center': 'engineering',
                     'tags': ['production', 'critical', 'agent-management']
                 }),
-                'deployment_stack': f'step-functions-agents-{environment}',
-                'deployment_region': os.environ.get('AWS_REGION', 'us-east-1'),
+
+                # Lifecycle
                 'created_at': datetime.utcnow().isoformat(),
                 'updated_at': datetime.utcnow().isoformat(),
                 'created_by': 'system'
@@ -260,13 +295,24 @@ def handler(event, context):
                 'version': '1.0.0',
                 'server_name': 'Example Echo MCP Server',
                 'description': 'Simple echo server for testing MCP protocol implementation',
+                'protocol_version': '2024-11-05',
                 'endpoint_url': 'https://echo.example.com/mcp',
                 'protocol_type': 'jsonrpc',
                 'authentication_type': 'none',
-                'available_tools': [
+
+                # Deployment information
+                'deployment_type': 'docker',
+                'deployment_region': os.environ.get('AWS_REGION', 'us-east-1'),
+                'deployment_stack': 'manual',
+                'lambda_arn': '',
+                'function_url': 'https://echo.example.com/mcp',
+
+                # Tool specifications
+                'available_tools': json.dumps([
                     {
                         'name': 'echo',
                         'description': 'Echoes back the input message',
+                        'implementation': 'local',
                         'inputSchema': {
                             'type': 'object',
                             'properties': {
@@ -278,14 +324,34 @@ def handler(event, context):
                             'required': ['message']
                         }
                     }
-                ],
+                ]),
+                'available_resources': json.dumps([]),
+                'available_prompts': json.dumps([]),
+
+                # Status and health
                 'status': 'inactive',
+                'health_status': 'unknown',
+                'health_check_url': '',
+                'health_check_interval': 0,
+                'last_health_check': '',
+
+                # Observability
+                'cloudwatch_log_group': '',
+                'metrics_namespace': '',
+                'traces_enabled': False,
+                'log_level': 'INFO',
+
+                # Configuration
                 'configuration': json.dumps({}),
+                'environment_variables': json.dumps({}),
+
+                # Metadata
                 'metadata': json.dumps({
                     'purpose': 'testing',
                     'tags': ['example', 'development']
                 }),
-                'deployment_stack': 'manual',
+
+                # Lifecycle
                 'created_at': datetime.utcnow().isoformat(),
                 'updated_at': datetime.utcnow().isoformat(),
                 'created_by': 'system'

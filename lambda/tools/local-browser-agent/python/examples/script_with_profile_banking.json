@@ -1,0 +1,51 @@
+{
+  "name": "Banking Transaction Check",
+  "description": "Check recent bank transactions using a saved authenticated session",
+  "starting_page": "https://example-bank.com/dashboard",
+  "abort_on_error": true,
+
+  "_comment_session": "Session configuration for profile and authentication management",
+  "session": {
+    "profile_name": "banking_profile",
+    "clone_for_parallel": false,
+    "requires_human_login": false,
+    "auto_login_if_needed": true,
+    "session_timeout_hours": 12,
+    "login_check_prompt": "Is there a login button visible?",
+    "post_login_verification": "Can you see the account dashboard?"
+  },
+
+  "_comment_steps": "Automation steps to execute",
+  "steps": [
+    {
+      "action": "act",
+      "prompt": "Navigate to the transactions page",
+      "description": "Go to transactions view"
+    },
+    {
+      "action": "act_with_schema",
+      "prompt": "Extract the last 5 transactions with date, description, and amount",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "transactions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {"type": "string"},
+                "description": {"type": "string"},
+                "amount": {"type": "number"},
+                "type": {"type": "string", "enum": ["debit", "credit"]}
+              },
+              "required": ["date", "description", "amount"]
+            }
+          },
+          "account_balance": {"type": "number"}
+        },
+        "required": ["transactions"]
+      },
+      "description": "Extract transaction data"
+    }
+  ]
+}

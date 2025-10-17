@@ -1,0 +1,67 @@
+{
+  "name": "Contact Form Submission",
+  "description": "Fill and submit a standard contact form",
+  "version": "1.0.0",
+  "instructions": "Fill and submit the contact form:\n1. Wait for the form to be fully loaded\n2. Click on the Name field and type \"{name}\"\n3. Click on the Email field and type \"{email}\"\n4. Click on the Subject field and type \"{subject}\"\n5. Click on the Message field and type \"{message}\"\n6. If there's a phone field, type \"{phone}\"\n7. Check any required checkboxes (like terms acceptance)\n8. Click the Submit or Send button\n9. Wait for confirmation message or redirect\n10. Extract the confirmation text, ticket number, or reference ID if shown",
+  "parameters": {
+    "name": {
+      "type": "string",
+      "required": true,
+      "example": "John Doe",
+      "description": "Full name"
+    },
+    "email": {
+      "type": "string",
+      "required": true,
+      "example": "john.doe@example.com",
+      "description": "Email address",
+      "validation": "email"
+    },
+    "subject": {
+      "type": "string",
+      "required": false,
+      "default": "General Inquiry",
+      "example": "Product Question",
+      "description": "Message subject"
+    },
+    "message": {
+      "type": "string",
+      "required": true,
+      "example": "I would like more information about your services.",
+      "description": "Message content"
+    },
+    "phone": {
+      "type": "string",
+      "required": false,
+      "example": "+1-555-0123",
+      "description": "Contact phone number"
+    }
+  },
+  "extract_fields": [
+    "confirmation_message",
+    "ticket_number",
+    "reference_id",
+    "estimated_response_time",
+    "support_email"
+  ],
+  "validation": [
+    {
+      "check": "form_submitted",
+      "success_indicator": "confirmation message or thank you page",
+      "error_message": "Form submission may have failed"
+    },
+    {
+      "check": "no_validation_errors",
+      "error_indicators": ["required field", "invalid email", "error message"],
+      "error_message": "Form validation errors detected"
+    }
+  ],
+  "timeout": 60,
+  "retry_on_failure": true,
+  "max_retries": 2,
+  "notes": [
+    "Form field names may vary across different websites",
+    "Some forms may have CAPTCHA protection",
+    "Check for GDPR consent checkboxes on EU sites"
+  ]
+}

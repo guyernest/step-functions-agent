@@ -1,0 +1,73 @@
+name: BT Broadband Availability Checker
+description: Check broadband availability for UK addresses using BT Wholesale checker
+version: 2.0.0
+starting_url: https://www.broadbandchecker.btwholesale.com/#/ADSL/AddressHome
+
+instructions: |
+  Fill the address form and check availability:
+  1. Type "{building_number}" in the Building Number field
+  2. Type "{street}" in the Street/Road field
+  3. Type "{town}" in the Town field
+  4. Type "{postcode}" in the PostCode field
+  5. Click the Submit button
+  6. Wait for the address list to appear
+  7. Click the first matching address
+  8. Wait for the results page to load (URL should contain "AddressFeatureProduct")
+  9. Extract all availability information including:
+     - Exchange name and status
+     - Cabinet number
+     - Maximum download/upload speeds
+     - Available technologies (VDSL, FTTC, FTTP)
+     - WLR3 availability status
+
+parameters:
+  building_number:
+    type: string
+    required: true
+    example: "13"
+    description: Building number or name
+  street:
+    type: string
+    required: true
+    example: "ALBION DRIVE"
+    description: Street or road name
+  town:
+    type: string
+    required: true
+    example: "HACKNEY, LONDON"
+    description: Town or city name
+  postcode:
+    type: string
+    required: true
+    example: "E8 4LX"
+    description: UK postcode
+
+extract_fields:
+  - exchange_name
+  - cabinet_number
+  - max_download_speed
+  - max_upload_speed
+  - technologies_available
+  - wlr3_status
+  - distance_from_exchange
+  - distance_from_cabinet
+
+validation:
+  - check: page_loaded
+    url_contains: "AddressFeatureProduct"
+    error_message: "Failed to reach results page"
+  - check: exchange_found
+    field: exchange_name
+    not_empty: true
+    error_message: "No exchange information found"
+
+timeout: 90
+retry_on_failure: true
+max_retries: 3
+step_timeout: 60
+
+notes: |
+  - This checker works for UK addresses only
+  - Results may vary based on actual line tests
+  - FTTP availability doesn't guarantee service is orderable
+  - Check with ISP for actual service availability

@@ -8,6 +8,7 @@ mod commands;
 mod config;
 mod config_commands;
 mod nova_act_executor;
+mod profile_commands;
 mod session_manager;
 mod test_commands;
 
@@ -95,6 +96,11 @@ async fn main() -> Result<()> {
             test_commands::load_browser_example,
             test_commands::validate_browser_script,
             test_commands::execute_browser_script,
+            profile_commands::list_profiles,
+            profile_commands::create_profile,
+            profile_commands::delete_profile,
+            profile_commands::setup_profile_login,
+            profile_commands::validate_profile,
         ])
         .setup(|_app| {
             info!("Tauri application started");

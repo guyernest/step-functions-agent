@@ -1,0 +1,7 @@
+bedrock-agentcore>=0.1.0
+nova-act>=1.0.0
+boto3>=1.35.0
+requests>=2.32.0
+pydantic>=2.8.0
+pyyaml>=6.0.0
+python-dotenv>=1.0.0

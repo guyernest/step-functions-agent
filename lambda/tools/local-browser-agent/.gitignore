@@ -12,6 +12,11 @@ src-tauri/target/
 ui/node_modules/
 ui/dist/
 
+# Browser Profiles (contains session data and credentials)
+browser-profiles/
+src-tauri/browser-profiles/
+python/browser-profiles/
+
 # Config
 config.yaml
 

@@ -1,0 +1,12 @@
+# Exclude AgentCore deployment files from Lambda package
+agents/
+test_events/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.git/
+*.md
+.dockerignore

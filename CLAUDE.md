@@ -1,0 +1,1 @@
+- The venv is at .venv/bin/activate and not in cpython-3.12.3-macos-aarch64-none that was already deleted.

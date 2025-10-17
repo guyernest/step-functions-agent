@@ -1,9 +1,9 @@
 e2b_code_interpreter==1.0.0
-anthropic==0.35.0 
+anthropic==0.35.0
 openai
 python-dotenv==1.0.1
 ipykernel
-aws-cdk-lib
+aws-cdk-lib==2.219.0
 constructs>=10.0.0,<11.0.0
 aws_cdk.aws_lambda_python_alpha
 aws_cdk.aws_lambda_go_alpha
@@ -12,3 +12,6 @@ cdklabs.generative_ai_cdk_constructs==0.1.296
 cdk-monitoring-constructs
 aws-lambda-powertools
 boto3
+bedrock-agentcore
+bedrock-agentcore-starter-toolkit
+strands-agents

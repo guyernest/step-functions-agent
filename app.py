@@ -56,6 +56,7 @@ from stacks.agents.browser_automation_agent_unified_llm_stack import BrowserAuto
 from stacks.agents.broadband_agent_unified_llm_stack import BroadbandAgentUnifiedLLMStack
 from stacks.agents.broadband_checker_structured_stack import BroadbandCheckerStructuredStack
 from stacks.agents.travel_time_checker_structured_stack import TravelTimeCheckerStructuredStack
+from stacks.agents.browser_automation_structured_stack import BrowserAutomationStructuredStack
 from stacks.shared.structured_output_infrastructure_stack import StructuredOutputInfrastructureStack
 # from legacy.step_functions_agent.agent_monitoring_stack import AgentMonitoringStack  # Commented out due to missing dependency
 
@@ -495,6 +496,19 @@ def main():
     )
     browser_automation_agent_rust.add_dependency(browser_remote_tool)  # Depends on browser remote tool
 
+    # Browser Automation Agent with Structured Output - using unified LLM generator pattern
+    browser_automation_structured = BrowserAutomationStructuredStack(
+        app,
+        f"BrowserAutomationStructuredStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Browser automation agent with structured output using unified LLM generator for {environment} environment"
+    )
+    browser_automation_structured.add_dependency(shared_llm_stack)
+    browser_automation_structured.add_dependency(agent_registry_stack)
+    browser_automation_structured.add_dependency(shared_infrastructure_stack)  # For ToolRegistry
+    browser_automation_structured.add_dependency(browser_remote_tool)  # For browser remote tool
+
     # ==========================
     # Long Content Support Stacks
     # ==========================
@@ -761,7 +775,7 @@ def main():
                   sql_agent, google_maps_agent, research_agent,
                   cloudwatch_agent, graphql_agent, image_analysis_agent,
                   test_sql_approval_agent, test_automation_remote_agent, web_search_agent_rust,
-                  broadband_checker,
+                  broadband_checker, browser_automation_structured,
                   long_content_infrastructure, microsoft_graph_long_content,
                   test_automation_remote_agent_rust_long, reinvent_mcp, wikipedia_mcp]:
         for key, value in tags.items():

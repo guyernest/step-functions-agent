@@ -1,12 +1,18 @@
-# Deployment Guide
+# UI Amplify Deployment Guide
 
-> **Note**: This guide covers local sandbox deployment. For production branch deployments using AWS Amplify Hosting, see [REMOTE_DEPLOYMENT.md](./REMOTE_DEPLOYMENT.md).
+## Architecture Overview
+
+The UI Amplify application connects to **Core CDK stacks** which can be deployed to multiple environments (prod, dev, etc.). Each core environment is independent.
+
+**Key Separation**:
+- **Core Tables**: AgentRegistry, ToolRegistry, MCPServerRegistry, ToolSecrets (from core-{env})
+- **UI Tables**: LLMModels, ExecutionIndex, TestEvents, TestResults (UI-specific)
 
 ## Quick Start
 
 ### For Production
 ```bash
-# Ensure Core CDK is deployed
+# Ensure Core CDK is deployed to prod
 cd /Users/guy/projects/step-functions-agent
 ENVIRONMENT=prod make deploy-all
 
@@ -16,113 +22,133 @@ git push origin main
 
 ### For Local Development
 ```bash
-# Option 1: Isolated Sandbox (creates own tables)
-make sandbox
+# Default: Connect to core-prod, create isolated UI tables
+npx ampx sandbox
 
-# Option 2: Connected to Dev Environment
-make sandbox-dev  # Uses existing dev tables
-
-# Option 3: Connected to Production (BE CAREFUL!)
-make sandbox-prod  # Uses existing prod tables
+# Connect to core-dev instead
+CORE_ENV=dev npx ampx sandbox
 ```
 
 ## How It Works
 
-### Resource Discovery
-The Amplify app uses **predictable naming conventions** to find resources:
-- No CloudFormation exports required
-- Works with Amplify Hosting deployments
-- Tables are referenced by name: `{TableName}-{Environment}`
+### Environment Variables
 
-### Environment Detection
-1. Reads `.amplify-env` file (created by Makefile)
-2. Determines table strategy based on environment:
-   - `prod`/`dev` → Use existing Core CDK tables
-   - `sandbox-*` → Create local temporary tables
+**CORE_ENV**: Specifies which core environment to connect to
+- Default: `prod`
+- Options: `prod`, `dev`, or any deployed core environment
+- Controls which core tables (registries) to import
+
+**Examples**:
+```bash
+# Connect to core-prod (default)
+npx ampx sandbox
+
+# Connect to core-dev
+CORE_ENV=dev npx ampx sandbox
+```
 
 ### Table Strategy
-Control with `USE_EXISTING_TABLES` environment variable:
-```bash
-# Force use of existing tables (Core CDK must be deployed)
-USE_EXISTING_TABLES=true make sandbox
 
-# Let sandbox create its own tables (default for sandbox)
-make sandbox
-```
+**Remote Amplify Builds** (prod, dev):
+- Import core tables from matching environment (prod → core-prod, dev → core-dev)
+- Import UI tables from matching environment (LLMModels-prod, ExecutionIndex-prod)
+
+**Local Sandbox**:
+- Import core tables from specified CORE_ENV (default: prod)
+- Create isolated UI tables (LLMModels-sandbox-{user}, ExecutionIndex-sandbox-{user})
+
+This ensures sandbox never conflicts with remote Amplify deployments.
 
 ## Common Scenarios
 
-### 1. Frontend Developer (Isolated)
-No need for Core CDK deployment:
+### 1. Test UI Against Production Core
+Default behavior - see deployed prod infrastructure:
 ```bash
-make sandbox
-# Works immediately with local tables
+npx ampx sandbox
+# Core tables: AgentRegistry-prod, ToolRegistry-prod, MCPServerRegistry-prod
+# UI tables: LLMModels-sandbox-guy, ExecutionIndex-sandbox-guy
 ```
 
-### 2. Full-Stack Developer (Integrated)
-Test with real Core CDK infrastructure:
+### 2. Test UI Against Development Core
+Test with dev infrastructure without affecting prod:
 ```bash
-# Deploy your sandbox Core CDK
-cd ../
-ENVIRONMENT=sandbox-$USER make deploy-all
-
-# Run UI connected to your Core CDK
-cd ui_amplify
-USE_EXISTING_TABLES=true make sandbox
+CORE_ENV=dev npx ampx sandbox
+# Core tables: AgentRegistry-dev, ToolRegistry-dev, MCPServerRegistry-dev
+# UI tables: LLMModels-sandbox-guy, ExecutionIndex-sandbox-guy
 ```
 
-### 3. Testing Against Production Data
+### 3. Remote Production Deployment
+Via Amplify Console (CI/CD):
 ```bash
-make sandbox-prod
-# WARNING: This uses production tables!
+git push origin main
+# Amplify Console environment variable: CORE_ENV=prod
+# Core tables: AgentRegistry-prod, ToolRegistry-prod (imported)
+# UI tables: LLMModels-prod, ExecutionIndex-prod (imported)
 ```
 
-### 4. CI/CD Pipeline
-Amplify Hosting automatically:
-1. Detects branch (main → prod, develop → dev)
-2. Sets environment accordingly
-3. Connects to existing Core CDK tables
-4. No manual intervention needed
+### 4. Remote Development Deployment
+Via Amplify Console (CI/CD):
+```bash
+git push origin dev
+# Amplify Console environment variable: CORE_ENV=dev
+# Core tables: AgentRegistry-dev, ToolRegistry-dev (imported)
+# UI tables: LLMModels-dev, ExecutionIndex-dev (imported)
+```
 
 ## Environment Reference
 
-| Command | Environment | Tables | Use Case |
-|---------|------------|--------|----------|
-| `make sandbox` | `sandbox-{USER}` | Creates local | Isolated development |
-| `make sandbox-dev` | `dev` | Uses existing | Test with dev data |
-| `make sandbox-prod` | `prod` | Uses existing | Debug production |
-| `git push main` | `prod` | Uses existing | Production deploy |
+| Deployment | CORE_ENV | Core Tables | UI Tables | Use Case |
+|------------|----------|-------------|-----------|----------|
+| `npx ampx sandbox` | `prod` (default) | AgentRegistry-prod | LLMModels-sandbox-guy | Local dev vs prod |
+| `CORE_ENV=dev npx ampx sandbox` | `dev` | AgentRegistry-dev | LLMModels-sandbox-guy | Local dev vs dev |
+| Remote prod (Amplify) | `prod` | AgentRegistry-prod | LLMModels-prod | Production |
+| Remote dev (Amplify) | `dev` | AgentRegistry-dev | LLMModels-dev | Development |
 
 ## Troubleshooting
 
-### "Table not found" Error
-```bash
-# Check if Core CDK tables exist
-aws dynamodb list-tables | grep -E "AgentRegistry|ToolRegistry"
+### Error: "Resource of type 'AWS::DynamoDB::Table' with identifier 'X' already exists"
 
-# If missing, deploy Core CDK first
+**Cause**: Trying to create a UI table that already exists (e.g., sandbox creating LLMModels-prod)
+
+**Solution**: Verify CORE_ENV is set correctly and backend.ts uses `uiTableEnvSuffix` for UI tables
+
+### Error: "Table not found" (AgentRegistry-prod)
+
+**Cause**: Core tables don't exist in specified environment
+
+**Solution**: Deploy core stacks first
+```bash
 cd /Users/guy/projects/step-functions-agent
-ENVIRONMENT=sandbox-$USER make deploy-all
+ENVIRONMENT=prod make deploy-all
 ```
 
-### Wrong Environment
+### Sandbox sees wrong data
+
+**Cause**: Connected to wrong core environment
+
+**Solution**: Set CORE_ENV explicitly
 ```bash
-# Check current environment
-cat .amplify-env
-
-# Change if needed
-echo "dev" > .amplify-env
-make sandbox
+CORE_ENV=dev npx ampx sandbox
 ```
 
-### Permission Issues
-- Sandbox tables: Automatically granted
-- Existing tables: Check IAM roles in Core CDK
+### Can't see deployed agents/tools/servers
+
+**Cause**: Core tables empty or connected to wrong environment
+
+**Solution**: Verify core deployment and CORE_ENV
+```bash
+# Check what's in core-prod
+aws dynamodb scan --table-name AgentRegistry-prod --max-items 5
+```
 
 ## Best Practices
 
-1. **Always use Makefile commands** - They manage `.amplify-env` correctly
-2. **Don't mix environments** - Keep sandbox/dev/prod separate
-3. **Check before sandbox-prod** - You're using production data!
-4. **Deploy Core CDK first** - For dev/prod environments
-5. **Use isolated sandbox** - For pure frontend development
+1. **Use CORE_ENV explicitly** - Don't rely on defaults in shared development
+2. **Sandbox = isolated UI tables** - Never affects remote Amplify deployments
+3. **Deploy core first** - Ensure core-{env} exists before UI deployment
+4. **Set Amplify env vars** - Configure CORE_ENV in Amplify Console for remote builds
+5. **Parallel development** - Multiple developers can run sandboxes simultaneously
+
+## Summary
+
+The key insight: **Core tables** (registries) are shared/imported, **UI tables** are environment-specific (created for sandbox, imported for remote builds). This allows sandbox to see deployed infrastructure without conflicting with production UI deployments.

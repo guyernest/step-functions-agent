@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import ConfigScreen from './components/ConfigScreen'
 import ListenScreen from './components/ListenScreen'
 import TestScreen from './components/TestScreen'
+import ProfilesScreen from './components/ProfilesScreen'
 
-type Screen = 'listen' | 'test' | 'config'
+type Screen = 'listen' | 'test' | 'profiles' | 'config'
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('listen')
@@ -47,6 +48,14 @@ function App() {
           </button>
 
           <button
+            className={`nav-item ${currentScreen === 'profiles' ? 'active' : ''}`}
+            onClick={() => setCurrentScreen('profiles')}
+          >
+            <span className="nav-icon">👤</span>
+            <span className="nav-label">Profiles</span>
+          </button>
+
+          <button
             className={`nav-item ${currentScreen === 'config' ? 'active' : ''}`}
             onClick={() => setCurrentScreen('config')}
           >
@@ -78,6 +87,7 @@ function App() {
           </div>
         )}
         {currentScreen === 'test' && <TestScreen />}
+        {currentScreen === 'profiles' && <ProfilesScreen />}
         {currentScreen === 'config' && <ConfigScreen onConfigSaved={() => setConfigExists(true)} />}
       </div>
     </div>

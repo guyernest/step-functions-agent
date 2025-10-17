@@ -171,16 +171,24 @@ if (process.env.TABLE_ENV_SUFFIX) {
 // 3. For true sandbox isolation, create separate sandbox tables
 
 // Determine if we should import from Core CDK or create local tables
+// Remote Amplify builds (prod, dev) import everything
+// Local sandbox connects to specified core env but creates isolated UI tables
 const importFromCoreCDK = envSuffix === 'prod' || envSuffix === 'dev' || process.env.USE_EXISTING_TABLES === 'true';
+
+// Which core environment to connect to (prod, dev, etc.)
+// For remote builds: use the deployment environment (prod connects to core-prod, dev to core-dev)
+// For sandbox: connect to specified core env (default: prod)
+const coreEnv = importFromCoreCDK ? envSuffix : (process.env.CORE_ENV || 'prod');
+
+// UI table suffix: remote builds use env name, sandbox uses sandbox-{user} for isolation
+const uiTableEnvSuffix = importFromCoreCDK ? envSuffix : `sandbox-${userName}`;
 
 // For logging
 console.log(`=== Environment Configuration ===`);
-console.log(`    Environment suffix: ${envSuffix}`);
-console.log(`    Strategy: ${importFromCoreCDK ? 'Import from Core CDK exports' : 'Create local sandbox tables'}`);
-
-// When importing from Core CDK, we'll use CloudFormation exports
-// When creating local, we'll use predictable names with sandbox suffix
-const tableEnvSuffix = importFromCoreCDK ? envSuffix : `sandbox-${userName}`;
+console.log(`    Amplify environment: ${envSuffix}`);
+console.log(`    Core environment (for registries): ${coreEnv}`);
+console.log(`    UI tables suffix: ${uiTableEnvSuffix}`);
+console.log(`    Strategy: ${importFromCoreCDK ? 'Remote build - import all tables' : `Sandbox - connect to core-${coreEnv}, create isolated UI tables`}`);
 
 // Import or create DynamoDB tables
 let agentRegistryTable: aws_dynamodb.ITable;
@@ -191,88 +199,87 @@ let testEventsTable: aws_dynamodb.ITable;
 let testResultsTable: aws_dynamodb.ITable;
 
 if (importFromCoreCDK) {
-  // Import tables from Core CDK using CloudFormation exports
-  console.log(`=== Importing tables from Core CDK CloudFormation exports ===`);
+  // Remote Amplify build: Import all tables from matching core environment
+  console.log(`=== Remote Build Mode: Importing all tables from core-${coreEnv} ===`);
 
-  // Import tables using the ARN exports from Core CDK
+  // Import core/registry tables using CloudFormation exports
   agentRegistryTable = aws_dynamodb.Table.fromTableArn(
     externalDataSourcesStack,
     'AgentRegistryTable',
-    Fn.importValue(`SharedTableArnAgentRegistry-${tableEnvSuffix}`)
+    Fn.importValue(`SharedTableArnAgentRegistry-${coreEnv}`)
   );
 
   toolRegistryTable = aws_dynamodb.Table.fromTableArn(
     externalDataSourcesStack,
     'ToolRegistryTable',
-    Fn.importValue(`SharedTableArnToolRegistry-${tableEnvSuffix}`)
+    Fn.importValue(`SharedTableArnToolRegistry-${coreEnv}`)
   );
 
   mcpRegistryTable = aws_dynamodb.Table.fromTableArn(
     externalDataSourcesStack,
     'MCPRegistryTable',
-    Fn.importValue(`MCPRegistryTableArn-${tableEnvSuffix}`)
+    Fn.importValue(`MCPRegistryTableArn-${coreEnv}`)
   );
 
-  // For tables without ARN exports, use the name exports
   toolSecretsTable = aws_dynamodb.Table.fromTableName(
     externalDataSourcesStack,
     'ToolSecretsTable',
-    Fn.importValue(`ToolSecretsTableName-${tableEnvSuffix}`)
+    Fn.importValue(`ToolSecretsTableName-${coreEnv}`)
   );
 
+  // Import UI tables using CloudFormation exports
   testEventsTable = aws_dynamodb.Table.fromTableName(
     externalDataSourcesStack,
     'TestEventsTable',
-    Fn.importValue(`SharedTableTestEvents-${tableEnvSuffix}`)
+    Fn.importValue(`SharedTableTestEvents-${uiTableEnvSuffix}`)
   );
 
   testResultsTable = aws_dynamodb.Table.fromTableName(
     externalDataSourcesStack,
     'TestResultsTable',
-    Fn.importValue(`SharedTableTestResults-${tableEnvSuffix}`)
+    Fn.importValue(`SharedTableTestResults-${uiTableEnvSuffix}`)
   );
 } else {
-  // For sandbox/dev environments, create lightweight local tables
-  // This allows the UI to work independently during development
-  console.log(`=== Creating local sandbox tables with suffix: ${tableEnvSuffix} ===`);
+  // Sandbox Mode:
+  // - Import core/registry tables from specified core env (default: prod)
+  // - Create sandbox-specific UI tables (isolated from remote builds)
+  console.log(`=== Sandbox Mode: Connecting to core-${coreEnv}, creating UI tables with ${uiTableEnvSuffix} ===`);
 
-  agentRegistryTable = new aws_dynamodb.Table(externalDataSourcesStack, 'AgentRegistryTable', {
-    tableName: `AgentRegistry-${tableEnvSuffix}`,
-    partitionKey: { name: 'id', type: aws_dynamodb.AttributeType.STRING },
-    billingMode: aws_dynamodb.BillingMode.PAY_PER_REQUEST,
-    removalPolicy: RemovalPolicy.DESTROY
-  });
+  // Import core/registry tables from specified environment
+  agentRegistryTable = aws_dynamodb.Table.fromTableName(
+    externalDataSourcesStack,
+    'AgentRegistryTable',
+    `AgentRegistry-${coreEnv}`
+  );
 
-  toolRegistryTable = new aws_dynamodb.Table(externalDataSourcesStack, 'ToolRegistryTable', {
-    tableName: `ToolRegistry-${tableEnvSuffix}`,
-    partitionKey: { name: 'id', type: aws_dynamodb.AttributeType.STRING },
-    billingMode: aws_dynamodb.BillingMode.PAY_PER_REQUEST,
-    removalPolicy: RemovalPolicy.DESTROY
-  });
+  toolRegistryTable = aws_dynamodb.Table.fromTableName(
+    externalDataSourcesStack,
+    'ToolRegistryTable',
+    `ToolRegistry-${coreEnv}`
+  );
 
-  mcpRegistryTable = new aws_dynamodb.Table(externalDataSourcesStack, 'MCPRegistryTable', {
-    tableName: `MCPServerRegistry-${tableEnvSuffix}`,
-    partitionKey: { name: 'id', type: aws_dynamodb.AttributeType.STRING },
-    billingMode: aws_dynamodb.BillingMode.PAY_PER_REQUEST,
-    removalPolicy: RemovalPolicy.DESTROY
-  });
+  mcpRegistryTable = aws_dynamodb.Table.fromTableName(
+    externalDataSourcesStack,
+    'MCPRegistryTable',
+    `MCPServerRegistry-${coreEnv}`
+  );
 
-  toolSecretsTable = new aws_dynamodb.Table(externalDataSourcesStack, 'ToolSecretsTable', {
-    tableName: `ToolSecrets-${tableEnvSuffix}`,
-    partitionKey: { name: 'id', type: aws_dynamodb.AttributeType.STRING },
-    billingMode: aws_dynamodb.BillingMode.PAY_PER_REQUEST,
-    removalPolicy: RemovalPolicy.DESTROY
-  });
+  toolSecretsTable = aws_dynamodb.Table.fromTableName(
+    externalDataSourcesStack,
+    'ToolSecretsTable',
+    `ToolSecrets-${coreEnv}`
+  );
 
+  // Create sandbox-specific UI tables (for isolated test data)
   testEventsTable = new aws_dynamodb.Table(externalDataSourcesStack, 'TestEventsTable', {
-    tableName: `TestEvents-${tableEnvSuffix}`,
+    tableName: `TestEvents-${uiTableEnvSuffix}`,
     partitionKey: { name: 'id', type: aws_dynamodb.AttributeType.STRING },
     billingMode: aws_dynamodb.BillingMode.PAY_PER_REQUEST,
     removalPolicy: RemovalPolicy.DESTROY
   });
 
   testResultsTable = new aws_dynamodb.Table(externalDataSourcesStack, 'TestResultsTable', {
-    tableName: `TestResults-${tableEnvSuffix}`,
+    tableName: `TestResults-${uiTableEnvSuffix}`,
     partitionKey: { name: 'id', type: aws_dynamodb.AttributeType.STRING },
     billingMode: aws_dynamodb.BillingMode.PAY_PER_REQUEST,
     removalPolicy: RemovalPolicy.DESTROY
@@ -280,14 +287,13 @@ if (importFromCoreCDK) {
 }
 
 // Handle LLMModels table
-// For prod/dev, import the existing table from Core CDK
-// For sandbox, create a local table
+// This is a UI-specific table for managing model costs and configurations
+// Each environment (prod, dev, sandbox-user) gets its own table
 let llmModelsTable: aws_dynamodb.ITable;
 
 if (importFromCoreCDK) {
-  // Import the existing LLMModels table from Core CDK
-  // Core CDK creates this as LLMModels-{env}
-  const llmModelsTableName = `LLMModels-${tableEnvSuffix}`;
+  // For prod/dev: import existing table
+  const llmModelsTableName = `LLMModels-${envSuffix}`;
   console.log(`    Importing LLMModels table: ${llmModelsTableName}`);
 
   llmModelsTable = aws_dynamodb.Table.fromTableAttributes(
@@ -295,12 +301,13 @@ if (importFromCoreCDK) {
     'LLMModelsTable',
     {
       tableName: llmModelsTableName,
-      globalIndexes: ['provider-index'] // Include the GSI name so CDK knows about it
+      globalIndexes: ['provider-index']
     }
   );
 } else {
-  // Create local LLMModels table for sandbox
-  const llmModelsTableName = `LLMModels-${tableEnvSuffix}`;
+  // For sandbox: create environment-specific table
+  const llmModelsTableName = `LLMModels-${uiTableEnvSuffix}`;
+  console.log(`    Creating LLMModels table: ${llmModelsTableName}`);
 
   llmModelsTable = new aws_dynamodb.Table(externalDataSourcesStack, 'LLMModelsTable', {
     tableName: llmModelsTableName,
@@ -320,7 +327,8 @@ if (importFromCoreCDK) {
 }
 
 // Create ExecutionIndex table for efficient history queries
-const executionIndexTableName = `ExecutionIndex-${tableEnvSuffix}`;
+// This is a UI-specific table, so use uiTableEnvSuffix to keep sandbox isolated
+const executionIndexTableName = `ExecutionIndex-${uiTableEnvSuffix}`;
 console.log(`    Creating ExecutionIndex table: ${executionIndexTableName}`);
 
 const executionIndexTable = new aws_dynamodb.Table(externalDataSourcesStack, 'ExecutionIndexTable', {
@@ -368,7 +376,7 @@ backend.listExecutionsFromIndex.addEnvironment('EXECUTION_INDEX_TABLE_NAME', exe
 // The Lambda will filter by tags to only index agent executions
 const dataStack = backend.data.resources.cfnResources.cfnGraphqlApi.stack;
 const executionEventRule = new Rule(dataStack, 'ExecutionEventRule', {
-  ruleName: `step-functions-execution-index-${tableEnvSuffix}`,
+  ruleName: `step-functions-execution-index-${uiTableEnvSuffix}`,
   description: 'Capture Step Functions execution events for indexing (filters by tags)',
   eventPattern: {
     source: ['aws.states'],

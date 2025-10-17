@@ -15,6 +15,24 @@ interface ExecutionResult {
   error?: string
 }
 
+interface ParsedExecutionOutput {
+  s3Uploads: string[]
+  jsonResult: any | null
+  otherLogs: string[]
+}
+
+interface Profile {
+  name: string
+  description: string
+  tags: string[]
+  last_used: string | null
+}
+
+interface ProfileListResponse {
+  profiles: Profile[]
+  total_count: number
+}
+
 export default function TestScreen() {
   const [script, setScript] = useState('')
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
@@ -22,11 +40,51 @@ export default function TestScreen() {
   const [isExecuting, setIsExecuting] = useState(false)
   const [executionLog, setExecutionLog] = useState<string[]>([])
   const [exampleScripts, setExampleScripts] = useState<string[]>([])
+  const [showS3Uploads, setShowS3Uploads] = useState(false)
+  const [showOtherLogs, setShowOtherLogs] = useState(false)
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [selectedProfile, setSelectedProfile] = useState<string>('')
 
   useEffect(() => {
-    // Load list of example scripts
+    // Load list of example scripts and profiles
     loadExampleScripts()
+    loadProfiles()
   }, [])
+
+  const parseExecutionOutput = (output: string): ParsedExecutionOutput => {
+    const lines = output.split('\n').filter(line => line.trim())
+    const s3Uploads: string[] = []
+    const otherLogs: string[] = []
+    let jsonResult: any = null
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+
+      // Check if it's an S3 upload line
+      if (trimmed.startsWith('Uploaded ') || trimmed.includes('s3://')) {
+        s3Uploads.push(trimmed)
+      }
+      // Check if it's the JSON result (starts with {)
+      else if (trimmed.startsWith('{')) {
+        try {
+          jsonResult = JSON.parse(trimmed)
+        } catch {
+          // If it doesn't parse, treat it as other log
+          otherLogs.push(trimmed)
+        }
+      }
+      // Check for S3 upload status lines
+      else if (trimmed.startsWith('S3 upload')) {
+        otherLogs.push(trimmed)
+      }
+      // Everything else
+      else if (trimmed) {
+        otherLogs.push(trimmed)
+      }
+    }
+
+    return { s3Uploads, jsonResult, otherLogs }
+  }
 
   const loadExampleScripts = async () => {
     try {
@@ -35,6 +93,16 @@ export default function TestScreen() {
     } catch (error) {
       console.error('Failed to load example scripts:', error)
       setExampleScripts([])
+    }
+  }
+
+  const loadProfiles = async () => {
+    try {
+      const result = await invoke<ProfileListResponse>('list_profiles', { tags: null })
+      setProfiles(result.profiles)
+    } catch (error) {
+      console.error('Failed to load profiles:', error)
+      setProfiles([])
     }
   }
 
@@ -103,8 +171,26 @@ export default function TestScreen() {
     setExecutionLog([`[START] ${dryRun ? 'Dry run' : 'Execution'} started at ${new Date().toLocaleTimeString()}`])
 
     try {
+      // Inject profile configuration if a profile is selected
+      let scriptToExecute = script
+      if (selectedProfile && !dryRun) {
+        try {
+          const parsed = JSON.parse(script)
+          // Add or update session configuration
+          parsed.session = {
+            ...parsed.session,
+            profile_name: selectedProfile,
+            clone_for_parallel: false
+          }
+          scriptToExecute = JSON.stringify(parsed)
+          setExecutionLog(prev => [...prev, `[INFO] Using profile: ${selectedProfile}`])
+        } catch (e) {
+          setExecutionLog(prev => [...prev, `[WARNING] Could not inject profile - invalid JSON`])
+        }
+      }
+
       const result = await invoke<ExecutionResult>('execute_browser_script', {
-        script,
+        script: scriptToExecute,
         dryRun
       })
 
@@ -229,6 +315,29 @@ export default function TestScreen() {
           {/* Control Buttons */}
           <div className="card controls-card">
             <h3>Test Controls</h3>
+
+            {/* Profile Selector */}
+            {profiles.length > 0 && (
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>Browser Profile (optional)</label>
+                <select
+                  value={selectedProfile}
+                  onChange={(e) => setSelectedProfile(e.target.value)}
+                  className="select-input"
+                >
+                  <option value="">No profile (fresh browser)</option>
+                  {profiles.map(profile => (
+                    <option key={profile.name} value={profile.name}>
+                      {profile.name} - {profile.description || 'No description'}
+                    </option>
+                  ))}
+                </select>
+                <span className="form-hint">
+                  Use a saved profile to reuse authenticated sessions
+                </span>
+              </div>
+            )}
+
             <div className="button-group">
               <button
                 onClick={handleValidate}
@@ -275,20 +384,127 @@ export default function TestScreen() {
               {executionLog.length === 0 ? (
                 <p className="log-empty">No execution logs yet. Load a script and click Execute to test.</p>
               ) : (
-                executionLog.map((log, i) => (
-                  <div
-                    key={i}
-                    className={`log-line ${
-                      log.includes('[ERROR]') || log.includes('[FAILED]') || log.includes('✗') ? 'error' :
-                      log.includes('[SUCCESS]') || log.includes('✓') ? 'success' :
-                      log.includes('[WARNING]') ? 'warning' :
-                      log.includes('[START]') || log.includes('[END]') ? 'info' :
-                      ''
-                    }`}
-                  >
-                    {log}
-                  </div>
-                ))
+                executionLog.map((log, i) => {
+                  // Check if this log entry contains execution output (JSON result)
+                  if (log.includes('{') && (log.includes('"success"') || log.includes('"step_results"'))) {
+                    const parsed = parseExecutionOutput(log)
+
+                    return (
+                      <div key={i} className="execution-result">
+                        {/* Summary Section */}
+                        {parsed.jsonResult && (
+                          <div className="result-summary">
+                            <h4 className={parsed.jsonResult.success ? 'success' : 'error'}>
+                              {parsed.jsonResult.success ? '✓ Execution Successful' : '✗ Execution Failed'}
+                            </h4>
+                            {parsed.jsonResult.script_name && (
+                              <p><strong>Script:</strong> {parsed.jsonResult.script_name}</p>
+                            )}
+                            {parsed.jsonResult.script_description && (
+                              <p><strong>Description:</strong> {parsed.jsonResult.script_description}</p>
+                            )}
+                            <p><strong>Steps:</strong> {parsed.jsonResult.steps_executed}/{parsed.jsonResult.steps_total}</p>
+                            {parsed.jsonResult.error && (
+                              <p className="error-message"><strong>Error:</strong> {parsed.jsonResult.error}</p>
+                            )}
+                            {parsed.jsonResult.recording_s3_uri && (
+                              <p><strong>Recordings:</strong> <code>{parsed.jsonResult.recording_s3_uri}</code></p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Step Results */}
+                        {parsed.jsonResult?.step_results && parsed.jsonResult.step_results.length > 0 && (
+                          <div className="step-results">
+                            <h4>Step Results</h4>
+                            {parsed.jsonResult.step_results.map((step: any, stepIdx: number) => (
+                              <div key={stepIdx} className={`step-result ${step.success ? 'success' : 'error'}`}>
+                                <div className="step-header">
+                                  <span className="step-number">Step {step.step_number}</span>
+                                  <span className="step-action">{step.action}</span>
+                                  {step.success ? '✓' : '✗'}
+                                </div>
+                                {step.description && <p className="step-description">{step.description}</p>}
+                                {step.response && (
+                                  <div className="step-response">
+                                    <strong>Response:</strong>
+                                    <pre>{typeof step.response === 'string' ? step.response : JSON.stringify(step.response, null, 2)}</pre>
+                                  </div>
+                                )}
+                                {step.parsed_response && (
+                                  <div className="step-parsed-response">
+                                    <strong>Extracted Data:</strong>
+                                    <pre>{JSON.stringify(step.parsed_response, null, 2)}</pre>
+                                  </div>
+                                )}
+                                {step.error && (
+                                  <p className="step-error"><strong>Error:</strong> {step.error}</p>
+                                )}
+                                <div className="step-metadata">
+                                  {step.num_steps !== undefined && <span>Steps: {step.num_steps}</span>}
+                                  {step.duration !== undefined && <span>Duration: {step.duration.toFixed(2)}s</span>}
+                                  {step.matches_schema !== undefined && (
+                                    <span className={step.matches_schema ? 'success' : 'warning'}>
+                                      Schema: {step.matches_schema ? 'Valid' : 'Invalid'}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* S3 Uploads Section (Collapsible) */}
+                        {parsed.s3Uploads.length > 0 && (
+                          <details className="s3-uploads-section">
+                            <summary>S3 Uploads ({parsed.s3Uploads.length} files)</summary>
+                            <div className="s3-uploads-list">
+                              {parsed.s3Uploads.map((upload, idx) => (
+                                <div key={idx} className="s3-upload-item">{upload}</div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
+
+                        {/* Other Logs Section (Collapsible) */}
+                        {parsed.otherLogs.length > 0 && (
+                          <details className="other-logs-section">
+                            <summary>Additional Logs ({parsed.otherLogs.length} entries)</summary>
+                            <div className="other-logs-list">
+                              {parsed.otherLogs.map((logLine, idx) => (
+                                <div key={idx} className="log-line">{logLine}</div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
+
+                        {/* Raw JSON (Collapsible) */}
+                        {parsed.jsonResult && (
+                          <details className="raw-json-section">
+                            <summary>Raw JSON Output</summary>
+                            <pre className="raw-json">{JSON.stringify(parsed.jsonResult, null, 2)}</pre>
+                          </details>
+                        )}
+                      </div>
+                    )
+                  }
+
+                  // Regular log lines
+                  return (
+                    <div
+                      key={i}
+                      className={`log-line ${
+                        log.includes('[ERROR]') || log.includes('[FAILED]') || log.includes('✗') ? 'error' :
+                        log.includes('[SUCCESS]') || log.includes('✓') ? 'success' :
+                        log.includes('[WARNING]') ? 'warning' :
+                        log.includes('[START]') || log.includes('[END]') ? 'info' :
+                        ''
+                      }`}
+                    >
+                      {log}
+                    </div>
+                  )
+                })
               )}
             </div>
           </div>

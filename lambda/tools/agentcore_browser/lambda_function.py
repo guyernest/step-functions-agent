@@ -6,16 +6,70 @@ Handles streaming responses and long-running browser automation tasks
 
 import json
 import boto3
-import logging
+from botocore.exceptions import ClientError
 import os
 import uuid
 from typing import Dict, Any, Generator, Optional
 import time
+from aws_lambda_powertools import Logger, Tracer
+from aws_lambda_powertools.utilities.typing import LambdaContext
+from aws_lambda_powertools.utilities import parameters
 from agent_config import get_agent_config, get_agent_arn, get_transformer, generate_presigned_urls
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+# Initialize AWS Lambda Powertools
+logger = Logger(service="agentcore-browser")
+tracer = Tracer()
 
+
+def get_tool_credentials(tool_name: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve credentials from the consolidated tool secrets for a specific tool.
+
+    Uses AWS Lambda Powertools Parameters utility to fetch secrets:
+    - Consolidated secret: /ai-agent/tool-secrets/{env_name}
+    - Tool-specific section within the consolidated secret
+
+    Args:
+        tool_name: Name of the tool (e.g., 'browser_broadband')
+
+    Returns:
+        Dictionary with credentials or None if not configured
+
+    Expected secret structure in consolidated secret:
+    {
+        "browser_broadband": {
+            "username": "user@example.com",
+            "password": "encrypted_password",
+            "api_key": "optional_api_key"
+        },
+        "browser_shopping": {...},
+        ...
+    }
+    """
+    try:
+        # Get environment name for secret path
+        env_name = os.environ.get('ENVIRONMENT', os.environ.get('ENV_NAME', 'prod'))
+        secret_name = os.environ.get('CONSOLIDATED_SECRET_NAME', f'/ai-agent/tool-secrets/{env_name}')
+
+        # Use Powertools Parameters to get secret with caching
+        consolidated_secret = parameters.get_secret(secret_name, transform='json')
+
+        # Extract tool-specific credentials
+        tool_secrets = consolidated_secret.get(tool_name, {})
+
+        if tool_secrets:
+            logger.info(f"Successfully retrieved credentials for {tool_name} (fields: {list(tool_secrets.keys())})")
+            return tool_secrets
+        else:
+            # No credentials configured for this tool - this is OK
+            logger.info(f"No credentials configured for {tool_name} in consolidated secret")
+            return None
+
+    except Exception as e:
+        logger.error(f"Error retrieving credentials for {tool_name}: {e}")
+        # Don't fail the request if credentials can't be retrieved
+        # Let the agent handle missing credentials
+        return None
 
 
 def process_event_stream(stream_response: Generator) -> Dict[str, Any]:
@@ -114,11 +168,13 @@ def process_event_stream(stream_response: Generator) -> Dict[str, Any]:
     }
 
 
-def handler(event, context):
+@tracer.capture_lambda_handler
+@logger.inject_lambda_context
+def handler(event: dict, context: LambdaContext) -> dict:
     """
     Lambda handler that routes to different Agent Core agents based on tool name
     Handles streaming responses for long-running browser automation tasks
-    
+
     Expected input format from tool registry:
     {
         "id": "toolu_xxx",
@@ -128,7 +184,7 @@ def handler(event, context):
         }
     }
     """
-    logger.info(f"Received event: {json.dumps(event)}")
+    logger.info("Received tool invocation", extra={"event": event})
     
     # Get environment variables
     aws_region = os.environ.get('AWS_REGION')
@@ -182,6 +238,17 @@ def handler(event, context):
                 'tool_use_id': tool_use_id,
                 'content': f'Error: {str(e)}'
             }
+
+        # Retrieve and inject credentials from consolidated tool secrets
+        credentials = get_tool_credentials(tool_name)
+        if credentials:
+            # Inject credentials into the payload
+            if 'input' not in agent_payload:
+                agent_payload['input'] = {}
+            agent_payload['input']['credentials'] = credentials
+            logger.info(f"Injected credentials for {tool_name} (fields: {list(credentials.keys())})")
+        else:
+            logger.info(f"No credentials configured for {tool_name}")
         
         # Initialize Agent Core client
         from botocore.config import Config
