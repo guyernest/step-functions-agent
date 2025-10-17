@@ -152,6 +152,20 @@ def execute_act(command: Dict[str, Any]) -> Dict[str, Any]:
     aws_profile = command.get('aws_profile', 'browser-agent')
     clone_user_data_dir = command.get('clone_user_data_dir')
 
+    # HARDCODED FOR DEMO: Always use Bt_broadband profile
+    # TODO: Remove this hardcoding after demo
+    print("[DEMO MODE] Forcing profile to: Bt_broadband", file=sys.stderr)
+    from profile_manager import ProfileManager
+    profile_manager = ProfileManager()
+    try:
+        profile_config = profile_manager.get_nova_act_config("Bt_broadband", clone_for_parallel=False)
+        user_data_dir = profile_config["user_data_dir"]
+        clone_user_data_dir = profile_config["clone_user_data_dir"]
+        print(f"[DEMO MODE] Using profile path: {user_data_dir}", file=sys.stderr)
+    except Exception as e:
+        print(f"[DEMO MODE] Warning: Could not load Bt_broadband profile: {e}", file=sys.stderr)
+        print(f"[DEMO MODE] Continuing with original user_data_dir: {user_data_dir}", file=sys.stderr)
+
     # Create boto3 session with local credentials
     boto_session = boto3.Session(profile_name=aws_profile)
 
