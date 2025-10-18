@@ -1,0 +1,69 @@
+{
+  "name": "BT Wholesale Broadband Availability Check",
+  "description": "Check broadband availability for UK addresses using BT Wholesale Broadband Checker",
+  "starting_page": "https://my.btwholesale.com/portalzone/portalzone/spa/#/portalzone/myApps",
+  "abort_on_error": true,
+  "session": {
+    "profile_name": "Bt_broadband",
+    "clone_for_parallel": false,
+    "requires_human_login": false,
+    "session_timeout_hours": 24
+  },
+  "steps": [
+    {
+      "action": "act",
+      "prompt": "If a login page appears, type 'nterizakis' as the username, and in the next screen verify that password was filled in automatically, and click Next button. Otherwise or after a successful login, click on the 'Open App' of the Enhanced Broadband Availability Checker on the bottom right of the screen",
+      "description": "Navigate to Broadband Availability Checker"
+    },
+    {
+      "action": "act",
+      "prompt": "Click on the Address Checker tab and Fill in the address form with these details: - Building Number field: {{building_number}} - Street/Road field: '{{street}}' - PostCode field: '{{postcode}}'. Then click the Submit button.",
+      "description": "Search by address"
+    },
+    {
+      "action": "act",
+      "prompt": "If an address list appears, select the closest match to {{building_number}} {{street}}, {{postcode}}{{#full_address}} (matching '{{full_address}}'){{/full_address}} and click submit, otherwise continue to next task.",
+      "description": "Select from address options if needed"
+    },
+    {
+      "action": "act_with_schema",
+      "prompt": "Extract the broadband availability information from the results page: - Exchange name (e.g., \"KINGSLAND GREEN\") - Cabinet number (e.g., \"Cabinet 9\") - VDSL Range A downstream and upstream rates in Mbps - Service type (ADSL, VDSL, FTTC, FTTP) - Availability status",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "exchange": {
+            "type": "string",
+            "description": "BT exchange station name"
+          },
+          "cabinet": {
+            "type": "string",
+            "description": "Street cabinet number"
+          },
+          "downstream_mbps": {
+            "type": "number",
+            "description": "Maximum download speed in Mbps"
+          },
+          "upstream_mbps": {
+            "type": "number",
+            "description": "Maximum upload speed in Mbps"
+          },
+          "availability": {
+            "type": "boolean",
+            "description": "Whether broadband service is available"
+          },
+          "service_type": {
+            "type": "string",
+            "enum": ["ADSL", "VDSL", "FTTC", "FTTP", "unknown"],
+            "description": "Type of broadband service"
+          }
+        },
+        "required": ["exchange", "downstream_mbps", "upstream_mbps"]
+      },
+      "description": "Extract structured broadband data"
+    },
+    {
+      "action": "screenshot",
+      "description": "Capture the results page"
+    }
+  ]
+}

@@ -153,14 +153,17 @@ impl ActivityPoller {
 
         debug!("Extracted parameters: {}", serde_json::to_string_pretty(&tool_params).unwrap_or_else(|_| "{}".to_string()));
 
-        // Extract prompt for display
-        let prompt = tool_params.get("prompt")
+        // Extract task description for display
+        // Priority: name > description > prompt > "Unknown task"
+        let task_description = tool_params.get("name")
             .and_then(|v| v.as_str())
+            .or_else(|| tool_params.get("description").and_then(|v| v.as_str()))
+            .or_else(|| tool_params.get("prompt").and_then(|v| v.as_str()))
             .unwrap_or("Unknown task");
 
-        *self.current_task.write() = Some(prompt.to_string());
+        *self.current_task.write() = Some(task_description.to_string());
 
-        info!("Executing task: {}", prompt);
+        info!("Executing task: {}", task_description);
 
         // Start heartbeat task
         let heartbeat_handle = self.start_heartbeat_task(task_token.clone());

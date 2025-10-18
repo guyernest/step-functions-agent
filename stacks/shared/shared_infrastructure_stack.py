@@ -34,7 +34,13 @@ class SharedInfrastructureStack(Stack):
         
         # Create DynamoDB tool registry
         self._create_tool_registry()
-        
+
+        # Create DynamoDB template registry
+        self._create_template_registry()
+
+        # Create template renderer Lambda
+        self._create_template_renderer_lambda()
+
         # Create consolidated tool secrets infrastructure
         self._create_tool_secrets_infrastructure()
         
@@ -101,6 +107,87 @@ class SharedInfrastructureStack(Stack):
             )
         )
 
+    def _create_template_registry(self):
+        """Create DynamoDB table for browser automation template registry"""
+        table_name = f"TemplateRegistry-{self.env_name}"
+
+        self.template_registry_table = dynamodb.Table(
+            self,
+            "TemplateRegistry",
+            table_name=table_name,
+            partition_key=dynamodb.Attribute(
+                name="template_id",
+                type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="version",
+                type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.DESTROY,  # TODO: Change for production
+            point_in_time_recovery=True,
+            stream=dynamodb.StreamViewType.NEW_AND_OLD_IMAGES
+        )
+
+        # Global Secondary Index: Templates by Extraction Name
+        self.template_registry_table.add_global_secondary_index(
+            index_name="TemplatesByExtractionName",
+            partition_key=dynamodb.Attribute(
+                name="extraction_name",
+                type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="created_at",
+                type=dynamodb.AttributeType.STRING
+            )
+        )
+
+        # Global Secondary Index: Templates by Status
+        self.template_registry_table.add_global_secondary_index(
+            index_name="TemplatesByStatus",
+            partition_key=dynamodb.Attribute(
+                name="status",
+                type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="updated_at",
+                type=dynamodb.AttributeType.STRING
+            )
+        )
+
+    def _create_template_renderer_lambda(self):
+        """Create Lambda function for rendering browser automation templates with Mustache syntax"""
+
+        # Create IAM role for template renderer
+        template_renderer_role = iam.Role(
+            self,
+            "TemplateRendererRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AWSLambdaBasicExecutionRole"
+                )
+            ]
+        )
+
+        # Create the Lambda function for template rendering
+        self.template_renderer_lambda = _lambda_python.PythonFunction(
+            self,
+            "TemplateRenderer",
+            function_name=f"template-renderer-{self.env_name}",
+            description="Renders browser automation script templates using Mustache syntax",
+            entry="lambda/shared/template_renderer",
+            index="lambda_function.py",
+            handler="lambda_handler",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            timeout=Duration.seconds(30),
+            memory_size=256,
+            architecture=_lambda.Architecture.ARM_64,
+            role=template_renderer_role,
+            environment={
+                "ENVIRONMENT": self.env_name
+            }
+        )
 
     def _create_tool_secrets_infrastructure(self):
         """Create consolidated tool secrets infrastructure"""
@@ -210,8 +297,10 @@ class SharedInfrastructureStack(Stack):
                 resources=[
                     self.tool_registry_table.table_arn,
                     self.tool_secrets_table.table_arn,
+                    self.template_registry_table.table_arn,
                     f"{self.tool_registry_table.table_arn}/index/*",
-                    f"{self.tool_secrets_table.table_arn}/index/*"
+                    f"{self.tool_secrets_table.table_arn}/index/*",
+                    f"{self.template_registry_table.table_arn}/index/*"
                 ]
             )
         )
@@ -459,6 +548,37 @@ def handler(event, context):
             description="Service token for the shared Custom Resource provider"
         )
 
+        # Export template registry table name
+        CfnOutput(
+            self,
+            "TemplateRegistryTableName",
+            value=self.template_registry_table.table_name,
+            export_name=f"TemplateRegistryTableName-{self.env_name}",
+            description="Name of the template registry DynamoDB table"
+        )
+
+        # Export template registry table ARN
+        CfnOutput(
+            self,
+            "TemplateRegistryTableArn",
+            value=self.template_registry_table.table_arn,
+            export_name=f"TemplateRegistryTableArn-{self.env_name}",
+            description="ARN of the template registry DynamoDB table"
+        )
+
+        # Export template renderer Lambda ARN
+        CfnOutput(
+            self,
+            "TemplateRendererLambdaArn",
+            value=self.template_renderer_lambda.function_arn,
+            export_name=f"TemplateRendererLambdaArn-{self.env_name}",
+            description="ARN of the template renderer Lambda function"
+        )
+
     def get_tool_registry_table(self) -> dynamodb.Table:
         """Get the tool registry table for use in other stacks"""
         return self.tool_registry_table
+
+    def get_template_registry_table(self) -> dynamodb.Table:
+        """Get the template registry table for use in other stacks"""
+        return self.template_registry_table

@@ -29,9 +29,10 @@ def execute_browser_command(command: Dict[str, Any]) -> Dict[str, Any]:
 
     Args:
         command: Dictionary containing:
-            - command_type: 'start_session', 'act', or 'end_session'
+            - command_type: 'start_session', 'act', 'script', 'end_session', or 'validate_profile'
             - prompt: Natural language instruction (for 'act')
-            - starting_page: Initial URL (for 'start_session')
+            - steps: List of script steps (for 'script')
+            - starting_page: Initial URL (for 'start_session' or 'script')
             - session_id: Session identifier
             - s3_bucket: S3 bucket for recordings
             - user_data_dir: Chrome profile directory
@@ -51,6 +52,8 @@ def execute_browser_command(command: Dict[str, Any]) -> Dict[str, Any]:
             return start_session(command)
         elif command_type == 'act':
             return execute_act(command)
+        elif command_type == 'script':
+            return execute_script(command)
         elif command_type == 'end_session':
             return end_session(command)
         elif command_type == 'validate_profile':
@@ -240,6 +243,40 @@ def execute_act(command: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "success": False,
             "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc()
+        }
+
+
+def execute_script(command: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Execute a browser automation script with structured steps
+
+    This uses the ScriptExecutor to run a script with multiple steps.
+    The script format matches the local examples in examples/ directory.
+    """
+    try:
+        from script_executor import ScriptExecutor
+
+        # ScriptExecutor expects the full script structure with steps, session, etc.
+        # The command already contains these fields from the template
+        executor = ScriptExecutor(
+            s3_bucket=command.get('s3_bucket'),
+            aws_profile=command.get('aws_profile', 'browser-agent'),
+            user_data_dir=command.get('user_data_dir'),
+            headless=command.get('headless', False),
+            record_video=command.get('record_video', True),
+            max_steps=command.get('max_steps', 30),
+            timeout=command.get('timeout', 300),
+            nova_act_api_key=os.environ.get('NOVA_ACT_API_KEY')
+        )
+
+        return executor.execute_script(command)
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to execute script: {str(e)}",
             "error_type": type(e).__name__,
             "traceback": traceback.format_exc()
         }

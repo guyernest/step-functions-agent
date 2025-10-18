@@ -163,17 +163,29 @@ def handler(event, context):
         # Define tool specification
         tool_spec = {
             "tool_name": "browser_remote",
-            "description": "Execute browser automation on a remote machine using Nova Act. Runs in user's real browser to avoid bot detection. Supports session persistence, CAPTCHA handling, and authenticated browsing.",
+            "description": "Execute browser automation on a remote machine using Nova Act. Supports two modes: (1) Template mode - use pre-built browser automation templates with variables for consistent execution, (2) Legacy mode - provide natural language prompts for ad-hoc automation. Template mode is preferred for schema-driven agents.",
             "input_schema": {
                 "type": "object",
                 "properties": {
+                    "template_id": {
+                        "type": "string",
+                        "description": "Template ID from TemplateRegistry (e.g., 'broadband_availability_bt_wholesale'). Use this for schema-driven automation with pre-built templates."
+                    },
+                    "template_version": {
+                        "type": "string",
+                        "description": "Template version (default: '1.0.0'). Specifies which version of the template to use."
+                    },
+                    "variables": {
+                        "type": "object",
+                        "description": "Variables to populate the template (e.g., {'building_number': '23', 'street': 'High Street', 'postcode': 'SW1A 1AA'}). Required when using template_id."
+                    },
                     "prompt": {
                         "type": "string",
-                        "description": "Natural language instruction for browser automation (e.g., 'Navigate to BT broadband checker and search for address')"
+                        "description": "[LEGACY] Natural language instruction for browser automation (e.g., 'Navigate to BT broadband checker and search for address'). Use template_id instead when available."
                     },
                     "starting_page": {
                         "type": "string",
-                        "description": "Initial URL to navigate to (optional if continuing existing session)"
+                        "description": "[LEGACY] Initial URL to navigate to (optional if continuing existing session or using template)"
                     },
                     "session_id": {
                         "type": "string",
@@ -181,7 +193,7 @@ def handler(event, context):
                     },
                     "user_data_dir": {
                         "type": "string",
-                        "description": "Path to Chrome profile directory for authenticated sessions (optional)"
+                        "description": "Path to Chrome profile directory for authenticated sessions (optional, overrides template default)"
                     },
                     "max_steps": {
                         "type": "integer",
@@ -193,7 +205,7 @@ def handler(event, context):
                     },
                     "schema": {
                         "type": "object",
-                        "description": "JSON schema for structured output extraction (optional)"
+                        "description": "JSON schema for structured output extraction (optional, overrides template schema)"
                     },
                     "headless": {
                         "type": "boolean",
@@ -204,7 +216,16 @@ def handler(event, context):
                         "description": "Record video of browser session (default: true)"
                     }
                 },
-                "required": ["prompt"]
+                "oneOf": [
+                    {
+                        "required": ["template_id", "variables"],
+                        "description": "Template mode - use pre-built automation template"
+                    },
+                    {
+                        "required": ["prompt"],
+                        "description": "Legacy mode - use natural language prompt"
+                    }
+                ]
             },
             "output_schema": {
                 "type": "object",

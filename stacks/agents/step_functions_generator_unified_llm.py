@@ -24,7 +24,10 @@ class UnifiedLLMStepFunctionsGenerator:
         llm_models_table_name: str = None,
         agent_registry_table_name: str = None,
         tool_registry_table_name: str = None,
-        approval_activity_arn: str = None
+        approval_activity_arn: str = None,
+        extraction_name: str = None,
+        template_registry_table_name: str = None,
+        template_renderer_lambda_arn: str = None
     ) -> str:
         """
         Generate a Step Functions definition for the unified Rust LLM service
@@ -41,6 +44,7 @@ class UnifiedLLMStepFunctionsGenerator:
             agent_registry_table_name: Name of agent registry DynamoDB table
             tool_registry_table_name: Name of tool registry DynamoDB table
             approval_activity_arn: ARN of approval activity for human approval tools
+            extraction_name: Optional extraction name for print_output tool (e.g., "broadband_availability_bt_wholesale")
 
         Returns:
             JSON string of the Step Functions definition
@@ -63,21 +67,31 @@ class UnifiedLLMStepFunctionsGenerator:
                 "input_schema": {"type": "object", "properties": {}, "required": []}
             })
 
-        # Create structured output tool if schema provided
-        structured_output_tool = None
+        # Create structured output tools if schema provided
+        structured_output_tools = []
         if structured_output_schema:
-            structured_output_tool = {
-                "name": f"return_{agent_name}_data",
-                "description": f"Return structured {agent_name} data in the required format",
-                "input_schema": structured_output_schema
-            }
+            # Schema-based print_output tool (preferred for schema-driven agents)
+            if extraction_name:
+                structured_output_tools.append({
+                    "name": f"print_{extraction_name}_output",
+                    "description": f"Print the final {extraction_name} output in the canonical schema format. Call this tool when you have completed the extraction and want to return the structured data.",
+                    "input_schema": structured_output_schema
+                })
+            else:
+                # Legacy tool name for backward compatibility (only if no extraction_name)
+                structured_output_tools.append({
+                    "name": f"return_{agent_name}_data",
+                    "description": f"Return structured {agent_name} data in the required format",
+                    "input_schema": structured_output_schema
+                })
         
         # Generate tool routing choices
         tool_choices = UnifiedLLMStepFunctionsGenerator._generate_tool_choices(
             tool_configs,
             agent_name=agent_name,
             structured_output_schema=structured_output_schema,
-            approval_activity_arn=approval_activity_arn
+            approval_activity_arn=approval_activity_arn,
+            extraction_name=extraction_name
         )
         
         # Build the complete state machine definition
@@ -175,8 +189,8 @@ class UnifiedLLMStepFunctionsGenerator:
                     "Next": "Call Unified LLM",
                     "Assign": {
                         "tools": "{% " + (
-                            f"($toolNames := $states.result.name; $structuredToolName := '{structured_output_tool['name']}'; $structuredToolName in $toolNames ? $states.result : $append($states.result, {json.dumps(structured_output_tool)}))"
-                            if structured_output_tool else "$states.result"
+                            f"($toolNames := $states.result.name; $structuredTools := {json.dumps(structured_output_tools)}; $newTools := $filter($structuredTools, function($tool) {{ $not($tool.name in $toolNames) }}); $count($newTools) > 0 ? $append($states.result, $newTools) : $states.result)"
+                            if structured_output_tools else "$states.result"
                         ) + " %}"
                     },
                     "Output": {
@@ -311,7 +325,10 @@ class UnifiedLLMStepFunctionsGenerator:
                                 tool_configs,
                                 agent_name=agent_name,
                                 structured_output_schema=structured_output_schema,
-                                approval_activity_arn=approval_activity_arn
+                                approval_activity_arn=approval_activity_arn,
+                                extraction_name=extraction_name,
+                                template_registry_table_name=template_registry_table_name,
+                                template_renderer_lambda_arn=template_renderer_lambda_arn
                             ),
                             "Unknown Tool": {
                                 "Type": "Pass",
@@ -375,7 +392,8 @@ class UnifiedLLMStepFunctionsGenerator:
     @staticmethod
     def _generate_tool_choices(tool_configs: List[Dict[str, Any]], agent_name: str = None,
                               structured_output_schema: Dict[str, Any] = None,
-                              approval_activity_arn: str = None) -> List[Dict[str, Any]]:
+                              approval_activity_arn: str = None,
+                              extraction_name: str = None) -> List[Dict[str, Any]]:
         """Generate the Choice conditions for tool routing"""
         choices = []
         for config in tool_configs:
@@ -387,11 +405,20 @@ class UnifiedLLMStepFunctionsGenerator:
 
         # Add structured output tool routing if schema provided
         if structured_output_schema:
-            structured_output_tool_name = f"return_{agent_name}_data"
-            choices.append({
-                "Condition": "{% $states.input.name = '" + structured_output_tool_name + "' %}",
-                "Next": "Process Structured Output"
-            })
+            if extraction_name:
+                # Schema-based print_output tool (preferred)
+                print_output_tool_name = f"print_{extraction_name}_output"
+                choices.append({
+                    "Condition": "{% $states.input.name = '" + print_output_tool_name + "' %}",
+                    "Next": "Process Structured Output"
+                })
+            else:
+                # Legacy tool name (only if no extraction_name)
+                structured_output_tool_name = f"return_{agent_name}_data"
+                choices.append({
+                    "Condition": "{% $states.input.name = '" + structured_output_tool_name + "' %}",
+                    "Next": "Process Structured Output"
+                })
 
         return choices
     
@@ -399,7 +426,10 @@ class UnifiedLLMStepFunctionsGenerator:
     def _generate_tool_states(tool_configs: List[Dict[str, Any]],
                              agent_name: str = None,
                              structured_output_schema: Dict[str, Any] = None,
-                             approval_activity_arn: str = None) -> Dict[str, Any]:
+                             approval_activity_arn: str = None,
+                             extraction_name: str = None,
+                             template_registry_table_name: str = None,
+                             template_renderer_lambda_arn: str = None) -> Dict[str, Any]:
         """Generate the tool execution states"""
         states = {}
         
@@ -477,20 +507,97 @@ class UnifiedLLMStepFunctionsGenerator:
                     "Output": "{% $states.result[0] %}"
                 }
             elif requires_activity and activity_type == "remote_execution":
-                # Remote execution workflow: Activity → Check Response → Return Result
+                # Remote execution workflow with template rendering support
                 remote_activity_arn = config.get("activity_arn")
-                if remote_activity_arn:
+                if remote_activity_arn and template_registry_table_name and template_renderer_lambda_arn:
+                    # Template-aware remote execution workflow
                     states[f"Execute {tool_name}"] = {
                         "Type": "Parallel",
-                        "Comment": f"Execute {tool_name} via remote activity",
+                        "Comment": f"Execute {tool_name} via remote activity with template support",
                         "Branches": [
                             {
-                                "StartAt": f"Wait for Remote {tool_name}",
+                                "StartAt": f"Check Template Enabled {tool_name}",
                                 "States": {
+                                    f"Check Template Enabled {tool_name}": {
+                                        "Type": "Choice",
+                                        "Comment": "Check if tool input contains template_id for template rendering",
+                                        "Choices": [{
+                                            "Condition": "{% $exists($states.input.input.template_id) %}",
+                                            "Next": f"Load Template {tool_name}"
+                                        }],
+                                        "Default": f"Wait for Remote {tool_name} Direct"
+                                    },
+                                    f"Load Template {tool_name}": {
+                                        "Type": "Task",
+                                        "Resource": "arn:aws:states:::dynamodb:getItem",
+                                        "Comment": "Load browser automation template from TemplateRegistry",
+                                        "Arguments": {
+                                            "TableName": template_registry_table_name,
+                                            "Key": {
+                                                "template_id": {
+                                                    "S": "{% $states.input.input.template_id %}"
+                                                },
+                                                "version": {
+                                                    "S": "{% $states.input.input.template_version ? $states.input.input.template_version : '1.0.0' %}"
+                                                }
+                                            }
+                                        },
+                                        "Next": f"Render Template {tool_name}",
+                                        "Assign": {
+                                            "template": "{% $parse($states.result.Item.template.S) %}",
+                                            "variables": "{% $states.input.input.variables ? $states.input.input.variables : {} %}"
+                                        },
+                                        "Output": {
+                                            "id": "{% $states.input.id %}",
+                                            "name": "{% $states.input.name %}"
+                                        }
+                                    },
+                                    f"Render Template {tool_name}": {
+                                        "Type": "Task",
+                                        "Resource": "arn:aws:states:::lambda:invoke",
+                                        "Comment": "Render template with variables using Mustache syntax",
+                                        "Arguments": {
+                                            "FunctionName": template_renderer_lambda_arn,
+                                            "Payload": {
+                                                "template": "{% $template %}",
+                                                "variables": "{% $variables %}"
+                                            }
+                                        },
+                                        "Next": f"Wait for Remote {tool_name}",
+                                        "Assign": {
+                                            "rendered_script": "{% $states.result.Payload.rendered_script %}"
+                                        },
+                                        "Output": {
+                                            "id": "{% $states.input.id %}",
+                                            "name": "{% $states.input.name %}"
+                                        }
+                                    },
                                     f"Wait for Remote {tool_name}": {
                                         "Type": "Task",
                                         "Resource": remote_activity_arn,
                                         "TimeoutSeconds": 300,  # 5 minute timeout
+                                        "Comment": "Send rendered script to remote browser agent",
+                                        "Arguments": {
+                                            "tool_name": tool_name,
+                                            "tool_use_id": "{% $states.input.id %}",
+                                            "tool_input": "{% $rendered_script %}",
+                                            "timestamp": "{% $states.context.Execution.StartTime %}",
+                                            "context": {
+                                                "execution_name": "{% $states.context.Execution.Name %}",
+                                                "state_machine": "{% $states.context.StateMachine.Name %}"
+                                            }
+                                        },
+                                        "Catch": [{
+                                            "ErrorEquals": ["States.Timeout"],
+                                            "Next": f"Remote Timeout {tool_name}"
+                                        }],
+                                        "Next": f"Process Remote Response {tool_name}"
+                                    },
+                                    f"Wait for Remote {tool_name} Direct": {
+                                        "Type": "Task",
+                                        "Resource": remote_activity_arn,
+                                        "TimeoutSeconds": 300,  # 5 minute timeout
+                                        "Comment": "Send raw script to remote browser agent (no template)",
                                         "Arguments": {
                                             "tool_name": tool_name,
                                             "tool_use_id": "{% $states.input.id %}",
@@ -505,8 +612,7 @@ class UnifiedLLMStepFunctionsGenerator:
                                             "ErrorEquals": ["States.Timeout"],
                                             "Next": f"Remote Timeout {tool_name}"
                                         }],
-                                        "Next": f"Process Remote Response {tool_name}",
-                                        "Comment": f"Wait for remote system to process {tool_name}"
+                                        "Next": f"Process Remote Response {tool_name}"
                                     },
                                     f"Process Remote Response {tool_name}": {
                                         "Type": "Choice",

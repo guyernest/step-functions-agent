@@ -191,9 +191,18 @@ impl NovaActExecutor {
             // Add record_video (always true for Activity pattern)
             obj.insert("record_video".to_string(), json!(true));
 
-            // Default command type if not specified
+            // Detect command type based on input structure
             if !obj.contains_key("command_type") {
-                obj.insert("command_type".to_string(), json!("act"));
+                // If input has "steps" array, use script mode
+                // Otherwise use prompt mode (act)
+                let command_type = if obj.contains_key("steps") {
+                    "script"
+                } else {
+                    "act"
+                };
+
+                obj.insert("command_type".to_string(), json!(command_type));
+                debug!("Auto-detected command_type: {}", command_type);
             }
 
             // Add max_steps with default if not specified
@@ -289,7 +298,7 @@ mod tests {
     use std::sync::Arc;
 
     #[tokio::test]
-    async fn test_build_command() {
+    async fn test_build_command_prompt_mode() {
         let config = Arc::new(Config {
             activity_arn: "arn:aws:states:us-west-2:123456789:activity:browser-remote-prod".to_string(),
             aws_profile: "browser-agent".to_string(),
@@ -318,5 +327,47 @@ mod tests {
         assert_eq!(command.get("aws_profile").unwrap(), "browser-agent");
         assert_eq!(command.get("record_video").unwrap(), true);
         assert_eq!(command.get("command_type").unwrap(), "act");
+    }
+
+    #[tokio::test]
+    async fn test_build_command_script_mode() {
+        let config = Arc::new(Config {
+            activity_arn: "arn:aws:states:us-west-2:123456789:activity:browser-remote-prod".to_string(),
+            aws_profile: "browser-agent".to_string(),
+            s3_bucket: "browser-agent-recordings-prod".to_string(),
+            user_data_dir: None,
+            ui_port: 3000,
+            nova_act_api_key: Some("test-key".to_string()),
+            headless: false,
+            heartbeat_interval: 60,
+            aws_region: None,
+        });
+
+        let executor = NovaActExecutor {
+            config,
+            python_wrapper_path: PathBuf::from("/tmp/nova_act_wrapper.py"),
+        };
+
+        let input = json!({
+            "name": "Test Script",
+            "starting_page": "https://example.com",
+            "steps": [
+                {
+                    "action": "act",
+                    "prompt": "Click the button",
+                    "description": "Click submit"
+                }
+            ]
+        });
+
+        let command = executor.build_command(input).unwrap();
+
+        assert_eq!(command.get("name").unwrap(), "Test Script");
+        assert_eq!(command.get("starting_page").unwrap(), "https://example.com");
+        assert!(command.get("steps").unwrap().is_array());
+        assert_eq!(command.get("s3_bucket").unwrap(), "browser-agent-recordings-prod");
+        assert_eq!(command.get("aws_profile").unwrap(), "browser-agent");
+        assert_eq!(command.get("record_video").unwrap(), true);
+        assert_eq!(command.get("command_type").unwrap(), "script");
     }
 }
