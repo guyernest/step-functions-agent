@@ -44,61 +44,40 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
                                 )['Parameter']['Value'])
 
         all_results = []
-        failed_count = 0
-        success_count = 0
 
         # Process results from the Map state (already in memory)
         for result in processing_results:
-            if isinstance(result, dict):
-                process_result_item(result, all_results)
-                if result.get('_status') == 'FAILED':
-                    failed_count += 1
-                else:
-                    success_count += 1
-            else:
-                logger.warning(f"Unexpected result format: {type(result)}")
-                failed_count += 1
+            process_result_item(result, all_results)
 
         # If no results found
         if not all_results:
             return {
                 'status': 'NO_RESULTS',
                 'message': 'No results to aggregate',
-                'files_processed': total_files
+                'total_items': len(processing_results)
             }
 
-        # Determine CSV columns with proper ordering
-        # Use a list to preserve insertion order
-        original_columns = []
-        output_columns = []
-        metadata_columns = []
-        seen_columns = set()
+        # Count successes and failures based on processed results
+        failed_count = sum(1 for r in all_results if r.get('_status') == 'FAILED')
+        success_count = len(all_results) - failed_count
 
-        # First pass: get column order from first result (preserves input order)
-        if all_results:
-            first_result = all_results[0]
-            for col in first_result.keys():
-                if col not in seen_columns:
-                    seen_columns.add(col)
+        # Determine CSV columns with proper ordering
+        # Collect all unique columns, separating regular fields from metadata
+        regular_columns = []
+        metadata_columns = []
+        seen = set()
+
+        for result in all_results:
+            for col in result.keys():
+                if col not in seen:
+                    seen.add(col)
                     if col.startswith('_'):
                         metadata_columns.append(col)
                     else:
-                        # Columns from original input will appear first in the result
-                        original_columns.append(col)
+                        regular_columns.append(col)
 
-        # Second pass: collect any additional columns from other results
-        for result in all_results[1:]:
-            for col in result.keys():
-                if col not in seen_columns:
-                    seen_columns.add(col)
-                    if col.startswith('_'):
-                        if col not in metadata_columns:
-                            metadata_columns.append(col)
-                    else:
-                        original_columns.append(col)
-
-        # Order: original columns (in order they appear) + metadata columns
-        final_columns = original_columns + sorted(metadata_columns)
+        # Order: regular columns (in order they appear) + sorted metadata columns
+        final_columns = regular_columns + sorted(metadata_columns)
 
         # Create CSV in memory
         output_buffer = io.StringIO()
@@ -150,49 +129,28 @@ def process_result_item(item: Dict[str, Any], results_list: List[Dict[str, Any]]
     """
     Process a single result item and add to results list
 
-    The item structure from the Map state is:
+    The item structure from the Map state (Lambda invocation response) is:
     {
-        "row": { original CSV row data },
-        "structured_result": {
-            "Payload": { extracted structured data or error }
-        }
+        "ExecutedVersion": "$LATEST",
+        "Payload": { extracted structured data with all fields },
+        "SdkHttpMetadata": {...},
+        "StatusCode": 200
     }
     """
-    if isinstance(item, dict):
-        result_row = {}
+    if not isinstance(item, dict):
+        logger.warning(f"Unexpected result format: {type(item)}")
+        results_list.append({'_error': 'Invalid result format', '_raw': str(item)[:500]})
+        return
 
-        # First, get the original row data if requested
-        if 'row' in item:
-            original_row = item['row']
-            if isinstance(original_row, dict):
-                result_row.update(original_row)
-
-        # Then extract the structured result
-        if 'structured_result' in item:
-            structured_result = item['structured_result']
-
-            # Handle Lambda response wrapper
-            if isinstance(structured_result, dict) and 'Payload' in structured_result:
-                payload = structured_result['Payload']
-
-                # The payload should contain the extracted fields
-                if isinstance(payload, dict):
-                    # Add all fields from the payload (structured output + metadata)
-                    result_row.update(payload)
-            elif isinstance(structured_result, dict):
-                # Direct structured result
-                result_row.update(structured_result)
-
-        # If we didn't get any data, at least record an error
-        if not result_row:
-            result_row = {
-                '_status': 'FAILED',
-                '_error': 'No data extracted',
-                '_raw': str(item)[:500]  # Truncated for debugging
-            }
-
+    # Extract the Payload which contains the actual result data
+    if 'Payload' in item and isinstance(item['Payload'], dict):
+        result_row = item['Payload'].copy()
         results_list.append(result_row)
     else:
-        # Handle unexpected format
-        logger.warning(f"Unexpected result format: {type(item)}")
-        results_list.append({'_error': 'Invalid result format', '_data': str(item)})
+        # Handle missing or invalid payload
+        result_row = {
+            '_status': 'FAILED',
+            '_error': 'No Payload found in Lambda response',
+            '_raw': str(item)[:500]  # Truncated for debugging
+        }
+        results_list.append(result_row)
