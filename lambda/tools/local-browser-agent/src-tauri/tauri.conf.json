@@ -53,7 +53,7 @@
         "providerShortName": null,
         "signingIdentity": null
       },
-      "resources": [],
+      "resources": ["../python", "../examples"],
       "shortDescription": "Local browser agent for Step Functions",
       "targets": "all",
       "windows": {

@@ -53,10 +53,18 @@ impl NovaActExecutor {
         // Try relative path from executable (for release builds)
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_dir) = exe_path.parent() {
-                let wrapper_path = exe_dir.join("..").join("python").join("nova_act_wrapper.py");
-                if wrapper_path.exists() {
-                    debug!("Found Python wrapper at: {}", wrapper_path.display());
-                    return Ok(wrapper_path.canonicalize()?);
+                // macOS .app bundle: executable is at Contents/MacOS/, resources are at Contents/Resources/
+                let wrapper_paths = vec![
+                    exe_dir.join("..").join("Resources").join("_up_").join("python").join("nova_act_wrapper.py"),  // macOS bundle
+                    exe_dir.join("..").join("Resources").join("python").join("nova_act_wrapper.py"),                // macOS bundle (alternative)
+                    exe_dir.join("..").join("python").join("nova_act_wrapper.py"),  // Linux/Windows
+                ];
+
+                for wrapper_path in wrapper_paths {
+                    if wrapper_path.exists() {
+                        debug!("Found Python wrapper at: {}", wrapper_path.display());
+                        return Ok(wrapper_path.canonicalize()?);
+                    }
                 }
             }
         }
@@ -104,39 +112,59 @@ impl NovaActExecutor {
 
         for path in &venv_paths {
             if path.exists() {
-                debug!("Found Python venv at: {}", path.display());
+                info!("Found Python venv at: {}", path.display());
                 return Ok(path.canonicalize()?);
             }
         }
 
         // Try relative to executable (for release builds)
         if let Ok(exe_path) = std::env::current_exe() {
+            info!("Executable path: {}", exe_path.display());
+
             if let Some(exe_dir) = exe_path.parent() {
+                info!("Executable directory: {}", exe_dir.display());
+
+                // For macOS app bundle:
+                // exe_path = /Applications/Local Browser Agent.app/Contents/MacOS/Local Browser Agent
+                // exe_dir = /Applications/Local Browser Agent.app/Contents/MacOS/
+                // We need: /Applications/Local Browser Agent.app/Contents/Resources/_up_/python/.venv/bin/python
+
                 #[cfg(target_os = "windows")]
-                let venv_python = exe_dir.join("..\\python\\.venv\\Scripts\\python.exe");
+                let venv_paths_release = vec![
+                    exe_dir.join("..\\python\\.venv\\Scripts\\python.exe"),
+                ];
 
                 #[cfg(not(target_os = "windows"))]
-                let venv_python = exe_dir.join("../python/.venv/bin/python");
+                let venv_paths_release = vec![
+                    exe_dir.join("../Resources/_up_/python/.venv/bin/python"),  // macOS bundle (primary)
+                    exe_dir.join("../Resources/python/.venv/bin/python"),       // macOS bundle (alternative)
+                    exe_dir.join("../python/.venv/bin/python"),                 // Linux
+                ];
 
-                if venv_python.exists() {
-                    debug!("Found Python venv at: {}", venv_python.display());
-                    return Ok(venv_python.canonicalize()?);
+                info!("Searching for Python venv in app bundle...");
+                for venv_python in &venv_paths_release {
+                    let absolute_path = std::fs::canonicalize(venv_python).ok();
+                    info!("Checking: {} (absolute: {:?})", venv_python.display(), absolute_path);
+
+                    if venv_python.exists() {
+                        info!("✓ Found Python venv at: {}", venv_python.display());
+                        return Ok(venv_python.canonicalize()?);
+                    }
                 }
+
+                error!("None of the expected venv paths exist");
             }
         }
 
-        // Fallback to system python (platform-specific command)
-        #[cfg(target_os = "windows")]
-        {
-            debug!("Using system python");
-            Ok(PathBuf::from("python"))
-        }
+        // No venv found - this is an error, user needs to run setup
+        error!("Python venv not found in app bundle");
+        error!("Please run the setup script or use the 'Setup Python Environment' button in the Configuration screen");
 
-        #[cfg(not(target_os = "windows"))]
-        {
-            debug!("Using system python3");
-            Ok(PathBuf::from("python3"))
-        }
+        anyhow::bail!(
+            "Python virtual environment not found. Please run setup:\n\
+             1. Use the 'Setup Python Environment' button in the Configuration screen, OR\n\
+             2. Run: ./SETUP.sh from the deployment package"
+        )
     }
 
     /// Execute a browser automation command
@@ -266,10 +294,18 @@ impl NovaActExecutor {
         let output = child.wait_with_output()
             .context("Failed to wait for Python subprocess")?;
 
+        // Log Python stderr (contains INFO logs and debug output)
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !stderr.is_empty() {
+            // Log each line of stderr to preserve formatting
+            for line in stderr.lines() {
+                info!("Python: {}", line);
+            }
+        }
+
         // Check exit status
         if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            error!("Python subprocess failed with stderr: {}", stderr);
+            error!("Python subprocess failed with exit code: {:?}", output.status.code());
             anyhow::bail!("Python subprocess failed: {}", stderr);
         }
 

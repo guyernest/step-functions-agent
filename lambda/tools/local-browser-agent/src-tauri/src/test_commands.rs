@@ -51,29 +51,51 @@ pub struct ExecutionResult {
 
 /// Find examples directory
 fn find_examples_dir() -> Result<PathBuf> {
+    // Try relative to executable (release mode / app bundle)
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            // For macOS app bundle
+            #[cfg(target_os = "macos")]
+            let example_paths = vec![
+                exe_dir.join("../Resources/examples"),
+                exe_dir.join("../examples"),
+            ];
+
+            // For Linux
+            #[cfg(target_os = "linux")]
+            let example_paths = vec![
+                exe_dir.join("../examples"),
+            ];
+
+            // For Windows
+            #[cfg(target_os = "windows")]
+            let example_paths = vec![
+                exe_dir.join("..\\examples"),
+            ];
+
+            for examples_path in &example_paths {
+                log::info!("Checking for examples at: {}", examples_path.display());
+                if examples_path.exists() && examples_path.is_dir() {
+                    log::info!("✓ Found examples at: {}", examples_path.display());
+                    return Ok(examples_path.canonicalize()?);
+                }
+            }
+        }
+    }
+
+    // Fallback: try current directory (for development)
     let current_dir = std::env::current_dir()
         .context("Failed to get current directory")?;
 
-    // Try different possible locations
-    let locations = vec![
+    let dev_locations = vec![
         current_dir.join("examples"),
         current_dir.join("../examples"),
         current_dir.join("../../examples"),
     ];
 
-    for path in &locations {
+    for path in &dev_locations {
         if path.exists() && path.is_dir() {
             return Ok(path.canonicalize()?);
-        }
-    }
-
-    // If not found in dev mode, try relative to executable (release mode)
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(exe_dir) = exe_path.parent() {
-            let examples_path = exe_dir.join("../examples");
-            if examples_path.exists() {
-                return Ok(examples_path.canonicalize()?);
-            }
         }
     }
 
@@ -278,43 +300,103 @@ pub fn validate_browser_script(script: String) -> Result<ValidationResult, Strin
 
 /// Find Python script executor
 fn find_script_executor() -> Result<PathBuf> {
+    // Try relative to executable (release mode / app bundle)
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            // For macOS app bundle
+            #[cfg(target_os = "macos")]
+            let script_paths = vec![
+                exe_dir.join("../Resources/_up_/python/script_executor.py"),
+                exe_dir.join("../Resources/python/script_executor.py"),
+                exe_dir.join("../python/script_executor.py"),
+            ];
+
+            // For Linux
+            #[cfg(target_os = "linux")]
+            let script_paths = vec![
+                exe_dir.join("../python/script_executor.py"),
+            ];
+
+            // For Windows
+            #[cfg(target_os = "windows")]
+            let script_paths = vec![
+                exe_dir.join("..\\python\\script_executor.py"),
+            ];
+
+            for script_path in &script_paths {
+                log::info!("Checking for script_executor.py at: {}", script_path.display());
+                if script_path.exists() {
+                    log::info!("✓ Found script_executor.py at: {}", script_path.display());
+                    return Ok(script_path.canonicalize()?);
+                }
+            }
+        }
+    }
+
+    // Fallback: try current directory (for development)
     let current_dir = std::env::current_dir()
         .context("Failed to get current directory")?;
 
-    let locations = vec![
+    let dev_locations = vec![
         current_dir.join("python/script_executor.py"),
         current_dir.join("../python/script_executor.py"),
         current_dir.join("../../python/script_executor.py"),
     ];
 
-    for path in &locations {
+    for path in &dev_locations {
         if path.exists() {
             return Ok(path.canonicalize()?);
-        }
-    }
-
-    // Try relative to executable (release mode)
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(exe_dir) = exe_path.parent() {
-            let script_path = exe_dir.join("../python/script_executor.py");
-            if script_path.exists() {
-                return Ok(script_path.canonicalize()?);
-            }
         }
     }
 
     anyhow::bail!("Could not find script_executor.py")
 }
 
-/// Check if uvx is available
-fn is_uvx_available() -> bool {
-    std::process::Command::new("uvx")
-        .arg("--version")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+/// Find Python executable from venv
+fn find_python_executable() -> Result<PathBuf> {
+    use log::{info, error};
+
+    // Try relative to executable (for release builds)
+    if let Ok(exe_path) = std::env::current_exe() {
+        info!("Executable path: {}", exe_path.display());
+
+        if let Some(exe_dir) = exe_path.parent() {
+            info!("Executable directory: {}", exe_dir.display());
+
+            #[cfg(not(target_os = "windows"))]
+            let venv_paths_release = vec![
+                exe_dir.join("../Resources/_up_/python/.venv/bin/python"),  // macOS bundle (primary)
+                exe_dir.join("../Resources/python/.venv/bin/python"),       // macOS bundle (alternative)
+                exe_dir.join("../python/.venv/bin/python"),                 // Linux
+            ];
+
+            #[cfg(target_os = "windows")]
+            let venv_paths_release = vec![
+                exe_dir.join("..\\python\\.venv\\Scripts\\python.exe"),
+            ];
+
+            info!("Searching for Python venv in app bundle...");
+            for venv_python in &venv_paths_release {
+                info!("Checking: {}", venv_python.display());
+
+                if venv_python.exists() {
+                    info!("✓ Found Python venv at: {}", venv_python.display());
+                    // DO NOT canonicalize - we need to use the venv symlink directly
+                    // so that Python loads the venv's site-packages
+                    return Ok(venv_python.clone());
+                }
+            }
+
+            error!("None of the expected venv paths exist");
+        }
+    }
+
+    // No venv found - this is an error
+    error!("Python venv not found in app bundle");
+    anyhow::bail!(
+        "Python virtual environment not found. Please run setup:\n\
+         Use the 'Setup Python Environment' button in the Configuration screen"
+    )
 }
 
 /// Tauri command to execute a browser script
@@ -327,6 +409,27 @@ pub async fn execute_browser_script(
     // Parse the script
     let parsed: BrowserScript = serde_json::from_str(&script)
         .map_err(|e| format!("Failed to parse script: {}", e))?;
+
+    // Try to reload config from file to get latest values
+    // (in case user saved config without restarting app)
+    let current_config = {
+        let home = std::env::var("HOME").unwrap_or_default();
+        let config_path = std::path::PathBuf::from(&home).join("config.yaml");
+
+        if config_path.exists() {
+            log::info!("Reloading config from file for script execution");
+            match Config::from_file(&config_path) {
+                Ok(c) => Arc::new(c),
+                Err(e) => {
+                    log::warn!("Failed to reload config from file, using startup config: {}", e);
+                    Arc::clone(&config)
+                }
+            }
+        } else {
+            log::info!("Config file not found, using startup config");
+            Arc::clone(&config)
+        }
+    };
 
     if dry_run {
         // Dry run: just validate and return what would be executed
@@ -374,10 +477,10 @@ pub async fn execute_browser_script(
         use tokio::process::Command;
 
         // Get config to access AWS profile, Nova Act API key, and headless setting
-        let aws_profile = config.aws_profile.trim().to_string();
-        let s3_bucket = Some(config.s3_bucket.trim().to_string());
-        let nova_act_api_key = config.nova_act_api_key.clone();
-        let headless = config.headless;
+        let aws_profile = current_config.aws_profile.trim().to_string();
+        let s3_bucket = Some(current_config.s3_bucket.trim().to_string());
+        let nova_act_api_key = current_config.nova_act_api_key.clone();
+        let headless = current_config.headless;
 
         // Find Python script executor
         let script_executor = find_script_executor()
@@ -390,24 +493,20 @@ pub async fn execute_browser_script(
         fs::write(temp_file.path(), &script)
             .map_err(|e| format!("Failed to write script to temp file: {}", e))?;
 
-        // Check if uvx is available
-        let use_uvx = is_uvx_available();
-
+        // Find Python executable from venv
         log::info!("Executing browser script: {}", parsed.name);
-        log::debug!("Using uvx: {}", use_uvx);
+        log::info!("Step 1: Finding Python executable...");
+        let python_executable = find_python_executable()
+            .map_err(|e| format!("Failed to find Python executable: {}", e))?;
+
+        log::info!("✓ Found Python executable: {}", python_executable.display());
         log::debug!("AWS Profile: {}", aws_profile);
         log::debug!("Script executor: {:?}", script_executor);
         log::debug!("Script file: {:?}", temp_file.path());
 
-        let mut cmd = if use_uvx {
-            let mut c = Command::new("uvx");
-            c.arg("--from").arg("nova-act").arg("python").arg(&script_executor);
-            c
-        } else {
-            let mut c = Command::new("python3");
-            c.arg(&script_executor);
-            c
-        };
+        log::info!("Step 2: Preparing command...");
+        let mut cmd = Command::new(python_executable);
+        cmd.arg(&script_executor);
 
         // Add common arguments
         cmd.arg("--script").arg(temp_file.path());
@@ -418,48 +517,63 @@ pub async fn execute_browser_script(
 
         // Only add --headless if config says to run headless
         if headless {
+            log::info!("Step 3: Running in headless mode");
             cmd.arg("--headless");
+        } else {
+            log::info!("Step 3: Running in visible mode (headless disabled)");
         }
 
         if let Some(bucket) = s3_bucket {
+            log::info!("Step 4: S3 recording bucket configured: {}", bucket);
             cmd.arg("--s3-bucket").arg(&bucket);
+        } else {
+            log::info!("Step 4: No S3 recording bucket configured");
         }
 
         if let Some(api_key) = nova_act_api_key {
             if !api_key.trim().is_empty() {
+                log::info!("Step 5: Nova Act API key provided");
                 cmd.arg("--nova-act-api-key").arg(api_key.trim());
+            } else {
+                log::info!("Step 5: Nova Act API key is empty, using environment variable");
             }
+        } else {
+            log::info!("Step 5: No Nova Act API key in config, using environment variable");
         }
 
+        log::info!("Step 6: Spawning Python subprocess...");
         let output = cmd
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
             .await
             .map_err(|e| {
-                if use_uvx {
-                    format!("Failed to execute via uvx: {}", e)
-                } else {
-                    format!("Failed to execute Python script: {}. Consider installing uv/uvx for automatic dependency management.", e)
-                }
+                log::error!("Failed to spawn Python subprocess: {}", e);
+                format!("Failed to execute Python script: {}", e)
             })?;
+
+        log::info!("Step 7: Python subprocess completed");
 
         // Parse output
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
 
+        log::info!("Step 8: Processing execution results...");
         log::debug!("Script execution stdout: {}", stdout);
         if !stderr.is_empty() {
             log::debug!("Script execution stderr: {}", stderr);
         }
 
         if output.status.success() {
+            log::info!("✓ Script execution completed successfully!");
             Ok(ExecutionResult {
                 success: true,
                 output: Some(stdout.to_string()),
                 error: None,
             })
         } else {
+            log::error!("✗ Script execution failed with exit code: {:?}", output.status.code());
+
             // Combine stdout and stderr for better error visibility
             let mut error_msg = String::new();
             if !stderr.is_empty() {
@@ -473,6 +587,8 @@ pub async fn execute_browser_script(
                 error_msg.push_str("\n\n");
             }
             error_msg.push_str(&format!("Exit code: {:?}", output.status.code()));
+
+            log::error!("Error details: {}", error_msg);
 
             Ok(ExecutionResult {
                 success: false,

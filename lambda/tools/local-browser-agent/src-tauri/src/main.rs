@@ -34,7 +34,7 @@ async fn main() -> Result<()> {
     // Parse command line arguments
     let args: Vec<String> = std::env::args().collect();
 
-    // Try to load config, but don't fail if it doesn't exist yet (for UI configuration)
+    // Try to load config, but use defaults if it doesn't exist yet (for UI configuration)
     let config_result = parse_config_path(&args).and_then(|path| {
         Config::from_file(&path).map(|c| (c, path))
     });
@@ -58,10 +58,14 @@ async fn main() -> Result<()> {
         // Don't auto-start polling - let user control via UI
         info!("Activity poller initialized - use UI to start listening");
 
-        (Some(config), Some(poller), Some(session_manager))
+        (config, Some(poller), Some(session_manager))
     } else {
-        info!("No configuration file found - use UI to configure");
-        (None, None, None)
+        info!("No configuration file found - using defaults. Use UI to configure.");
+
+        // Create a minimal default config so commands don't crash
+        let config = Arc::new(Config::default_minimal());
+
+        (config, None, None)
     };
 
     // Start Tauri application
@@ -73,9 +77,8 @@ async fn main() -> Result<()> {
     if let Some(sm) = session_manager {
         builder = builder.manage(sm);
     }
-    if let Some(c) = config {
-        builder = builder.manage(c);
-    }
+    // Always manage config (even if it's a default minimal one)
+    builder = builder.manage(config);
 
     builder
         .invoke_handler(tauri::generate_handler![
@@ -92,6 +95,8 @@ async fn main() -> Result<()> {
             config_commands::test_aws_connection,
             config_commands::validate_activity_arn,
             config_commands::list_chrome_profiles,
+            config_commands::check_python_environment,
+            config_commands::setup_python_environment,
             test_commands::list_browser_examples,
             test_commands::load_browser_example,
             test_commands::validate_browser_script,
@@ -123,13 +128,17 @@ fn parse_config_path(args: &[String]) -> Result<PathBuf> {
         }
     }
 
-    // Default to config.yaml in current directory
-    let default_path = PathBuf::from("config.yaml");
+    // Default to config.yaml in user's home directory (same as UI save/load)
+    let home = std::env::var("HOME")
+        .context("Failed to get HOME directory")?;
+
+    let default_path = PathBuf::from(&home).join("config.yaml");
+
+    info!("Looking for config at: {}", default_path.display());
 
     if !default_path.exists() {
-        anyhow::bail!(
-            "Config file not found. Please create config.yaml or specify path with --config"
-        );
+        info!("Config file not found at: {}", default_path.display());
+        anyhow::bail!("Config file not found at {}. Use UI to configure.", default_path.display());
     }
 
     Ok(default_path)

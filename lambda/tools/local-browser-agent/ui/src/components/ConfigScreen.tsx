@@ -34,6 +34,18 @@ interface ValidationResult {
   details: string | null
 }
 
+interface SetupResult {
+  success: boolean
+  message: string
+  steps: SetupStep[]
+}
+
+interface SetupStep {
+  name: string
+  status: string
+  details: string
+}
+
 function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
   const [config, setConfig] = useState<ConfigData>({
     activity_arn: '',
@@ -55,6 +67,8 @@ function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
   const [validating, setValidating] = useState(false)
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null)
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
+  const [settingUp, setSettingUp] = useState(false)
+  const [setupResult, setSetupResult] = useState<SetupResult | null>(null)
 
   useEffect(() => {
     loadInitialData()
@@ -62,6 +76,18 @@ function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
 
   const loadInitialData = async () => {
     try {
+      // First, try to load existing config
+      let loadedConfig: ConfigData | null = null
+      try {
+        loadedConfig = await invoke<ConfigData>('load_config_from_file', {
+          path: 'config.yaml',
+        })
+        console.log('✓ Loaded config from ~/config.yaml:', loadedConfig)
+      } catch (error) {
+        console.log('⚠ Config file not found, will use defaults:', error)
+      }
+
+      // Then load AWS and Chrome profiles
       const [profiles, chromeProfs] = await Promise.all([
         invoke<string[]>('list_aws_profiles'),
         invoke<ChromeProfile[]>('list_chrome_profiles'),
@@ -70,14 +96,12 @@ function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
       setAwsProfiles(profiles)
       setChromeProfiles(chromeProfs)
 
-      // Try to load existing config
-      try {
-        const loadedConfig = await invoke<ConfigData>('load_config_from_file', {
-          path: 'config.yaml',
-        })
+      // Set config AFTER we have profiles loaded (so dropdowns render correctly)
+      if (loadedConfig) {
+        console.log('Setting config state with loaded values')
         setConfig(loadedConfig)
-      } catch {
-        // Config doesn't exist yet, use defaults
+      } else {
+        console.log('Using default config values')
       }
 
       setLoading(false)
@@ -99,7 +123,7 @@ function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
       })
 
       onConfigSaved()
-      alert('Configuration saved successfully!\n\nPlease restart the application for the changes to take effect and to start polling for activities.')
+      alert('Configuration saved successfully!\n\nThe configuration will be used for new script executions.\n\nNote: To start polling for Step Functions activities, you need to restart the application.')
     } catch (error) {
       console.error('Error saving config:', error)
       alert(`Error saving configuration: ${error}`)
@@ -154,6 +178,42 @@ function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
       })
     } finally {
       setValidating(false)
+    }
+  }
+
+  const handleSetupPython = async () => {
+    setSettingUp(true)
+    setSetupResult(null)
+
+    try {
+      const result = await invoke<SetupResult>('setup_python_environment')
+      setSetupResult(result)
+    } catch (error) {
+      setSetupResult({
+        success: false,
+        message: `Setup failed: ${error}`,
+        steps: [],
+      })
+    } finally {
+      setSettingUp(false)
+    }
+  }
+
+  const handleCheckPython = async () => {
+    setSettingUp(true)
+    setSetupResult(null)
+
+    try {
+      const result = await invoke<SetupResult>('check_python_environment')
+      setSetupResult(result)
+    } catch (error) {
+      setSetupResult({
+        success: false,
+        message: `Check failed: ${error}`,
+        steps: [],
+      })
+    } finally {
+      setSettingUp(false)
     }
   }
 
@@ -224,6 +284,52 @@ function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
             <div className={`alert ${testResult.success ? 'alert-success' : 'alert-error'}`}>
               <strong>{testResult.message}</strong>
               {testResult.error && <div className="alert-details">{testResult.error}</div>}
+            </div>
+          )}
+        </section>
+
+        {/* Python Environment Setup */}
+        <section className="config-section">
+          <h3>Python Environment</h3>
+
+          <p className="section-description">
+            Before running browser automation scripts, you need to set up the Python environment inside the app bundle.
+            This will install Python dependencies and the Chromium browser.
+          </p>
+
+          <div className="form-actions">
+            <button
+              onClick={handleCheckPython}
+              disabled={settingUp}
+              className="btn-secondary"
+            >
+              {settingUp ? 'Checking...' : 'Check Status'}
+            </button>
+            <button
+              onClick={handleSetupPython}
+              disabled={settingUp}
+              className="btn-primary"
+            >
+              {settingUp ? 'Setting up...' : 'Setup Python Environment'}
+            </button>
+          </div>
+
+          {setupResult && (
+            <div className={`alert ${setupResult.success ? 'alert-success' : 'alert-error'}`}>
+              <strong>{setupResult.message}</strong>
+              {setupResult.steps.length > 0 && (
+                <div className="setup-steps">
+                  {setupResult.steps.map((step, index) => (
+                    <div key={index} className={`setup-step setup-step-${step.status}`}>
+                      <span className="step-name">{step.name}</span>
+                      <span className={`step-status status-${step.status}`}>
+                        {step.status === 'success' ? '✓' : step.status === 'failed' ? '✗' : '-'}
+                      </span>
+                      <div className="step-details">{step.details}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </section>

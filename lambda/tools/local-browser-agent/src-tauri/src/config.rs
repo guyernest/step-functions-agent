@@ -45,6 +45,21 @@ fn default_heartbeat_interval() -> u64 {
 }
 
 impl Config {
+    /// Create a default minimal config (for when no config file exists)
+    pub fn default_minimal() -> Self {
+        Config {
+            activity_arn: String::new(),
+            aws_profile: "default".to_string(),
+            s3_bucket: String::new(),
+            user_data_dir: None,
+            ui_port: default_ui_port(),
+            nova_act_api_key: None,
+            headless: false,
+            heartbeat_interval: default_heartbeat_interval(),
+            aws_region: None,
+        }
+    }
+
     /// Load configuration from YAML file
     pub fn from_file(path: &PathBuf) -> Result<Self> {
         let contents = std::fs::read_to_string(path)
@@ -53,15 +68,17 @@ impl Config {
         let config: Config = serde_yaml::from_str(&contents)
             .context("Failed to parse config file")?;
 
-        config.validate()?;
+        // Don't validate here - allow incomplete configs for testing/configuration
+        // Validation will happen when trying to use specific features
 
         Ok(config)
     }
 
-    /// Validate configuration
-    fn validate(&self) -> Result<()> {
+    /// Validate configuration for activity polling
+    /// This is stricter than basic validation - requires all fields for polling to work
+    pub fn validate_for_polling(&self) -> Result<()> {
         if self.activity_arn.is_empty() {
-            anyhow::bail!("activity_arn cannot be empty");
+            anyhow::bail!("activity_arn cannot be empty for activity polling");
         }
 
         if self.aws_profile.is_empty() {
@@ -69,7 +86,20 @@ impl Config {
         }
 
         if self.s3_bucket.is_empty() {
-            anyhow::bail!("s3_bucket cannot be empty");
+            anyhow::bail!("s3_bucket cannot be empty for activity polling");
+        }
+
+        if self.heartbeat_interval == 0 {
+            anyhow::bail!("heartbeat_interval must be greater than 0");
+        }
+
+        Ok(())
+    }
+
+    /// Basic validation - just ensures critical fields are valid
+    fn validate(&self) -> Result<()> {
+        if self.aws_profile.is_empty() {
+            anyhow::bail!("aws_profile cannot be empty");
         }
 
         if self.heartbeat_interval == 0 {

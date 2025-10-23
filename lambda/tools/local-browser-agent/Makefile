@@ -14,7 +14,9 @@ help:
 	@echo ""
 	@echo "Development:"
 	@echo "  make dev              Run in development mode with hot reload (opens Tauri UI)"
-	@echo "  make build            Build release binary"
+	@echo "  make build            Build release binary with DMG installer"
+	@echo "  make build-bin        Build binary only (faster, no DMG bundle)"
+	@echo "  make package          Create deployment package (includes DMG, Python, docs)"
 	@echo "  make run              Run the agent (requires config.yaml)"
 	@echo "  make run-config       Run with custom config (CONFIG=/path/to/config.yaml)"
 	@echo ""
@@ -89,9 +91,81 @@ install-rust:
 # Build
 build:
 	@echo "Building Local Browser Agent..."
+	@# Remove .venv from python directory to avoid bundling it (320MB!)
+	@rm -rf python/.venv python/__pycache__ python/*.pyc
+	@cd src-tauri && cargo tauri build
+	@echo ""
+	@echo "Build complete!"
+	@echo "  Binary:  ./src-tauri/target/release/local-browser-agent"
+	@echo "  App:     ./src-tauri/target/release/bundle/macos/Local Browser Agent.app"
+	@echo "  DMG:     ./src-tauri/target/release/bundle/dmg/*.dmg"
+
+# Build binary only (faster, no bundle)
+build-bin:
+	@echo "Building binary only (no bundle)..."
 	@cd ui && npm run build
 	@cd src-tauri && cargo build --release
 	@echo "Build complete: ./src-tauri/target/release/local-browser-agent"
+
+# Create deployment package
+package:
+	@echo "=================================="
+	@echo "Creating deployment package..."
+	@echo "=================================="
+	@echo ""
+	@# Check if build exists
+	@if [ ! -f "src-tauri/target/release/bundle/macos/Local Browser Agent.app/Contents/MacOS/local-browser-agent" ]; then \
+		echo "❌ Build not found. Running 'make build' first..."; \
+		make build; \
+	fi
+	@# Create deployment directory
+	@rm -rf deployment-package
+	@mkdir -p deployment-package
+	@echo "📦 Packaging files..."
+	@# Copy DMG installer
+	@echo "  - DMG installer"
+	@cp src-tauri/target/release/bundle/dmg/*.dmg deployment-package/ 2>/dev/null || true
+	@# Copy app bundle
+	@echo "  - App bundle"
+	@cp -r "src-tauri/target/release/bundle/macos/Local Browser Agent.app" deployment-package/ 2>/dev/null || true
+	@# Copy Python directory
+	@echo "  - Python scripts"
+	@mkdir -p deployment-package/python
+	@cp python/*.py deployment-package/python/
+	@cp python/requirements.txt deployment-package/python/
+	@# Copy examples directory
+	@echo "  - Examples"
+	@cp -r examples deployment-package/
+	@# Copy configuration template
+	@echo "  - Configuration template"
+	@cp config.example.yaml deployment-package/config.yaml
+	@# Create setup script
+	@echo "  - Setup script"
+	@cp SETUP.sh.template deployment-package/SETUP.sh
+	@chmod +x deployment-package/SETUP.sh
+	@# Copy README template
+	@echo "  - README"
+	@cp README.template.md deployment-package/README.md
+	@# Create compressed archive
+	@echo "  - Creating archive"
+	@tar -czf browser-agent-deployment.tar.gz deployment-package/
+	@# Show results
+	@echo ""
+	@echo "=================================="
+	@echo "✅ Deployment Package Created!"
+	@echo "=================================="
+	@echo ""
+	@echo "Archive: browser-agent-deployment.tar.gz"
+	@ls -lh browser-agent-deployment.tar.gz
+	@echo ""
+	@echo "Package contents:"
+	@ls -lh deployment-package/
+	@echo ""
+	@echo "To deploy to UK Mac:"
+	@echo "  1. Transfer: scp browser-agent-deployment.tar.gz user@uk-mac:"
+	@echo "  2. Extract: tar -xzf browser-agent-deployment.tar.gz"
+	@echo "  3. Setup:   cd deployment-package && ./SETUP.sh"
+	@echo ""
 
 # Development
 dev:

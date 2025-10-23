@@ -229,14 +229,37 @@ class ScriptExecutor:
 
             # Add Nova Act API key if provided (otherwise uses NOVA_ACT_API_KEY env var)
             # Note: Cannot use both API key and boto_session
-            if self.nova_act_api_key:
-                nova_act_kwargs["nova_act_api_key"] = self.nova_act_api_key
+            # Check for API key from: 1) argument, 2) env var
+            api_key_from_arg = self.nova_act_api_key and self.nova_act_api_key.strip()
+            api_key_from_env = os.environ.get("NOVA_ACT_API_KEY")
+
+            if api_key_from_arg:
+                # Explicit API key provided via argument
+                nova_act_kwargs["nova_act_api_key"] = self.nova_act_api_key.strip()
+            elif api_key_from_env:
+                # API key in environment - NovaAct will pick it up automatically
+                # Do NOT pass boto_session as it conflicts with API key
+                pass
             else:
-                # Use boto session for IAM-based auth (requires allowlist)
+                # No API key - use boto session for IAM-based auth (requires allowlist)
                 nova_act_kwargs["boto_session"] = self.boto_session
 
             # Track active user_data_dir for validation steps
             self._active_user_data_dir = profile_user_data_dir
+
+            # Log comprehensive session startup information
+            print(f"[INFO] Starting browser session with:", file=sys.stderr)
+            print(f"  - Script: {name}", file=sys.stderr)
+            print(f"  - Profile: {profile_name}", file=sys.stderr)
+            print(f"  - Profile Path: {profile_user_data_dir}", file=sys.stderr)
+            print(f"  - Headless Mode: {nova_act_kwargs['headless']}", file=sys.stderr)
+            print(f"  - Clone Profile: {clone_user_data_dir}", file=sys.stderr)
+            print(f"  - Starting Page: {starting_page}", file=sys.stderr)
+            print(f"  - Record Video: {self.record_video}", file=sys.stderr)
+            print(f"  - Max Steps per Action: {self.max_steps}", file=sys.stderr)
+            print(f"  - Timeout per Action: {self.timeout}s", file=sys.stderr)
+            print(f"  - Navigation Timeout: {nova_act_kwargs.get('go_to_url_timeout', 'default')}s", file=sys.stderr)
+            print(f"  - Total Steps: {len(steps)}", file=sys.stderr)
 
             # Create NovaAct instance
             nova = NovaAct(**nova_act_kwargs)

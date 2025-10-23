@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::fs;
 use tokio::process::Command;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -33,43 +32,129 @@ pub struct ProfileListResponse {
 
 /// Find profile_manager.py script
 fn find_profile_manager() -> Result<PathBuf> {
+    // Try relative to executable (release mode / app bundle)
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            // For macOS app bundle
+            #[cfg(target_os = "macos")]
+            let script_paths = vec![
+                exe_dir.join("../Resources/_up_/python/profile_manager.py"),
+                exe_dir.join("../Resources/python/profile_manager.py"),
+                exe_dir.join("../python/profile_manager.py"),
+            ];
+
+            // For Linux
+            #[cfg(target_os = "linux")]
+            let script_paths = vec![
+                exe_dir.join("../python/profile_manager.py"),
+            ];
+
+            // For Windows
+            #[cfg(target_os = "windows")]
+            let script_paths = vec![
+                exe_dir.join("..\\python\\profile_manager.py"),
+            ];
+
+            for script_path in &script_paths {
+                log::info!("Checking for profile_manager.py at: {}", script_path.display());
+                if script_path.exists() {
+                    log::info!("✓ Found profile_manager.py at: {}", script_path.display());
+                    return Ok(script_path.canonicalize()?);
+                }
+            }
+        }
+    }
+
+    // Fallback: try current directory (for development)
     let current_dir = std::env::current_dir()
         .context("Failed to get current directory")?;
 
-    let locations = vec![
+    let dev_locations = vec![
         current_dir.join("python/profile_manager.py"),
         current_dir.join("../python/profile_manager.py"),
         current_dir.join("../../python/profile_manager.py"),
     ];
 
-    for path in &locations {
+    for path in &dev_locations {
+        log::info!("Checking dev location for profile_manager.py at: {}", path.display());
         if path.exists() {
+            log::info!("✓ Found profile_manager.py at dev location: {}", path.display());
             return Ok(path.canonicalize()?);
         }
     }
 
-    // Try relative to executable (release mode)
+    anyhow::bail!("Could not find profile_manager.py in any expected location")
+}
+
+/// Find Python executable from venv
+fn find_python_executable() -> Result<PathBuf> {
     if let Ok(exe_path) = std::env::current_exe() {
+        log::info!("Executable path: {}", exe_path.display());
+
         if let Some(exe_dir) = exe_path.parent() {
-            let script_path = exe_dir.join("../python/profile_manager.py");
-            if script_path.exists() {
-                return Ok(script_path.canonicalize()?);
+            log::info!("Executable directory: {}", exe_dir.display());
+
+            #[cfg(not(target_os = "windows"))]
+            let venv_paths_release = vec![
+                exe_dir.join("../Resources/_up_/python/.venv/bin/python"),
+                exe_dir.join("../Resources/python/.venv/bin/python"),
+                exe_dir.join("../python/.venv/bin/python"),
+            ];
+
+            #[cfg(target_os = "windows")]
+            let venv_paths_release = vec![
+                exe_dir.join("..\\Resources\\_up_\\python\\.venv\\Scripts\\python.exe"),
+                exe_dir.join("..\\Resources\\python\\.venv\\Scripts\\python.exe"),
+                exe_dir.join("..\\python\\.venv\\Scripts\\python.exe"),
+            ];
+
+            log::info!("Searching for Python venv in app bundle...");
+            for venv_python in &venv_paths_release {
+                log::info!("Checking: {}", venv_python.display());
+
+                if venv_python.exists() {
+                    log::info!("✓ Found Python venv at: {}", venv_python.display());
+                    // DO NOT canonicalize - we need to use the venv symlink directly
+                    // so that Python loads the venv's site-packages
+                    return Ok(venv_python.clone());
+                }
             }
+
+            log::error!("None of the expected venv paths exist");
         }
     }
 
-    anyhow::bail!("Could not find profile_manager.py")
-}
+    // Fallback: try current directory (for development)
+    let current_dir = std::env::current_dir()
+        .context("Failed to get current directory")?;
 
-/// Check if uvx is available
-fn is_uvx_available() -> bool {
-    std::process::Command::new("uvx")
-        .arg("--version")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+    #[cfg(not(target_os = "windows"))]
+    let dev_venv_paths = vec![
+        current_dir.join("python/.venv/bin/python"),
+        current_dir.join("../python/.venv/bin/python"),
+        current_dir.join("../../python/.venv/bin/python"),
+    ];
+
+    #[cfg(target_os = "windows")]
+    let dev_venv_paths = vec![
+        current_dir.join("python\\.venv\\Scripts\\python.exe"),
+        current_dir.join("..\\python\\.venv\\Scripts\\python.exe"),
+        current_dir.join("..\\..\\python\\.venv\\Scripts\\python.exe"),
+    ];
+
+    for venv_python in &dev_venv_paths {
+        log::info!("Checking dev venv: {}", venv_python.display());
+        if venv_python.exists() {
+            log::info!("✓ Found Python venv at dev location: {}", venv_python.display());
+            return Ok(venv_python.clone());
+        }
+    }
+
+    log::error!("Python venv not found in app bundle or dev locations");
+    anyhow::bail!(
+        "Python virtual environment not found. Please run setup:\n\
+         Use the 'Setup Python Environment' button in the Configuration screen"
+    )
 }
 
 /// Tauri command to list browser profiles
@@ -78,20 +163,14 @@ pub async fn list_profiles(tags: Option<Vec<String>>) -> Result<ProfileListRespo
     let profile_manager = find_profile_manager()
         .map_err(|e| format!("Failed to find profile_manager.py: {}", e))?;
 
-    let use_uvx = is_uvx_available();
+    let python_exe = find_python_executable()
+        .map_err(|e| format!("Failed to find Python executable: {}", e))?;
 
     log::info!("Listing profiles");
-    log::debug!("Using uvx: {}", use_uvx);
+    log::debug!("Using Python: {}", python_exe.display());
 
-    let mut cmd = if use_uvx {
-        let mut c = Command::new("uvx");
-        c.arg("--from").arg("nova-act").arg("python").arg(&profile_manager);
-        c
-    } else {
-        let mut c = Command::new("python3");
-        c.arg(&profile_manager);
-        c
-    };
+    let mut cmd = Command::new(&python_exe);
+    cmd.arg(&profile_manager);
 
     cmd.arg("list");
 
@@ -141,20 +220,14 @@ pub async fn create_profile(
     let profile_manager = find_profile_manager()
         .map_err(|e| format!("Failed to find profile_manager.py: {}", e))?;
 
-    let use_uvx = is_uvx_available();
+    let python_exe = find_python_executable()
+        .map_err(|e| format!("Failed to find Python executable: {}", e))?;
 
     log::info!("Creating profile: {}", profile_name);
-    log::debug!("Using uvx: {}", use_uvx);
+    log::debug!("Using Python: {}", python_exe.display());
 
-    let mut cmd = if use_uvx {
-        let mut c = Command::new("uvx");
-        c.arg("--from").arg("nova-act").arg("python").arg(&profile_manager);
-        c
-    } else {
-        let mut c = Command::new("python3");
-        c.arg(&profile_manager);
-        c
-    };
+    let mut cmd = Command::new(&python_exe);
+    cmd.arg(&profile_manager);
 
     cmd.arg("create");
     cmd.arg("--profile").arg(&profile_name);
@@ -206,20 +279,14 @@ pub async fn delete_profile(
     let profile_manager = find_profile_manager()
         .map_err(|e| format!("Failed to find profile_manager.py: {}", e))?;
 
-    let use_uvx = is_uvx_available();
+    let python_exe = find_python_executable()
+        .map_err(|e| format!("Failed to find Python executable: {}", e))?;
 
     log::info!("Deleting profile: {}", profile_name);
-    log::debug!("Using uvx: {}", use_uvx);
+    log::debug!("Using Python: {}", python_exe.display());
 
-    let mut cmd = if use_uvx {
-        let mut c = Command::new("uvx");
-        c.arg("--from").arg("nova-act").arg("python").arg(&profile_manager);
-        c
-    } else {
-        let mut c = Command::new("python3");
-        c.arg(&profile_manager);
-        c
-    };
+    let mut cmd = Command::new(&python_exe);
+    cmd.arg(&profile_manager);
 
     cmd.arg("delete");
     cmd.arg("--profile").arg(&profile_name);
@@ -255,50 +322,43 @@ pub async fn delete_profile(
 pub async fn setup_profile_login(
     profile_name: String,
     starting_url: String,
+    config: State<'_, Arc<Config>>,
 ) -> Result<String, String> {
-    let profile_manager = find_profile_manager()
-        .map_err(|e| format!("Failed to find profile_manager.py: {}", e))?;
-
-    let use_uvx = is_uvx_available();
-
     log::info!("Setting up login for profile: {}", profile_name);
-    log::debug!("Using uvx: {}", use_uvx);
-    log::debug!("Starting URL: {}", starting_url);
+    log::info!("Starting URL: {}", starting_url);
 
-    let mut cmd = if use_uvx {
-        let mut c = Command::new("uvx");
-        c.arg("--from").arg("nova-act").arg("python").arg(&profile_manager);
-        c
+    // Use NovaActExecutor with the setup_login command type
+    // This is the same mechanism that works for validate_profile
+    let executor = NovaActExecutor::new(Arc::clone(&config))
+        .map_err(|e| format!("Failed to init NovaActExecutor: {}", e))?;
+
+    let payload = serde_json::json!({
+        "command_type": "setup_login",
+        "profile_name": profile_name,
+        "starting_url": starting_url,
+        "timeout": 300,  // 5 minutes for user to complete login
+    });
+
+    log::info!("Executing setup_login command via NovaActExecutor");
+
+    let result = executor.execute(payload).await
+        .map_err(|e| format!("Login setup failed: {}", e))?;
+
+    // Check if successful
+    if let Some(success) = result.get("success").and_then(|v| v.as_bool()) {
+        if success {
+            let message = result.get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Login setup completed");
+            Ok(message.to_string())
+        } else {
+            let error = result.get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Unknown error");
+            Err(error.to_string())
+        }
     } else {
-        let mut c = Command::new("python3");
-        c.arg(&profile_manager);
-        c
-    };
-
-    cmd.arg("login");
-    cmd.arg("--profile").arg(&profile_name);
-    cmd.arg("--url").arg(&starting_url);
-
-    // This command needs to be run in a way that allows the user to see the browser window
-    // and interact with it. We'll inherit the parent's stdio so the user can interact.
-    let output = cmd
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .await
-        .map_err(|e| format!("Failed to execute profile_manager.py: {}", e))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    if !stderr.is_empty() {
-        log::debug!("profile_manager stderr: {}", stderr);
-    }
-
-    if output.status.success() {
-        Ok(format!("Login setup completed for profile '{}'", profile_name))
-    } else {
-        Err(format!("Failed to setup login: {}", stderr))
+        Err("Invalid response from setup_login command".to_string())
     }
 }
 

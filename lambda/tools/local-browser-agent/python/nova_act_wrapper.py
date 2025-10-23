@@ -29,7 +29,7 @@ def execute_browser_command(command: Dict[str, Any]) -> Dict[str, Any]:
 
     Args:
         command: Dictionary containing:
-            - command_type: 'start_session', 'act', 'script', 'end_session', or 'validate_profile'
+            - command_type: 'start_session', 'act', 'script', 'end_session', 'validate_profile', or 'setup_login'
             - prompt: Natural language instruction (for 'act')
             - steps: List of script steps (for 'script')
             - starting_page: Initial URL (for 'start_session' or 'script')
@@ -41,6 +41,7 @@ def execute_browser_command(command: Dict[str, Any]) -> Dict[str, Any]:
             - schema: JSON schema for output
             - headless: Run headless mode
             - record_video: Record video
+            - profile_name: Profile name (for 'setup_login')
 
     Returns:
         Dictionary with execution result
@@ -58,6 +59,8 @@ def execute_browser_command(command: Dict[str, Any]) -> Dict[str, Any]:
             return end_session(command)
         elif command_type == 'validate_profile':
             return validate_profile(command)
+        elif command_type == 'setup_login':
+            return setup_login(command)
         else:
             return {
                 "success": False,
@@ -160,14 +163,16 @@ def execute_act(command: Dict[str, Any]) -> Dict[str, Any]:
     print("[DEMO MODE] Forcing profile to: Bt_broadband", file=sys.stderr)
     from profile_manager import ProfileManager
     profile_manager = ProfileManager()
+    profile_name = "Bt_broadband"
     try:
-        profile_config = profile_manager.get_nova_act_config("Bt_broadband", clone_for_parallel=False)
+        profile_config = profile_manager.get_nova_act_config(profile_name, clone_for_parallel=False)
         user_data_dir = profile_config["user_data_dir"]
         clone_user_data_dir = profile_config["clone_user_data_dir"]
-        print(f"[DEMO MODE] Using profile path: {user_data_dir}", file=sys.stderr)
+        print(f"[DEMO MODE] Loaded profile '{profile_name}' from path: {user_data_dir}", file=sys.stderr)
     except Exception as e:
-        print(f"[DEMO MODE] Warning: Could not load Bt_broadband profile: {e}", file=sys.stderr)
+        print(f"[DEMO MODE] Warning: Could not load {profile_name} profile: {e}", file=sys.stderr)
         print(f"[DEMO MODE] Continuing with original user_data_dir: {user_data_dir}", file=sys.stderr)
+        profile_name = "default" if not user_data_dir else "custom"
 
     # Create boto3 session with local credentials
     boto_session = boto3.Session(profile_name=aws_profile)
@@ -212,6 +217,18 @@ def execute_act(command: Dict[str, Any]) -> Dict[str, Any]:
             nova_act_kwargs["nova_act_api_key"] = nova_act_api_key
         else:
             nova_act_kwargs["boto_session"] = boto_session
+
+        # Log comprehensive session startup information
+        print(f"[INFO] Starting browser session with:", file=sys.stderr)
+        print(f"  - Profile: {profile_name}", file=sys.stderr)
+        print(f"  - Profile Path: {user_data_dir}", file=sys.stderr)
+        print(f"  - Headless Mode: {headless}", file=sys.stderr)
+        print(f"  - Clone Profile: {clone_user_data_dir if clone_user_data_dir is not None else 'not set (NovaAct default)'}", file=sys.stderr)
+        print(f"  - Starting Page: {starting_page or 'none'}", file=sys.stderr)
+        print(f"  - Record Video: {record_video}", file=sys.stderr)
+        print(f"  - Max Steps: {max_steps}", file=sys.stderr)
+        print(f"  - Timeout: {timeout}s", file=sys.stderr)
+        print(f"  - Session ID: {session_id or 'auto-generated'}", file=sys.stderr)
 
         with NovaAct(**nova_act_kwargs) as nova:
             # Execute act command
@@ -501,6 +518,131 @@ def validate_profile(command: Dict[str, Any]) -> Dict[str, Any]:
         recs.append("Use clone_user_data_dir=False to persist sessions; set True only for parallel or throwaway runs.")
     out["recommendations"] = recs
     return out
+
+
+def setup_login(command: Dict[str, Any]) -> Dict[str, Any]:
+    """Setup interactive login for a profile.
+
+    Opens a browser with the profile's user_data_dir, navigates to the starting_url,
+    and waits for a timeout period to allow the user to manually log in.
+    When the browser closes or timeout expires, the session is automatically saved.
+
+    Args:
+        command: Dictionary containing:
+            - profile_name: Name of the profile
+            - starting_url: URL to navigate to for login
+            - timeout: Timeout in seconds (default: 300 = 5 minutes)
+
+    Returns:
+        Dictionary with success status
+    """
+    profile_name = command.get("profile_name")
+    starting_url = command.get("starting_url")
+
+    if not profile_name:
+        return {"success": False, "error": "profile_name is required"}
+    if not starting_url:
+        return {"success": False, "error": "starting_url is required"}
+
+    try:
+        from profile_manager import ProfileManager
+
+        # Initialize profile manager
+        profile_manager = ProfileManager()
+
+        # Check if profile exists, create if not
+        profile = profile_manager.get_profile(profile_name)
+        if not profile:
+            print(f"Creating new profile: {profile_name}", file=sys.stderr)
+            profile = profile_manager.create_profile(
+                profile_name=profile_name,
+                description=f"Profile with authenticated session for {starting_url}",
+                tags=["authenticated"],
+                auto_login_sites=[starting_url]
+            )
+        else:
+            print(f"Using existing profile: {profile_name}", file=sys.stderr)
+
+        # Mark profile as requiring human login
+        profile_manager.mark_profile_for_login(
+            profile_name=profile_name,
+            requires_human=True,
+            notes=f"Manual login required for {starting_url}"
+        )
+
+        # Get Nova Act config
+        config = profile_manager.get_nova_act_config(profile_name, clone_for_parallel=False)
+        user_data_dir = config["user_data_dir"]
+
+        # Determine timeout (default 5 minutes)
+        timeout = command.get("timeout", 300)
+
+        # Get authentication credentials
+        nova_act_api_key = os.environ.get('NOVA_ACT_API_KEY')
+        boto_session = None
+        if not nova_act_api_key:
+            try:
+                aws_profile = command.get('aws_profile', 'browser-agent')
+                boto_session = boto3.Session(profile_name=aws_profile)
+            except Exception:
+                pass
+
+        # Build NovaAct kwargs
+        nova_act_kwargs = {
+            "starting_page": starting_url,
+            "user_data_dir": user_data_dir,
+            "clone_user_data_dir": False,  # Don't clone to preserve session
+            "headless": False,  # Must be visible for human login
+            "ignore_https_errors": True,
+        }
+
+        if nova_act_api_key:
+            nova_act_kwargs["nova_act_api_key"] = nova_act_api_key
+        elif boto_session:
+            nova_act_kwargs["boto_session"] = boto_session
+
+        print(f"", file=sys.stderr)
+        print(f"╔═══════════════════════════════════════════════════════════╗", file=sys.stderr)
+        print(f"║  PROFILE LOGIN SETUP                                      ║", file=sys.stderr)
+        print(f"╠═══════════════════════════════════════════════════════════╣", file=sys.stderr)
+        print(f"║  Profile: {profile_name:<48}║", file=sys.stderr)
+        print(f"║  URL:     {starting_url[:48]:<48}║", file=sys.stderr)
+        print(f"║  Timeout: {timeout} seconds{'':<38}║", file=sys.stderr)
+        print(f"╠═══════════════════════════════════════════════════════════╣", file=sys.stderr)
+        print(f"║  A browser window will open. Please log in manually.     ║", file=sys.stderr)
+        print(f"║  The browser will stay open for {timeout//60} minutes.{'':<23}║", file=sys.stderr)
+        print(f"║  Your login session will be saved automatically.         ║", file=sys.stderr)
+        print(f"║  You can close the browser when done.                    ║", file=sys.stderr)
+        print(f"╚═══════════════════════════════════════════════════════════╝", file=sys.stderr)
+        print(f"", file=sys.stderr)
+
+        # Open browser for manual login
+        import time
+        with NovaAct(**nova_act_kwargs) as nova:
+            # Just wait for the timeout - user can log in during this time
+            # The browser will stay open and visible
+            print(f"Browser opened. Waiting {timeout} seconds for you to complete login...", file=sys.stderr)
+            time.sleep(timeout)
+            print(f"Timeout reached. Closing browser and saving session...", file=sys.stderr)
+
+        print(f"", file=sys.stderr)
+        print(f"✓ Profile '{profile_name}' login setup completed!", file=sys.stderr)
+        print(f"  User data directory: {user_data_dir}", file=sys.stderr)
+        print(f"  Future scripts can reuse this authenticated session", file=sys.stderr)
+
+        return {
+            "success": True,
+            "message": f"Login setup completed for profile '{profile_name}'",
+            "profile_name": profile_name,
+            "user_data_dir": user_data_dir,
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to setup login: {str(e)}",
+            "traceback": traceback.format_exc()
+        }
 
 
 def main():
