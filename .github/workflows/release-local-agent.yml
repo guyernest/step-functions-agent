@@ -101,7 +101,7 @@ jobs:
         run: npm run build
 
       - name: Install Tauri CLI
-        run: cargo install tauri-cli --version '^2.0.0'
+        run: cargo install tauri-cli --version '^1.5.0'
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
