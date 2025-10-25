@@ -45,6 +45,31 @@ fn default_heartbeat_interval() -> u64 {
 }
 
 impl Config {
+    /// Get the default config directory (~/.local-browser-agent)
+    /// Cross-platform: works on macOS, Windows, and Linux
+    pub fn default_config_dir() -> Result<PathBuf> {
+        let home = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .context("Could not determine home directory (HOME or USERPROFILE not set)")?;
+
+        let config_dir = PathBuf::from(home).join(".local-browser-agent");
+
+        // Create directory if it doesn't exist
+        if !config_dir.exists() {
+            std::fs::create_dir_all(&config_dir)
+                .context(format!("Failed to create config directory: {}", config_dir.display()))?;
+        }
+
+        Ok(config_dir)
+    }
+
+    /// Get the default config file path (~/.local-browser-agent/config.yaml)
+    /// Cross-platform: works on macOS, Windows, and Linux
+    pub fn default_config_path() -> Result<PathBuf> {
+        let config_dir = Self::default_config_dir()?;
+        Ok(config_dir.join("config.yaml"))
+    }
+
     /// Create a default minimal config (for when no config file exists)
     pub fn default_minimal() -> Self {
         Config {

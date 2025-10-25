@@ -1,0 +1,142 @@
+name: Release Browser Agent
+
+on:
+  push:
+    tags:
+      - 'browser-agent-v*'  # Trigger on tags like browser-agent-v0.1.0
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            bundle: dmg
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            bundle: dmg
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundle: msi
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bundle: deb
+
+    runs-on: ${{ matrix.platform.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: lambda/tools/local-browser-agent/ui/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.0-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv (Unix)
+        if: matrix.platform.os != 'windows-latest'
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install uv (Windows)
+        if: matrix.platform.os == 'windows-latest'
+        run: |
+          irm https://astral.sh/uv/install.ps1 | iex
+          echo "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: powershell
+
+      - name: Create Python venv and install dependencies
+        working-directory: lambda/tools/local-browser-agent
+        shell: bash
+        run: |
+          # Create venv in python/.venv
+          uv venv python/.venv --python 3.11
+
+          # Activate and install dependencies
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            source python/.venv/Scripts/activate
+          else
+            source python/.venv/bin/activate
+          fi
+
+          # Install from requirements.txt
+          uv pip install -r python/requirements.txt
+
+          # Install Playwright browsers
+          playwright install chromium
+
+          echo "Python dependencies installed successfully"
+
+      - name: Install UI dependencies
+        working-directory: lambda/tools/local-browser-agent/ui
+        run: npm ci
+
+      - name: Build UI
+        working-directory: lambda/tools/local-browser-agent/ui
+        run: npm run build
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: lambda/tools/local-browser-agent/src-tauri
+          tauriScript: cargo tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Local Browser Agent ${{ github.ref_name }}'
+          releaseBody: |
+            ## Local Browser Agent Release
+
+            Cross-platform browser automation agent with Nova Act integration.
+
+            ### Features
+            - Browser automation via Nova Act
+            - Profile management for session persistence
+            - AWS Step Functions integration
+            - Script executor with validation
+
+            ### Installation
+            - **macOS**: Open the DMG and drag to Applications
+            - **Windows**: Run the MSI installer
+            - **Linux**: Install the DEB package
+
+            ### Setup
+            After installation, run "Setup Python Environment" from the Configuration tab.
+
+            See README for full documentation.
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.platform.target }}
+
+      - name: Upload Python scripts artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-scripts-${{ matrix.platform.os }}
+          path: |
+            lambda/tools/local-browser-agent/python/*.py
+            lambda/tools/local-browser-agent/python/requirements.txt

@@ -82,7 +82,7 @@ function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
         loadedConfig = await invoke<ConfigData>('load_config_from_file', {
           path: 'config.yaml',
         })
-        console.log('✓ Loaded config from ~/config.yaml:', loadedConfig)
+        console.log('✓ Loaded config from ~/.local-browser-agent/config.yaml:', loadedConfig)
       } catch (error) {
         console.log('⚠ Config file not found, will use defaults:', error)
       }
@@ -123,7 +123,7 @@ function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
       })
 
       onConfigSaved()
-      alert('Configuration saved successfully!\n\nThe configuration will be used for new script executions.\n\nNote: To start polling for Step Functions activities, you need to restart the application.')
+      alert('Configuration saved successfully to:\n~/.local-browser-agent/config.yaml\n\nThe configuration will be used for new script executions.\n\nNote: To start polling for Step Functions activities, you need to restart the application.')
     } catch (error) {
       console.error('Error saving config:', error)
       alert(`Error saving configuration: ${error}`)

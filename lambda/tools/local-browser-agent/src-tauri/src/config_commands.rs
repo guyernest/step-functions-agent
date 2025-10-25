@@ -35,17 +35,25 @@ pub async fn list_aws_profiles() -> Result<Vec<String>, String> {
 
 /// Resolve config path to absolute path in user's home directory
 fn resolve_config_path(path: &str) -> Result<PathBuf, String> {
+    // If path is "config.yaml" (the default), use the new default path
+    if path == "config.yaml" {
+        let default_path = Config::default_config_path()
+            .map_err(|e| format!("Failed to get default config path: {}", e))?;
+        info!("Using default config path: {}", default_path.display());
+        return Ok(default_path);
+    }
+
     // If path is already absolute, use it as-is
     let path_buf = PathBuf::from(path);
     if path_buf.is_absolute() {
         return Ok(path_buf);
     }
 
-    // Otherwise, resolve relative to HOME directory
-    let home = std::env::var("HOME")
-        .map_err(|e| format!("Failed to get HOME: {}", e))?;
+    // Otherwise, resolve relative to config directory
+    let config_dir = Config::default_config_dir()
+        .map_err(|e| format!("Failed to get config directory: {}", e))?;
 
-    let config_path = PathBuf::from(&home).join(path);
+    let config_path = config_dir.join(path);
 
     info!("Resolved config path: {} -> {}", path, config_path.display());
 

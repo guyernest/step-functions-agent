@@ -413,17 +413,20 @@ pub async fn execute_browser_script(
     // Try to reload config from file to get latest values
     // (in case user saved config without restarting app)
     let current_config = {
-        let home = std::env::var("HOME").unwrap_or_default();
-        let config_path = std::path::PathBuf::from(&home).join("config.yaml");
+        let config_path = Config::default_config_path().ok();
 
-        if config_path.exists() {
-            log::info!("Reloading config from file for script execution");
-            match Config::from_file(&config_path) {
-                Ok(c) => Arc::new(c),
-                Err(e) => {
-                    log::warn!("Failed to reload config from file, using startup config: {}", e);
-                    Arc::clone(&config)
+        if let Some(path) = config_path {
+            if path.exists() {
+                log::info!("Reloading config from file for script execution");
+                match Config::from_file(&path) {
+                    Ok(c) => Arc::new(c),
+                    Err(e) => {
+                        log::warn!("Failed to reload config from file, using startup config: {}", e);
+                        Arc::clone(&config)
+                    }
                 }
+            } else {
+                Arc::clone(&config)
             }
         } else {
             log::info!("Config file not found, using startup config");

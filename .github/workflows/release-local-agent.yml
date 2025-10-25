@@ -1,0 +1,142 @@
+name: Release Local Agent
+
+on:
+  push:
+    tags:
+      - 'local-agent-v*'  # Trigger on tags like local-agent-v0.2.0
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            bundle: dmg
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            bundle: dmg
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundle: msi
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bundle: deb
+
+    runs-on: ${{ matrix.platform.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: lambda/tools/local-agent/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.0-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            python3-tk \
+            python3-dev \
+            scrot \
+            xdotool
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv (Unix)
+        if: matrix.platform.os != 'windows-latest'
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install uv (Windows)
+        if: matrix.platform.os == 'windows-latest'
+        run: |
+          irm https://astral.sh/uv/install.ps1 | iex
+          echo "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: powershell
+
+      - name: Create Python venv and install dependencies
+        working-directory: lambda/tools/local-agent
+        shell: bash
+        run: |
+          # Install from pyproject.toml using uv
+          uv venv .venv --python 3.11
+
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            source .venv/Scripts/activate
+          else
+            source .venv/bin/activate
+          fi
+
+          # Install dependencies from pyproject.toml
+          uv pip install -e .
+
+          echo "Python dependencies installed successfully"
+
+      - name: Install UI dependencies
+        working-directory: lambda/tools/local-agent
+        run: npm ci
+
+      - name: Build UI
+        working-directory: lambda/tools/local-agent
+        run: npm run build
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: lambda/tools/local-agent/src-tauri
+          tauriScript: cargo tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Local Agent ${{ github.ref_name }}'
+          releaseBody: |
+            ## Local Agent Release
+
+            Cross-platform GUI automation agent for legacy applications.
+
+            ### Features
+            - GUI automation via PyAutoGUI
+            - Computer vision with OpenCV
+            - AWS Step Functions integration
+            - Script executor for non-browser automation
+
+            ### Installation
+            - **macOS**: Open the DMG and drag to Applications
+            - **Windows**: Run the MSI installer
+            - **Linux**: Install the DEB package
+
+            ### Setup
+            After installation, configure AWS credentials and activity ARN.
+
+            See README for full documentation.
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.platform.target }}
+
+      - name: Upload Python scripts artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-scripts-${{ matrix.platform.os }}
+          path: |
+            lambda/tools/local-agent/script_executor.py
+            lambda/tools/local-agent/pyproject.toml

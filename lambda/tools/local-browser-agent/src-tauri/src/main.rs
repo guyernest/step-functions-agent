@@ -128,11 +128,9 @@ fn parse_config_path(args: &[String]) -> Result<PathBuf> {
         }
     }
 
-    // Default to config.yaml in user's home directory (same as UI save/load)
-    let home = std::env::var("HOME")
-        .context("Failed to get HOME directory")?;
-
-    let default_path = PathBuf::from(&home).join("config.yaml");
+    // Default to config.yaml in ~/.local-browser-agent directory
+    let default_path = Config::default_config_path()
+        .context("Failed to get default config path")?;
 
     info!("Looking for config at: {}", default_path.display());
 
