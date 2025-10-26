@@ -64,6 +64,7 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             patchelf \
+            libsoup2.4-dev \
             python3-tk \
             python3-dev \
             scrot \
