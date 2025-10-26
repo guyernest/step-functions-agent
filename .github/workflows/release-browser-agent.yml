@@ -122,6 +122,10 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Use shorter path on Windows to avoid path length issues with aws-lc-sys
+          CARGO_TARGET_DIR: ${{ matrix.platform.os == 'windows-latest' && 'D:\t' || '' }}
+          # Disable incremental compilation on Windows to reduce build complexity
+          CARGO_INCREMENTAL: ${{ matrix.platform.os == 'windows-latest' && '0' || '1' }}
         with:
           projectPath: lambda/tools/local-browser-agent/src-tauri
           tauriScript: cargo tauri

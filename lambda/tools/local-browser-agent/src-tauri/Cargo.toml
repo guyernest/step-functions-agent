@@ -27,9 +27,9 @@ tauri = { version = "1.5", features = [
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.35", features = ["full"] }
-# Use native-tls instead of rustls to avoid aws-lc-sys compilation issues on Windows
-aws-config = { version = "1.1", features = ["behavior-version-latest"], default-features = false }
-aws-sdk-sfn = { version = "1.12", default-features = false }
+# AWS SDK - disable default features to avoid aws-lc on Windows
+aws-config = { version = "1.1", default-features = false, features = ["behavior-version-latest", "rt-tokio", "rustls"] }
+aws-sdk-sfn = { version = "1.12", default-features = false, features = ["rt-tokio", "rustls"] }
 anyhow = "1.0"
 thiserror = "1.0"
 log = "0.4"
