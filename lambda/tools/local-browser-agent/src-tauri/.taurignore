@@ -1,0 +1,8 @@
+# Exclude large Python venv and caches from bundle
+# Paths are relative to the tauri.conf.json bundle.resources entries
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+browser-profiles/
+examples/browser-profiles/
