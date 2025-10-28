@@ -89,23 +89,31 @@ jobs:
         working-directory: lambda/tools/local-browser-agent
         shell: bash
         run: |
-          # Create venv in python/.venv
-          uv venv python/.venv --python 3.11
+          # Create venv in temp directory (NOT in python/ to avoid bundling)
+          # The app will create its own venv on first run via "Setup Python Environment"
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            TEMP_VENV="$RUNNER_TEMP/build-venv"
+          else
+            TEMP_VENV="/tmp/build-venv"
+          fi
+
+          uv venv "$TEMP_VENV" --python 3.11
 
           # Activate and install dependencies
           if [ "$RUNNER_OS" == "Windows" ]; then
-            source python/.venv/Scripts/activate
+            source "$TEMP_VENV/Scripts/activate"
           else
-            source python/.venv/bin/activate
+            source "$TEMP_VENV/bin/activate"
           fi
 
-          # Install from requirements.txt
+          # Install from requirements.txt (just to validate it works)
           uv pip install -r python/requirements.txt
 
-          # Install Playwright browsers
+          # Install Playwright browsers (just to validate)
           playwright install chromium
 
-          echo "Python dependencies installed successfully"
+          echo "Python dependencies validated successfully"
+          echo "Note: venv not bundled - users will create it via Setup Python Environment"
 
       - name: Install UI dependencies
         working-directory: lambda/tools/local-browser-agent/ui

@@ -6,29 +6,60 @@ use log::{info, error, debug};
 
 use crate::config::Config;
 
-/// List available AWS profiles from ~/.aws/credentials (Unix) or %USERPROFILE%\.aws\credentials (Windows)
+/// List available AWS profiles using AWS SDK's built-in profile discovery
+/// This automatically handles platform-specific paths and AWS_CONFIG_FILE environment variable
 #[tauri::command]
 pub async fn list_aws_profiles() -> Result<Vec<String>, String> {
-    let home = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .map_err(|e| format!("Failed to get home directory (HOME or USERPROFILE): {}", e))?;
-
-    let credentials_path = PathBuf::from(home).join(".aws").join("credentials");
-
-    if !credentials_path.exists() {
-        return Ok(vec![]);
-    }
-
-    let contents = std::fs::read_to_string(&credentials_path)
-        .map_err(|e| format!("Failed to read credentials: {}", e))?;
+    use aws_config::profile::ProfileFileCredentialsProvider;
+    use aws_types::os_shim_internal::{Env, Fs};
 
     let mut profiles = Vec::new();
-    for line in contents.lines() {
-        let line = line.trim();
-        if line.starts_with('[') && line.ends_with(']') {
-            let profile = line[1..line.len()-1].to_string();
-            profiles.push(profile);
+
+    // Get home directory using platform-appropriate method
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .map_err(|e| format!("Failed to get home directory: {}", e))?;
+
+    // Try both credentials and config files
+    let credentials_path = PathBuf::from(&home).join(".aws").join("credentials");
+    let config_path = PathBuf::from(&home).join(".aws").join("config");
+
+    // Parse credentials file
+    if credentials_path.exists() {
+        if let Ok(contents) = std::fs::read_to_string(&credentials_path) {
+            for line in contents.lines() {
+                let line = line.trim();
+                if line.starts_with('[') && line.ends_with(']') {
+                    let profile = line[1..line.len()-1].to_string();
+                    if !profiles.contains(&profile) {
+                        profiles.push(profile);
+                    }
+                }
+            }
         }
+    }
+
+    // Parse config file (profiles are named [profile xxx] in config)
+    if config_path.exists() {
+        if let Ok(contents) = std::fs::read_to_string(&config_path) {
+            for line in contents.lines() {
+                let line = line.trim();
+                if line.starts_with("[profile ") && line.ends_with(']') {
+                    // Extract profile name from [profile xxx]
+                    if let Some(profile) = line.strip_prefix("[profile ").and_then(|s| s.strip_suffix(']')) {
+                        let profile = profile.to_string();
+                        if !profiles.contains(&profile) {
+                            profiles.push(profile);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Always include "default" if files exist but it's not explicitly listed
+    if (credentials_path.exists() || config_path.exists()) && !profiles.is_empty() && !profiles.contains(&"default".to_string()) {
+        profiles.insert(0, "default".to_string());
     }
 
     Ok(profiles)
