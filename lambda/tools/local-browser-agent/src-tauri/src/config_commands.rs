@@ -12,14 +12,23 @@ use crate::config::Config;
 pub async fn list_aws_profiles() -> Result<Vec<String>, String> {
     let mut profiles = Vec::new();
 
+    // Detect operating system
+    let os = std::env::consts::OS;
+    info!("Listing AWS profiles on OS: {}", os);
+
     // Get home directory using platform-appropriate method
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .map_err(|e| format!("Failed to get home directory: {}", e))?;
 
+    info!("Home directory: {}", home);
+
     // Try both credentials and config files
     let credentials_path = PathBuf::from(&home).join(".aws").join("credentials");
     let config_path = PathBuf::from(&home).join(".aws").join("config");
+
+    info!("Looking for AWS credentials at: {}", credentials_path.display());
+    info!("Looking for AWS config at: {}", config_path.display());
 
     // Parse credentials file
     if credentials_path.exists() {
@@ -58,6 +67,8 @@ pub async fn list_aws_profiles() -> Result<Vec<String>, String> {
     if (credentials_path.exists() || config_path.exists()) && !profiles.is_empty() && !profiles.contains(&"default".to_string()) {
         profiles.insert(0, "default".to_string());
     }
+
+    info!("Found {} AWS profiles: {:?}", profiles.len(), profiles);
 
     Ok(profiles)
 }
@@ -466,18 +477,46 @@ pub async fn check_python_environment() -> Result<SetupResult, String> {
 /// Setup Python environment inside the app bundle
 #[tauri::command]
 pub async fn setup_python_environment() -> Result<SetupResult, String> {
-    info!("Starting Python environment setup");
+    let os = std::env::consts::OS;
+    info!("Starting Python environment setup on OS: {}", os);
 
     let mut steps = Vec::new();
 
-    // Step 1: Find app bundle path
-    let app_path = PathBuf::from("/Applications/Local Browser Agent.app");
+    // Step 1: Find app bundle path (platform-aware)
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("Failed to get executable path: {}", e))?;
+
+    info!("Current executable: {}", exe_path.display());
+
+    // Determine app root based on platform
+    let app_path = if os == "macos" {
+        // On macOS: exe is at /Applications/Local Browser Agent.app/Contents/MacOS/Local Browser Agent
+        // We need: /Applications/Local Browser Agent.app
+        exe_path.parent()  // Contents/MacOS
+            .and_then(|p| p.parent())  // Contents
+            .and_then(|p| p.parent())  // Local Browser Agent.app
+            .ok_or_else(|| "Failed to determine app bundle path on macOS".to_string())?
+            .to_path_buf()
+    } else if os == "windows" {
+        // On Windows: exe is at C:\Program Files\Local Browser Agent\Local Browser Agent.exe
+        // We need: C:\Program Files\Local Browser Agent
+        exe_path.parent()
+            .ok_or_else(|| "Failed to determine app directory on Windows".to_string())?
+            .to_path_buf()
+    } else {
+        // Linux: similar to Windows
+        exe_path.parent()
+            .ok_or_else(|| "Failed to determine app directory on Linux".to_string())?
+            .to_path_buf()
+    };
+
+    info!("App root directory: {}", app_path.display());
 
     if !app_path.exists() {
-        error!("App not found at /Applications/Local Browser Agent.app");
+        error!("App path not found: {}", app_path.display());
         return Ok(SetupResult {
             success: false,
-            message: "Application not found in /Applications folder. Please install the DMG first.".to_string(),
+            message: format!("Application directory not found: {}", app_path.display()),
             steps,
         });
     }
@@ -485,17 +524,24 @@ pub async fn setup_python_environment() -> Result<SetupResult, String> {
     steps.push(SetupStep {
         name: "Locate application".to_string(),
         status: "success".to_string(),
-        details: "Found app at /Applications/Local Browser Agent.app".to_string(),
+        details: format!("Found app at: {}", app_path.display()),
     });
 
     // Step 2: Find or install uv
     info!("Checking for uv package manager");
 
-    // Get HOME directory for uv path
+    // Get HOME directory for uv path (platform-aware)
     let home = std::env::var("HOME")
-        .map_err(|_| "Failed to get HOME directory".to_string())?;
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .map_err(|_| "Failed to get home directory (HOME or USERPROFILE)".to_string())?;
 
-    let uv_path = PathBuf::from(&home).join(".cargo/bin/uv");
+    info!("Home directory for uv: {}", home);
+
+    // On Windows, uv.exe is in .cargo\bin\uv.exe; on Unix it's .cargo/bin/uv
+    let uv_binary = if os == "windows" { "uv.exe" } else { "uv" };
+    let uv_path = PathBuf::from(&home).join(".cargo").join("bin").join(uv_binary);
+
+    info!("Looking for uv at: {}", uv_path.display());
 
     // Check if uv exists at standard location AND is executable
     let uv_command = if uv_path.exists() {
