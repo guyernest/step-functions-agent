@@ -10,6 +10,8 @@
     "productName": "Local Browser Agent",
     "version": "0.1.0"
   },
+  "productName": "Local Browser Agent",
+  "version": "0.1.0",
   "tauri": {
     "allowlist": {
       "all": false,
@@ -32,7 +34,8 @@
     "bundle": {
       "active": true,
       "category": "DeveloperTool",
-      "copyright": "",
+      "copyright": "Copyright © 2025 AI-on-Cloud",
+      "publisher": "AI-on-Cloud",
       "deb": {
         "depends": []
       },
@@ -59,7 +62,12 @@
       "windows": {
         "certificateThumbprint": null,
         "digestAlgorithm": "sha256",
-        "timestampUrl": ""
+        "timestampUrl": "",
+        "wix": {
+          "language": "en-US",
+          "manufacturer": "AI-on-Cloud",
+          "license": "LICENSE"
+        }
       }
     },
     "security": {
