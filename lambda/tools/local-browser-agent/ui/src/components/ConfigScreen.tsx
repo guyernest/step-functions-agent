@@ -88,13 +88,26 @@ function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
       }
 
       // Then load AWS and Chrome profiles
-      const [profiles, chromeProfs] = await Promise.all([
-        invoke<string[]>('list_aws_profiles'),
-        invoke<ChromeProfile[]>('list_chrome_profiles'),
-      ])
+      try {
+        const [profiles, chromeProfs] = await Promise.all([
+          invoke<string[]>('list_aws_profiles').catch(err => {
+            console.error('Failed to load AWS profiles:', err)
+            return []
+          }),
+          invoke<ChromeProfile[]>('list_chrome_profiles').catch(err => {
+            console.error('Failed to load Chrome profiles:', err)
+            return []
+          }),
+        ])
 
-      setAwsProfiles(profiles)
-      setChromeProfiles(chromeProfs)
+        console.log('Loaded AWS profiles:', profiles)
+        console.log('Loaded Chrome profiles:', chromeProfs)
+
+        setAwsProfiles(profiles)
+        setChromeProfiles(chromeProfs)
+      } catch (error) {
+        console.error('Error loading profiles:', error)
+      }
 
       // Set config AFTER we have profiles loaded (so dropdowns render correctly)
       if (loadedConfig) {
@@ -255,7 +268,11 @@ function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
                 </option>
               ))}
             </select>
-            <span className="form-hint">Profile from ~/.aws/credentials</span>
+            <span className="form-hint">
+              {navigator.platform.includes('Win')
+                ? 'Profile from %USERPROFILE%\\.aws\\credentials or config'
+                : 'Profile from ~/.aws/credentials or config'}
+            </span>
           </div>
 
           <div className="form-group">
