@@ -149,16 +149,24 @@ pub async fn test_aws_connection(aws_profile: String, aws_region: Option<String>
     // Set AWS_PROFILE environment variable for the SDK
     std::env::set_var("AWS_PROFILE", &aws_profile);
 
-    // Create AWS config
-    let mut config_builder = aws_config::from_env().profile_name(&aws_profile);
-
-    if let Some(ref region) = aws_region {
-        info!("Using region: {}", region);
-        config_builder = config_builder.region(aws_sdk_sfn::config::Region::new(region.clone()));
-    }
-
+    // Try to manually load credentials from the profile to work around Windows parsing issues
     info!("Loading AWS configuration...");
-    let aws_config = config_builder.load().await;
+
+    // Use environment variables if they exist, otherwise fall back to profile
+    let aws_config = if std::env::var("AWS_ACCESS_KEY_ID").is_ok() {
+        info!("Using credentials from environment variables");
+        aws_config::from_env().load().await
+    } else {
+        info!("Loading credentials from profile: {}", aws_profile);
+        let mut config_builder = aws_config::from_env().profile_name(&aws_profile);
+
+        if let Some(ref region) = aws_region {
+            info!("Using region: {}", region);
+            config_builder = config_builder.region(aws_sdk_sfn::config::Region::new(region.clone()));
+        }
+
+        config_builder.load().await
+    };
 
     info!("Creating Step Functions client...");
     let sfn_client = aws_sdk_sfn::Client::new(&aws_config);
