@@ -182,11 +182,27 @@ pub async fn test_aws_connection(aws_profile: String, aws_region: Option<String>
         },
         Ok(Err(e)) => {
             let error_msg = format!("{}", e);
+            let error_debug = format!("{:?}", e);
             info!("✗ AWS API error: {}", error_msg);
+            info!("✗ AWS API error (debug): {}", error_debug);
+
+            // Check for common Windows issues
+            let user_message = if error_msg.contains("dispatch failure") {
+                "AWS connection failed. This may be due to:\n\
+                 1. Network connectivity issues\n\
+                 2. Windows firewall blocking the connection\n\
+                 3. Proxy settings\n\
+                 4. TLS/SSL certificate issues\n\n\
+                 Try running: aws sts get-caller-identity --profile CGI-PoC\n\
+                 from PowerShell to verify AWS CLI works."
+            } else {
+                "Failed to connect to AWS"
+            };
+
             Ok(ConnectionTestResult {
                 success: false,
-                message: "Failed to connect to AWS".to_string(),
-                error: Some(error_msg),
+                message: user_message.to_string(),
+                error: Some(format!("{}\n\nDetailed error: {}", error_msg, error_debug)),
             })
         },
         Err(_) => {
@@ -926,36 +942,77 @@ pub async fn setup_python_environment() -> Result<SetupResult, String> {
         details: "All dependencies installed from requirements.txt".to_string(),
     });
 
-    // Step 5: Install Playwright Chrome
+    // Step 5: Install Playwright Chromium (not Chrome - Chromium doesn't need admin on Windows)
     info!("Installing Playwright Chromium browser");
 
     let playwright_result = Command::new(&venv_python)
         .arg("-m")
         .arg("playwright")
         .arg("install")
-        .arg("chrome")
+        .arg("chromium")  // Use chromium instead of chrome (no admin needed)
+        .arg("--with-deps")  // Install system dependencies
         .current_dir(&python_dir)
-        .status();
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output();
 
-    if playwright_result.is_err() || !playwright_result.as_ref().unwrap().success() {
-        steps.push(SetupStep {
-            name: "Install Chromium browser".to_string(),
-            status: "failed".to_string(),
-            details: "Failed to install Playwright Chromium browser".to_string(),
-        });
+    match playwright_result {
+        Ok(output) if output.status.success() => {
+            info!("✓ Playwright Chromium installed successfully");
+            steps.push(SetupStep {
+                name: "Install Chromium browser".to_string(),
+                status: "success".to_string(),
+                details: "Playwright Chromium installed successfully".to_string(),
+            });
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
 
-        return Ok(SetupResult {
-            success: false,
-            message: "Failed to install Chromium browser".to_string(),
-            steps,
-        });
+            info!("✗ Playwright install failed");
+            info!("Exit code: {:?}", output.status.code());
+            info!("Stderr: {}", stderr);
+            if !stdout.is_empty() {
+                info!("Stdout: {}", stdout);
+            }
+
+            // Extract last 1000 chars of combined output
+            let combined_output = format!("STDOUT:\n{}\n\nSTDERR:\n{}", stdout, stderr);
+            let error_details = if combined_output.len() > 1000 {
+                format!("...(truncated)...\n{}", &combined_output[combined_output.len() - 1000..])
+            } else {
+                combined_output
+            };
+
+            steps.push(SetupStep {
+                name: "Install Chromium browser".to_string(),
+                status: "failed".to_string(),
+                details: format!("Failed to install Playwright Chromium.\nExit code: {:?}\n\n{}",
+                    output.status.code(),
+                    error_details),
+            });
+
+            return Ok(SetupResult {
+                success: false,
+                message: "Failed to install Chromium browser".to_string(),
+                steps,
+            });
+        }
+        Err(e) => {
+            info!("✗ Failed to execute playwright install: {}", e);
+            steps.push(SetupStep {
+                name: "Install Chromium browser".to_string(),
+                status: "failed".to_string(),
+                details: format!("Failed to execute playwright command: {}", e),
+            });
+
+            return Ok(SetupResult {
+                success: false,
+                message: "Failed to install Chromium browser".to_string(),
+                steps,
+            });
+        }
     }
-
-    steps.push(SetupStep {
-        name: "Install Chromium browser".to_string(),
-        status: "success".to_string(),
-        details: "Playwright Chromium installed successfully".to_string(),
-    });
 
     info!("Python environment setup completed successfully");
 
