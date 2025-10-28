@@ -163,18 +163,40 @@ pub async fn test_aws_connection(aws_profile: String, aws_region: Option<String>
     info!("Creating Step Functions client...");
     let sfn_client = aws_sdk_sfn::Client::new(&aws_config);
 
-    // Try to list activities (this requires minimal permissions)
-    match sfn_client.list_activities().max_results(1).send().await {
-        Ok(_) => Ok(ConnectionTestResult {
-            success: true,
-            message: "Successfully connected to AWS Step Functions".to_string(),
-            error: None,
-        }),
-        Err(e) => Ok(ConnectionTestResult {
-            success: false,
-            message: "Failed to connect to AWS".to_string(),
-            error: Some(format!("{}", e)),
-        }),
+    info!("Testing connection by listing activities...");
+
+    // Try to list activities with timeout (this requires minimal permissions)
+    let list_result = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        sfn_client.list_activities().max_results(1).send()
+    ).await;
+
+    match list_result {
+        Ok(Ok(_)) => {
+            info!("✓ AWS connection test successful");
+            Ok(ConnectionTestResult {
+                success: true,
+                message: "Successfully connected to AWS Step Functions".to_string(),
+                error: None,
+            })
+        },
+        Ok(Err(e)) => {
+            let error_msg = format!("{}", e);
+            info!("✗ AWS API error: {}", error_msg);
+            Ok(ConnectionTestResult {
+                success: false,
+                message: "Failed to connect to AWS".to_string(),
+                error: Some(error_msg),
+            })
+        },
+        Err(_) => {
+            info!("✗ AWS connection test timed out after 30 seconds");
+            Ok(ConnectionTestResult {
+                success: false,
+                message: "Connection test timed out".to_string(),
+                error: Some("Request timed out after 30 seconds. Check your network connection and AWS credentials.".to_string()),
+            })
+        }
     }
 }
 
@@ -357,7 +379,27 @@ pub async fn check_python_environment() -> Result<SetupResult, String> {
     let python_dir = if os == "macos" {
         app_path.join("Contents").join("Resources").join("_up_").join("python")
     } else {
-        app_path.join("python")
+        // Windows/Linux: Try multiple possible locations
+        let candidates = vec![
+            app_path.join("python"),
+            app_path.join("resources").join("python"),
+            app_path.join("_up_").join("python"),
+        ];
+
+        info!("Searching for Python directory in Windows/Linux...");
+        let mut found_path = None;
+        for candidate in &candidates {
+            info!("  Trying: {}", candidate.display());
+            if candidate.exists() {
+                info!("  ✓ Found at: {}", candidate.display());
+                found_path = Some(candidate.clone());
+                break;
+            } else {
+                info!("  ✗ Not found");
+            }
+        }
+
+        found_path.unwrap_or_else(|| app_path.join("python"))
     };
 
     info!("Looking for Python scripts at: {}", python_dir.display());
@@ -699,8 +741,27 @@ pub async fn setup_python_environment() -> Result<SetupResult, String> {
         // macOS: inside .app bundle at Contents/Resources/_up_/python
         app_path.join("Contents").join("Resources").join("_up_").join("python")
     } else {
-        // Windows/Linux: directly in app directory
-        app_path.join("python")
+        // Windows/Linux: Try multiple possible locations
+        let candidates = vec![
+            app_path.join("python"),
+            app_path.join("resources").join("python"),
+            app_path.join("_up_").join("python"),
+        ];
+
+        info!("Searching for Python directory in Windows/Linux...");
+        let mut found_path = None;
+        for candidate in &candidates {
+            info!("  Trying: {}", candidate.display());
+            if candidate.exists() {
+                info!("  ✓ Found at: {}", candidate.display());
+                found_path = Some(candidate.clone());
+                break;
+            } else {
+                info!("  ✗ Not found");
+            }
+        }
+
+        found_path.unwrap_or_else(|| app_path.join("python"))
     };
 
     info!("Looking for Python scripts at: {}", python_dir.display());
