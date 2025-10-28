@@ -852,6 +852,7 @@ pub async fn setup_python_environment() -> Result<SetupResult, String> {
 
     let requirements_txt = python_dir.join("requirements.txt");
 
+    // Disable UV debug logging to avoid buffer overflow
     let install_result = Command::new(&uv_command)
         .arg("pip")
         .arg("install")
@@ -859,21 +860,43 @@ pub async fn setup_python_environment() -> Result<SetupResult, String> {
         .arg(&venv_python)
         .arg("-r")
         .arg(&requirements_txt)
+        .arg("--quiet")  // Reduce UV verbosity
         .current_dir(&python_dir)
+        .env("UV_NO_PROGRESS", "1")  // Disable progress bars
+        .env_remove("RUST_LOG")  // Remove any debug logging env vars
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output();
 
     match install_result {
         Ok(output) if output.status.success() => {
+            info!("✓ Python dependencies installed successfully");
             // Success
         }
         Ok(output) => {
             let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+
+            // Extract last 2000 characters of stderr (avoid UI overflow with debug logs)
+            let stderr_trimmed = if stderr.len() > 2000 {
+                format!("...(truncated {} chars)...\n{}", stderr.len() - 2000, &stderr[stderr.len() - 2000..])
+            } else {
+                stderr.to_string()
+            };
+
+            info!("✗ UV pip install failed");
+            info!("Exit code: {:?}", output.status.code());
+            info!("Stderr (last 500 chars): {}", &stderr[stderr.len().saturating_sub(500)..]);
+            if !stdout.is_empty() {
+                info!("Stdout: {}", stdout);
+            }
+
             steps.push(SetupStep {
                 name: "Install Python dependencies".to_string(),
                 status: "failed".to_string(),
-                details: format!("Failed to install Python packages: {}", stderr),
+                details: format!("Failed to install Python packages.\nExit code: {:?}\n\nError output (end):\n{}",
+                    output.status.code(),
+                    stderr_trimmed),
             });
 
             return Ok(SetupResult {

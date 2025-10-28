@@ -27,9 +27,9 @@ tauri = { version = "1.5", features = [
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.35", features = ["full"] }
-# AWS SDK - disable default features to avoid aws-lc on Windows
-aws-config = { version = "1.1", default-features = false, features = ["behavior-version-latest", "rt-tokio", "rustls"] }
-aws-sdk-sfn = { version = "1.12", default-features = false, features = ["rt-tokio", "rustls"] }
+# AWS SDK - use defaults like local-agent (includes proper TLS support)
+aws-config = "1.5"
+aws-sdk-sfn = "1.12"
 anyhow = "1.0"
 thiserror = "1.0"
 log = "0.4"
