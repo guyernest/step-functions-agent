@@ -6,13 +6,14 @@ use log::{info, error, debug};
 
 use crate::config::Config;
 
-/// List available AWS profiles from ~/.aws/credentials
+/// List available AWS profiles from ~/.aws/credentials (Unix) or %USERPROFILE%\.aws\credentials (Windows)
 #[tauri::command]
 pub async fn list_aws_profiles() -> Result<Vec<String>, String> {
     let home = std::env::var("HOME")
-        .map_err(|e| format!("Failed to get HOME: {}", e))?;
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .map_err(|e| format!("Failed to get home directory (HOME or USERPROFILE): {}", e))?;
 
-    let credentials_path = PathBuf::from(home).join(".aws/credentials");
+    let credentials_path = PathBuf::from(home).join(".aws").join("credentials");
 
     if !credentials_path.exists() {
         return Ok(vec![]);
