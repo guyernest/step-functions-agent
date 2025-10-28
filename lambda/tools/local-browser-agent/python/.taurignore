@@ -1,0 +1,6 @@
+# Exclude venv and cache directories from Tauri bundle
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+browser-profiles/

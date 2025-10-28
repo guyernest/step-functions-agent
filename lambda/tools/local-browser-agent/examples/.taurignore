@@ -1,0 +1,2 @@
+# Exclude browser profiles from Tauri bundle
+browser-profiles/
