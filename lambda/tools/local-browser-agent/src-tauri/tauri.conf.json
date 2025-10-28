@@ -10,8 +10,6 @@
     "productName": "Local Browser Agent",
     "version": "0.1.0"
   },
-  "productName": "Local Browser Agent",
-  "version": "0.1.0",
   "tauri": {
     "allowlist": {
       "all": false,
@@ -62,12 +60,7 @@
       "windows": {
         "certificateThumbprint": null,
         "digestAlgorithm": "sha256",
-        "timestampUrl": "",
-        "wix": {
-          "language": "en-US",
-          "manufacturer": "AI-on-Cloud",
-          "license": "LICENSE"
-        }
+        "timestampUrl": ""
       }
     },
     "security": {
