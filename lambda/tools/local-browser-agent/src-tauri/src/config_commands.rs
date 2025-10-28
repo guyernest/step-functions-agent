@@ -6,13 +6,10 @@ use log::{info, error, debug};
 
 use crate::config::Config;
 
-/// List available AWS profiles using AWS SDK's built-in profile discovery
-/// This automatically handles platform-specific paths and AWS_CONFIG_FILE environment variable
+/// List available AWS profiles by reading both credentials and config files
+/// Automatically handles platform-specific paths (Windows: %USERPROFILE%\.aws, Unix: ~/.aws)
 #[tauri::command]
 pub async fn list_aws_profiles() -> Result<Vec<String>, String> {
-    use aws_config::profile::ProfileFileCredentialsProvider;
-    use aws_types::os_shim_internal::{Env, Fs};
-
     let mut profiles = Vec::new();
 
     // Get home directory using platform-appropriate method
