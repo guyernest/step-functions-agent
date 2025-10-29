@@ -54,10 +54,29 @@ impl NovaActExecutor {
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_dir) = exe_path.parent() {
                 // macOS .app bundle: executable is at Contents/MacOS/, resources are at Contents/Resources/
+                #[cfg(target_os = "macos")]
                 let wrapper_paths = vec![
-                    exe_dir.join("..").join("Resources").join("_up_").join("python").join("nova_act_wrapper.py"),  // macOS bundle
+                    exe_dir.join("..").join("Resources").join("_up_").join("python").join("nova_act_wrapper.py"),  // macOS bundle (primary)
                     exe_dir.join("..").join("Resources").join("python").join("nova_act_wrapper.py"),                // macOS bundle (alternative)
-                    exe_dir.join("..").join("python").join("nova_act_wrapper.py"),  // Linux/Windows
+                    exe_dir.join("..").join("python").join("nova_act_wrapper.py"),                                  // fallback
+                ];
+
+                // For Linux - check same locations as other Python scripts
+                #[cfg(target_os = "linux")]
+                let wrapper_paths = vec![
+                    exe_dir.join("python").join("nova_act_wrapper.py"),
+                    exe_dir.join("resources").join("python").join("nova_act_wrapper.py"),
+                    exe_dir.join("_up_").join("python").join("nova_act_wrapper.py"),
+                    exe_dir.join("..").join("python").join("nova_act_wrapper.py"),
+                ];
+
+                // For Windows - check same locations as other Python scripts
+                #[cfg(target_os = "windows")]
+                let wrapper_paths = vec![
+                    exe_dir.join("python").join("nova_act_wrapper.py"),
+                    exe_dir.join("resources").join("python").join("nova_act_wrapper.py"),
+                    exe_dir.join("_up_").join("python").join("nova_act_wrapper.py"),
+                    exe_dir.join("..").join("python").join("nova_act_wrapper.py"),
                 ];
 
                 for wrapper_path in wrapper_paths {
@@ -131,6 +150,9 @@ impl NovaActExecutor {
 
                 #[cfg(target_os = "windows")]
                 let venv_paths_release = vec![
+                    exe_dir.join("python\\.venv\\Scripts\\python.exe"),
+                    exe_dir.join("resources\\python\\.venv\\Scripts\\python.exe"),
+                    exe_dir.join("_up_\\python\\.venv\\Scripts\\python.exe"),
                     exe_dir.join("..\\python\\.venv\\Scripts\\python.exe"),
                 ];
 

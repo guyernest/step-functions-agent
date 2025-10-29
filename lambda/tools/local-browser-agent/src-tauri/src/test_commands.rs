@@ -317,15 +317,21 @@ fn find_script_executor() -> Result<PathBuf> {
                 exe_dir.join("../python/script_executor.py"),
             ];
 
-            // For Linux
+            // For Linux - check same locations as other Python scripts
             #[cfg(target_os = "linux")]
             let script_paths = vec![
+                exe_dir.join("python/script_executor.py"),
+                exe_dir.join("resources/python/script_executor.py"),
+                exe_dir.join("_up_/python/script_executor.py"),
                 exe_dir.join("../python/script_executor.py"),
             ];
 
-            // For Windows
+            // For Windows - check same locations as other Python scripts
             #[cfg(target_os = "windows")]
             let script_paths = vec![
+                exe_dir.join("python\\script_executor.py"),
+                exe_dir.join("resources\\python\\script_executor.py"),
+                exe_dir.join("_up_\\python\\script_executor.py"),
                 exe_dir.join("..\\python\\script_executor.py"),
             ];
 
