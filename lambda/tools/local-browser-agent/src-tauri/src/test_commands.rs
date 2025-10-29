@@ -384,6 +384,9 @@ fn find_python_executable() -> Result<PathBuf> {
 
             #[cfg(target_os = "windows")]
             let venv_paths_release = vec![
+                exe_dir.join("python\\.venv\\Scripts\\python.exe"),
+                exe_dir.join("resources\\python\\.venv\\Scripts\\python.exe"),
+                exe_dir.join("_up_\\python\\.venv\\Scripts\\python.exe"),
                 exe_dir.join("..\\python\\.venv\\Scripts\\python.exe"),
             ];
 
