@@ -259,15 +259,13 @@ pub async fn validate_activity_arn(activity_arn: String, aws_profile: String) ->
 /// Get Chrome profile paths
 #[tauri::command]
 pub async fn list_chrome_profiles() -> Result<Vec<ChromeProfile>, String> {
-    let _home = std::env::var("HOME")
-        .map_err(|e| format!("Failed to get HOME: {}", e))?;
-
-    let profiles = Vec::new();
+    let mut profiles = Vec::new();
 
     // macOS Chrome profiles
     #[cfg(target_os = "macos")]
     {
-        let chrome_dir = PathBuf::from(&home).join("Library/Application Support/Google/Chrome");
+        let home = dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
+        let chrome_dir = home.join("Library/Application Support/Google/Chrome");
         if chrome_dir.exists() {
             if let Ok(entries) = std::fs::read_dir(&chrome_dir) {
                 for entry in entries.flatten() {
