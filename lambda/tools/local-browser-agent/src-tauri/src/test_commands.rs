@@ -61,16 +61,22 @@ fn find_examples_dir() -> Result<PathBuf> {
                 exe_dir.join("../examples"),
             ];
 
-            // For Linux
+            // For Linux - check same locations as Python scripts
             #[cfg(target_os = "linux")]
             let example_paths = vec![
+                exe_dir.join("examples"),
+                exe_dir.join("resources/examples"),
+                exe_dir.join("_up_/examples"),
                 exe_dir.join("../examples"),
             ];
 
-            // For Windows
+            // For Windows - check same locations as Python scripts
             #[cfg(target_os = "windows")]
             let example_paths = vec![
-                exe_dir.join("..\\examples"),
+                exe_dir.join("examples"),                    // Same directory as exe
+                exe_dir.join("resources\\examples"),         // resources subdirectory
+                exe_dir.join("_up_\\examples"),              // _up_ subdirectory (matches Python)
+                exe_dir.join("..\\examples"),                // parent directory
             ];
 
             for examples_path in &example_paths {

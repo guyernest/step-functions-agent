@@ -43,15 +43,21 @@ fn find_profile_manager() -> Result<PathBuf> {
                 exe_dir.join("../python/profile_manager.py"),
             ];
 
-            // For Linux
+            // For Linux - check same locations as Python venv
             #[cfg(target_os = "linux")]
             let script_paths = vec![
+                exe_dir.join("python/profile_manager.py"),
+                exe_dir.join("resources/python/profile_manager.py"),
+                exe_dir.join("_up_/python/profile_manager.py"),
                 exe_dir.join("../python/profile_manager.py"),
             ];
 
-            // For Windows
+            // For Windows - check same locations as Python venv
             #[cfg(target_os = "windows")]
             let script_paths = vec![
+                exe_dir.join("python\\profile_manager.py"),
+                exe_dir.join("resources\\python\\profile_manager.py"),
+                exe_dir.join("_up_\\python\\profile_manager.py"),
                 exe_dir.join("..\\python\\profile_manager.py"),
             ];
 

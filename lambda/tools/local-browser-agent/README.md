@@ -135,21 +135,53 @@ This will:
 
 ### 2. Configure AWS Credentials
 
+The Local Browser Agent requires AWS credentials with specific IAM permissions. **See [docs/IAM_PERMISSIONS.md](./docs/IAM_PERMISSIONS.md) for detailed setup instructions.**
+
+#### Quick Setup
+
+**Option A: Environment Variables (Recommended for Windows)**
+
+```powershell
+# PowerShell (Windows)
+$env:AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"
+$env:AWS_SECRET_ACCESS_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+$env:AWS_DEFAULT_REGION = "us-west-2"
+```
+
+```bash
+# Bash/Zsh (macOS/Linux)
+export AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE"
+export AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+export AWS_DEFAULT_REGION="us-west-2"
+```
+
+**Option B: AWS CLI Profile (macOS/Linux)**
+
 ```bash
 # Configure AWS profile for local agent
-make aws-setup
-
-# Or manually:
 aws configure --profile browser-agent
 
-# Required permissions:
-# - states:GetActivityTask
-# - states:SendTaskSuccess
-# - states:SendTaskFailure
-# - states:SendTaskHeartbeat
-# - s3:ListObjects (on recordings bucket)
-# - s3:PutObject (on recordings bucket)
+# Or use make target
+make aws-setup
 ```
+
+#### Required IAM Permissions
+
+Create an IAM user with the following permissions:
+- `states:GetActivityTask` - Poll for browser tasks
+- `states:SendTaskSuccess` - Return results
+- `states:SendTaskFailure` - Report errors
+- `states:SendTaskHeartbeat` - Keep tasks alive
+- `states:DescribeActivity` - Validate Activity ARN
+- `s3:PutObject` - Upload recordings
+- `s3:ListBucket` - List recordings
+- `sts:GetCallerIdentity` - Test credentials
+
+**See [docs/IAM_PERMISSIONS.md](./docs/IAM_PERMISSIONS.md) for:**
+- Complete IAM policy JSON
+- Step-by-step IAM user creation
+- Security best practices
+- Troubleshooting permission issues
 
 ### 3. Deploy AWS Infrastructure
 
@@ -405,8 +437,48 @@ cargo run
    - `C:\Program Files\Google\Chrome\Application\chrome.exe`
    - `C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`
 4. **User Data Directory**: Default location is `%LOCALAPPDATA%\Google\Chrome\User Data`
-5. **AWS Credentials**: Located at `%USERPROFILE%\.aws\credentials`
+5. **AWS Credentials**:
+   - **Recommended**: Use environment variables (see below)
+   - **Alternative**: Profile files at `%USERPROFILE%\.aws\credentials`
+   - **Note**: The Rust AWS SDK on Windows may have issues parsing profile files
 6. **Firewall**: Ensure Windows Firewall allows outbound HTTPS connections to AWS
+
+### Windows AWS Credentials Setup
+
+**Method 1: Environment Variables (Recommended)**
+
+Create a PowerShell script `set-aws-env.ps1`:
+
+```powershell
+# Set AWS credentials for Local Browser Agent
+$env:AWS_ACCESS_KEY_ID = "AKIAIOSFODNN7EXAMPLE"
+$env:AWS_SECRET_ACCESS_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+$env:AWS_DEFAULT_REGION = "us-west-2"
+
+Write-Host "AWS credentials set. Starting Local Browser Agent..."
+
+# Run the application
+& ".\Local Browser Agent.exe"
+```
+
+Run it:
+```powershell
+.\set-aws-env.ps1
+```
+
+**Method 2: Persistent Environment Variables**
+
+Set system-wide environment variables:
+
+```powershell
+# Open Environment Variables settings
+rundll32 sysdm.cpl,EditEnvironmentVariables
+
+# Or set via PowerShell (requires admin)
+[System.Environment]::SetEnvironmentVariable('AWS_ACCESS_KEY_ID', 'AKIAIOSFODNN7EXAMPLE', 'User')
+[System.Environment]::SetEnvironmentVariable('AWS_SECRET_ACCESS_KEY', 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY', 'User')
+[System.Environment]::SetEnvironmentVariable('AWS_DEFAULT_REGION', 'us-west-2', 'User')
+```
 
 ### Common Windows Issues
 
@@ -424,12 +496,21 @@ Get-Command chrome
 Test-Path "C:\Program Files\Google\Chrome\Application\chrome.exe"
 ```
 
-**Issue**: AWS credentials not loading
+**Issue**: AWS credentials not loading (Profile parsing errors)
 ```powershell
-# Verify AWS CLI configuration
-aws configure list --profile browser-agent
+# Test with AWS CLI first
 aws sts get-caller-identity --profile browser-agent
+
+# If CLI works but app doesn't, use environment variables instead:
+$env:AWS_ACCESS_KEY_ID = "your-access-key"
+$env:AWS_SECRET_ACCESS_KEY = "your-secret-key"
+$env:AWS_DEFAULT_REGION = "us-west-2"
+
+# Then run the app
+& ".\Local Browser Agent.exe"
 ```
+
+**Note**: The Rust AWS SDK on Windows may have trouble parsing profile files due to encoding or line ending issues. Environment variables are the most reliable method.
 
 ## Troubleshooting
 
