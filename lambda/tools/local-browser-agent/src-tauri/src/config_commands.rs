@@ -747,14 +747,57 @@ pub async fn setup_python_environment() -> Result<SetupResult, String> {
                 });
             }
 
+            // After successful installation, find where UV actually installed
+            let actual_uv_path = if cfg!(target_os = "windows") {
+                // On Windows, use 'where' command to find UV
+                Command::new("where")
+                    .arg("uv.exe")
+                    .output()
+                    .ok()
+                    .and_then(|output| {
+                        if output.status.success() {
+                            let path_str = String::from_utf8(output.stdout).ok()?;
+                            let first_path = path_str.lines().next()?.trim();
+                            info!("Found UV at: {}", first_path);
+                            Some(PathBuf::from(first_path))
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|| {
+                        info!("Could not locate UV with 'where' command, using assumed path");
+                        uv_path.clone()
+                    })
+            } else {
+                // On Unix systems, use 'which' command
+                Command::new("which")
+                    .arg("uv")
+                    .output()
+                    .ok()
+                    .and_then(|output| {
+                        if output.status.success() {
+                            let path_str = String::from_utf8(output.stdout).ok()?;
+                            let first_path = path_str.trim();
+                            info!("Found UV at: {}", first_path);
+                            Some(PathBuf::from(first_path))
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|| {
+                        info!("Could not locate UV with 'which' command, using assumed path");
+                        uv_path.clone()
+                    })
+            };
+
             steps.push(SetupStep {
                 name: "Install uv package manager".to_string(),
                 status: "success".to_string(),
-                details: format!("uv installed successfully at {}", uv_path.display()),
+                details: format!("uv installed successfully at {}", actual_uv_path.display()),
             });
 
-            info!("Installed uv at: {}", uv_path.display());
-            uv_path
+            info!("Installed uv at: {}", actual_uv_path.display());
+            actual_uv_path
         }
     } else {
         uv_command
