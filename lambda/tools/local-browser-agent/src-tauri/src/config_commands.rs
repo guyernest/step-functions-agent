@@ -748,46 +748,87 @@ pub async fn setup_python_environment() -> Result<SetupResult, String> {
             }
 
             // After successful installation, find where UV actually installed
+            // Check known installation locations directly since PATH may not be refreshed
             let actual_uv_path = if cfg!(target_os = "windows") {
-                // On Windows, use 'where' command to find UV
-                Command::new("where")
-                    .arg("uv.exe")
-                    .output()
-                    .ok()
-                    .and_then(|output| {
-                        if output.status.success() {
-                            let path_str = String::from_utf8(output.stdout).ok()?;
-                            let first_path = path_str.lines().next()?.trim();
-                            info!("Found UV at: {}", first_path);
-                            Some(PathBuf::from(first_path))
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap_or_else(|| {
-                        info!("Could not locate UV with 'where' command, using assumed path");
-                        uv_path.clone()
-                    })
+                let home_dir = dirs::home_dir().unwrap_or_default();
+                let known_locations = vec![
+                    home_dir.join(".local\\bin\\uv.exe"),      // New default location
+                    home_dir.join(".cargo\\bin\\uv.exe"),      // Old location
+                ];
+
+                info!("Searching for UV in known locations after installation...");
+                let mut found_path = None;
+                for location in &known_locations {
+                    info!("  Checking: {}", location.display());
+                    if location.exists() {
+                        info!("  ✓ Found UV at: {}", location.display());
+                        found_path = Some(location.clone());
+                        break;
+                    }
+                }
+
+                // If not found in known locations, try 'where' command as fallback
+                found_path.or_else(|| {
+                    info!("  UV not in known locations, trying 'where' command...");
+                    Command::new("where")
+                        .arg("uv.exe")
+                        .output()
+                        .ok()
+                        .and_then(|output| {
+                            if output.status.success() {
+                                let path_str = String::from_utf8(output.stdout).ok()?;
+                                let first_path = path_str.lines().next()?.trim();
+                                info!("  ✓ Found UV via 'where': {}", first_path);
+                                Some(PathBuf::from(first_path))
+                            } else {
+                                None
+                            }
+                        })
+                }).unwrap_or_else(|| {
+                    info!("  Could not locate UV, using assumed path");
+                    uv_path.clone()
+                })
             } else {
-                // On Unix systems, use 'which' command
-                Command::new("which")
-                    .arg("uv")
-                    .output()
-                    .ok()
-                    .and_then(|output| {
-                        if output.status.success() {
-                            let path_str = String::from_utf8(output.stdout).ok()?;
-                            let first_path = path_str.trim();
-                            info!("Found UV at: {}", first_path);
-                            Some(PathBuf::from(first_path))
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap_or_else(|| {
-                        info!("Could not locate UV with 'which' command, using assumed path");
-                        uv_path.clone()
-                    })
+                // On Unix systems, check known locations first
+                let home_dir = dirs::home_dir().unwrap_or_default();
+                let known_locations = vec![
+                    home_dir.join(".local/bin/uv"),
+                    home_dir.join(".cargo/bin/uv"),
+                    PathBuf::from("/usr/local/bin/uv"),
+                ];
+
+                info!("Searching for UV in known locations after installation...");
+                let mut found_path = None;
+                for location in &known_locations {
+                    info!("  Checking: {}", location.display());
+                    if location.exists() {
+                        info!("  ✓ Found UV at: {}", location.display());
+                        found_path = Some(location.clone());
+                        break;
+                    }
+                }
+
+                // If not found in known locations, try 'which' command as fallback
+                found_path.or_else(|| {
+                    info!("  UV not in known locations, trying 'which' command...");
+                    Command::new("which")
+                        .arg("uv")
+                        .output()
+                        .ok()
+                        .and_then(|output| {
+                            if output.status.success() {
+                                let path_str = String::from_utf8(output.stdout).ok()?;
+                                let first_path = path_str.trim();
+                                info!("  ✓ Found UV via 'which': {}", first_path);
+                                Some(PathBuf::from(first_path))
+                            } else {
+                                None
+                            }
+                        })
+                }).unwrap_or_else(|| {
+                    info!("  Could not locate UV, using assumed path");
+                    uv_path.clone()
+                })
             };
 
             steps.push(SetupStep {
