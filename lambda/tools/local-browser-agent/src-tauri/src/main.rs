@@ -13,7 +13,7 @@ mod session_manager;
 mod test_commands;
 
 use anyhow::{Context, Result};
-use log::{error, info};
+use log::info;
 use std::path::PathBuf;
 use std::sync::Arc;
 use parking_lot::RwLock;

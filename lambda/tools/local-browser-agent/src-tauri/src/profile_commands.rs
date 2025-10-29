@@ -262,7 +262,7 @@ pub async fn create_profile(
         .await
         .map_err(|e| format!("Failed to execute profile_manager.py: {}", e))?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let _stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     if !stderr.is_empty() {
@@ -308,7 +308,7 @@ pub async fn delete_profile(
         .await
         .map_err(|e| format!("Failed to execute profile_manager.py: {}", e))?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let _stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     if !stderr.is_empty() {

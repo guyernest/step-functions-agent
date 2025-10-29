@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use anyhow::Result;
-use log::{info, error, debug};
+use log::{info, error};
 
 use crate::config::Config;
 
@@ -259,10 +259,10 @@ pub async fn validate_activity_arn(activity_arn: String, aws_profile: String) ->
 /// Get Chrome profile paths
 #[tauri::command]
 pub async fn list_chrome_profiles() -> Result<Vec<ChromeProfile>, String> {
-    let home = std::env::var("HOME")
+    let _home = std::env::var("HOME")
         .map_err(|e| format!("Failed to get HOME: {}", e))?;
 
-    let mut profiles = Vec::new();
+    let profiles = Vec::new();
 
     // macOS Chrome profiles
     #[cfg(target_os = "macos")]

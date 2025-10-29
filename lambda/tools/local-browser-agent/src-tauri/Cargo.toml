@@ -45,6 +45,7 @@ schemars = { version = "0.8", features = ["url"] }
 jsonschema = "0.18"
 url = "2.5"
 tempfile = "3.8"
+dirs = "5.0"
 
 [features]
 # This feature is used for production builds or when `devPath` points to the filesystem
