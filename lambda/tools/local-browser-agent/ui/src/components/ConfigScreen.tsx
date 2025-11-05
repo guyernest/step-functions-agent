@@ -15,6 +15,7 @@ interface ConfigData {
   nova_act_api_key: string | null
   headless: boolean
   heartbeat_interval: number
+  browser_channel: string | null
 }
 
 interface ChromeProfile {
@@ -57,6 +58,7 @@ function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
     nova_act_api_key: null,
     headless: false,
     heartbeat_interval: 60,
+    browser_channel: null,
   })
 
   const [awsProfiles, setAwsProfiles] = useState<string[]>([])
@@ -402,6 +404,25 @@ function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
         {/* Browser Configuration */}
         <section className="config-section">
           <h3>Browser Configuration</h3>
+
+          <div className="form-group">
+            <label htmlFor="browser_channel">Browser Channel</label>
+            <select
+              id="browser_channel"
+              value={config.browser_channel || ''}
+              onChange={(e) => setConfig({ ...config, browser_channel: e.target.value || null })}
+            >
+              <option value="">Auto-detect (Edge on Windows, Chrome on other platforms)</option>
+              <option value="msedge">Microsoft Edge</option>
+              <option value="chrome">Google Chrome</option>
+              <option value="chromium">Chromium (installed by setup script)</option>
+            </select>
+            <span className="form-hint">
+              {navigator.platform.includes('Win')
+                ? 'Recommended: Microsoft Edge (pre-installed on Windows 10/11)'
+                : 'Recommended: Google Chrome (or auto-detect)'}
+            </span>
+          </div>
 
           <div className="form-group">
             <label htmlFor="user_data_dir">Chrome Profile (optional)</label>
