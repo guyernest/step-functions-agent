@@ -157,22 +157,38 @@ def execute_act(command: Dict[str, Any]) -> Dict[str, Any]:
     record_video = command.get('record_video', True)
     aws_profile = command.get('aws_profile', 'browser-agent')
     clone_user_data_dir = command.get('clone_user_data_dir')
+    browser_channel = command.get('browser_channel')  # "msedge", "chrome", "chromium"
 
-    # HARDCODED FOR DEMO: Always use Bt_broadband profile
-    # TODO: Remove this hardcoding after demo
-    print("[DEMO MODE] Forcing profile to: Bt_broadband", file=sys.stderr)
-    from profile_manager import ProfileManager
-    profile_manager = ProfileManager()
-    profile_name = "Bt_broadband"
-    try:
-        profile_config = profile_manager.get_nova_act_config(profile_name, clone_for_parallel=False)
-        user_data_dir = profile_config["user_data_dir"]
-        clone_user_data_dir = profile_config["clone_user_data_dir"]
-        print(f"[DEMO MODE] Loaded profile '{profile_name}' from path: {user_data_dir}", file=sys.stderr)
-    except Exception as e:
-        print(f"[DEMO MODE] Warning: Could not load {profile_name} profile: {e}", file=sys.stderr)
-        print(f"[DEMO MODE] Continuing with original user_data_dir: {user_data_dir}", file=sys.stderr)
-        profile_name = "default" if not user_data_dir else "custom"
+    # Handle profile configuration
+    # Priority: session_config.profile_name > command.profile_name > command.user_data_dir > temporary profile
+    session_config = command.get('session')
+    profile_name = None
+
+    if session_config and isinstance(session_config, dict):
+        profile_name = session_config.get('profile_name')
+
+    if not profile_name:
+        profile_name = command.get('profile_name')
+
+    if profile_name:
+        # Use named profile from profile manager
+        from profile_manager import ProfileManager
+        profile_manager = ProfileManager()
+        try:
+            clone_for_parallel = False
+            if session_config and isinstance(session_config, dict):
+                clone_for_parallel = session_config.get('clone_for_parallel', False)
+
+            profile_config = profile_manager.get_nova_act_config(profile_name, clone_for_parallel=clone_for_parallel)
+            user_data_dir = profile_config["user_data_dir"]
+            clone_user_data_dir = profile_config["clone_user_data_dir"]
+            print(f"Using profile '{profile_name}' from path: {user_data_dir}", file=sys.stderr)
+        except Exception as e:
+            print(f"Warning: Could not load profile '{profile_name}': {e}", file=sys.stderr)
+            print(f"Falling back to temporary profile", file=sys.stderr)
+            user_data_dir = None
+            clone_user_data_dir = False
+    # else: use user_data_dir and clone_user_data_dir from command (already extracted above)
 
     # Create boto3 session with local credentials
     boto_session = boto3.Session(profile_name=aws_profile)
@@ -210,6 +226,10 @@ def execute_act(command: Dict[str, Any]) -> Dict[str, Any]:
         # Only set clone flag if explicitly provided by caller
         if clone_user_data_dir is not None:
             nova_act_kwargs["clone_user_data_dir"] = bool(clone_user_data_dir)
+
+        # Add browser channel if specified (for Edge, Chrome, Chromium selection)
+        if browser_channel:
+            nova_act_kwargs["browser_channel"] = browser_channel
 
         # Add authentication: use API key if available, otherwise use boto_session
         # Nova Act doesn't allow both
@@ -595,6 +615,11 @@ def setup_login(command: Dict[str, Any]) -> Dict[str, Any]:
             "headless": False,  # Must be visible for human login
             "ignore_https_errors": True,
         }
+
+        # Add browser channel if specified
+        browser_channel = command.get('browser_channel')
+        if browser_channel:
+            nova_act_kwargs["browser_channel"] = browser_channel
 
         if nova_act_api_key:
             nova_act_kwargs["nova_act_api_key"] = nova_act_api_key

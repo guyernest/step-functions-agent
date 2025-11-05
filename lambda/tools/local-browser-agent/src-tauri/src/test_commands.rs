@@ -548,9 +548,15 @@ pub async fn execute_browser_script(
             log::info!("Step 4: No S3 recording bucket configured");
         }
 
+        // Add browser channel if configured
+        if let Some(ref browser_channel) = current_config.browser_channel {
+            log::info!("Step 5: Browser channel: {}", browser_channel);
+            cmd.arg("--browser-channel").arg(browser_channel);
+        }
+
         if let Some(api_key) = nova_act_api_key {
             if !api_key.trim().is_empty() {
-                log::info!("Step 5: Nova Act API key provided");
+                log::info!("Step 6: Nova Act API key provided");
                 cmd.arg("--nova-act-api-key").arg(api_key.trim());
             } else {
                 log::info!("Step 5: Nova Act API key is empty, using environment variable");

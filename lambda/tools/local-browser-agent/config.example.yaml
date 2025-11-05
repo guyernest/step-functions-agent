@@ -28,3 +28,11 @@ headless: false
 
 # Heartbeat interval in seconds (how often to send heartbeat to Step Functions)
 heartbeat_interval: 60
+
+# ────────────────────────────────────────────────────────────────
+# Browser Configuration
+# ────────────────────────────────────────────────────────────────
+
+# Browser channel: "msedge" (Windows default), "chrome", "chromium"
+# null = auto-detect (Edge on Windows, Chrome on Mac/Linux)
+browser_channel: null

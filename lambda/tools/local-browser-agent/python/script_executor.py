@@ -60,6 +60,7 @@ class ScriptExecutor:
         navigation_timeout: int = 60000,  # milliseconds (default 60 seconds)
         nova_act_api_key: Optional[str] = None,
         profiles_dir: Optional[str] = None,
+        browser_channel: Optional[str] = None,  # "msedge", "chrome", "chromium"
     ):
         self.s3_bucket = s3_bucket
         self.aws_profile = aws_profile
@@ -70,6 +71,7 @@ class ScriptExecutor:
         self.timeout = timeout
         self.navigation_timeout = navigation_timeout
         self.nova_act_api_key = nova_act_api_key
+        self.browser_channel = browser_channel
         self.boto_session = boto3.Session(profile_name=aws_profile)
         self.profile_manager = ProfileManager(profiles_dir) if profiles_dir else ProfileManager()
 
@@ -145,16 +147,24 @@ class ScriptExecutor:
         clone_user_data_dir = False
         profile_info = {}
 
-        # HARDCODED FOR DEMO: Always use Bt_broadband profile
-        # TODO: Remove this hardcoding and use session_config.profile_name after demo
-        profile_name = "Bt_broadband"
-        mode = "use_profile"
+        # Determine profile name and mode from session config
+        profile_name = session_config.get("profile_name") if session_config else None
 
-        # Create minimal session config if not provided
-        if not session_config:
-            session_config = {"profile_name": profile_name}
+        if profile_name:
+            # Check if we should create a new profile or use existing
+            if session_config and session_config.get("create_profile", False):
+                mode = "create_profile"
+            else:
+                mode = "use_profile"
+        elif self.user_data_dir:
+            # Use provided user_data_dir
+            mode = "use_existing"
+        else:
+            # Use temporary profile
+            mode = "temp_profile"
 
-        print(f"[DEMO MODE] Forcing profile to: {profile_name}", file=sys.stderr)
+        if profile_name:
+            print(f"Using profile: {profile_name} (mode: {mode})", file=sys.stderr)
 
         if mode == "create_profile" and profile_name:
             # Create a new profile for manual login
@@ -222,6 +232,10 @@ class ScriptExecutor:
                 # "go_to_url_timeout": self.navigation_timeout // 1000,  # Convert milliseconds to seconds
                 "go_to_url_timeout": 120  # Testing extended timeout
             }
+
+            # Add browser channel if specified (for Edge, Chrome, Chromium selection)
+            if self.browser_channel:
+                nova_act_kwargs["browser_channel"] = self.browser_channel
 
             # Add profile info to result
             if profile_info:
@@ -495,6 +509,7 @@ def main():
     parser.add_argument("--navigation-timeout", type=int, default=60000, help="Page navigation timeout in milliseconds (default: 60000)")
     parser.add_argument("--nova-act-api-key", help="Nova Act API key (or use NOVA_ACT_API_KEY env var)")
     parser.add_argument("--profiles-dir", help="Directory for browser profiles")
+    parser.add_argument("--browser-channel", help="Browser channel: msedge, chrome, or chromium")
 
     args = parser.parse_args()
 
@@ -538,6 +553,7 @@ def main():
         navigation_timeout=args.navigation_timeout,
         nova_act_api_key=args.nova_act_api_key,
         profiles_dir=args.profiles_dir,
+        browser_channel=args.browser_channel,
     )
 
     # Execute script

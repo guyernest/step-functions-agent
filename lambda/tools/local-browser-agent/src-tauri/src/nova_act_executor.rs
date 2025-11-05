@@ -241,6 +241,11 @@ impl NovaActExecutor {
             // Add record_video (always true for Activity pattern)
             obj.insert("record_video".to_string(), json!(true));
 
+            // Add browser_channel if configured
+            if let Some(ref browser_channel) = self.config.browser_channel {
+                obj.insert("browser_channel".to_string(), json!(browser_channel));
+            }
+
             // Detect command type based on input structure
             if !obj.contains_key("command_type") {
                 // If input has "steps" array, use script mode

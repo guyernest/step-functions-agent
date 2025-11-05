@@ -34,6 +34,10 @@ pub struct Config {
 
     /// AWS region (optional, defaults to profile region)
     pub aws_region: Option<String>,
+
+    /// Browser channel: "msedge", "chrome", "chromium", or null for platform default
+    #[serde(default = "default_browser_channel")]
+    pub browser_channel: Option<String>,
 }
 
 fn default_ui_port() -> u16 {
@@ -42,6 +46,15 @@ fn default_ui_port() -> u16 {
 
 fn default_heartbeat_interval() -> u64 {
     60
+}
+
+fn default_browser_channel() -> Option<String> {
+    // Platform-specific defaults
+    #[cfg(target_os = "windows")]
+    return Some("msedge".to_string());
+
+    #[cfg(not(target_os = "windows"))]
+    return Some("chrome".to_string());
 }
 
 impl Config {
@@ -82,6 +95,7 @@ impl Config {
             headless: false,
             heartbeat_interval: default_heartbeat_interval(),
             aws_region: None,
+            browser_channel: default_browser_channel(),
         }
     }
 
@@ -161,6 +175,7 @@ mod tests {
             headless: false,
             heartbeat_interval: 60,
             aws_region: None,
+            browser_channel: Some("chrome".to_string()),
         };
 
         assert!(config.validate().is_ok());
@@ -178,6 +193,7 @@ mod tests {
             headless: false,
             heartbeat_interval: 60,
             aws_region: None,
+            browser_channel: Some("chrome".to_string()),
         };
 
         assert!(config.validate().is_err());
