@@ -1,10 +1,24 @@
 import { useState, useEffect } from 'react'
+import { invoke } from '@tauri-apps/api/tauri'
 import ConfigScreen from './components/ConfigScreen'
 import ListenScreen from './components/ListenScreen'
 import TestScreen from './components/TestScreen'
 import ProfilesScreen from './components/ProfilesScreen'
 
 type Screen = 'listen' | 'test' | 'profiles' | 'config'
+
+interface ConfigData {
+  activity_arn: string
+  aws_profile: string
+  aws_region: string | null
+  s3_bucket: string
+  user_data_dir: string | null
+  ui_port: number
+  nova_act_api_key: string | null
+  headless: boolean
+  heartbeat_interval: number
+  browser_channel: string | null
+}
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('listen')
@@ -16,9 +30,32 @@ function App() {
   }, [])
 
   const checkConfigExists = async () => {
-    // TODO: Add command to check if config exists
-    // For now, always show config first
-    setConfigExists(false)
+    try {
+      const config = await invoke<ConfigData>('load_config_from_file', {
+        path: 'config.yaml',
+      })
+
+      // Check if essential fields are configured
+      const isConfigured = !!(
+        config.activity_arn &&
+        config.activity_arn.trim() !== '' &&
+        config.aws_profile &&
+        config.aws_profile.trim() !== '' &&
+        config.s3_bucket &&
+        config.s3_bucket.trim() !== ''
+      )
+
+      setConfigExists(isConfigured)
+
+      if (isConfigured) {
+        console.log('✓ Configuration found and valid')
+      } else {
+        console.log('⚠ Configuration file exists but incomplete')
+      }
+    } catch (error) {
+      console.log('⚠ No configuration file found:', error)
+      setConfigExists(false)
+    }
   }
 
   return (
@@ -88,7 +125,7 @@ function App() {
         )}
         {currentScreen === 'test' && <TestScreen />}
         {currentScreen === 'profiles' && <ProfilesScreen />}
-        {currentScreen === 'config' && <ConfigScreen onConfigSaved={() => setConfigExists(true)} />}
+        {currentScreen === 'config' && <ConfigScreen onConfigSaved={checkConfigExists} />}
       </div>
     </div>
   )
