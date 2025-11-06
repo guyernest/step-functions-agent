@@ -176,6 +176,100 @@ class ProfileManager:
 
         return matched
 
+    def resolve_profile(
+        self,
+        session_config: Dict[str, Any],
+        verbose: bool = True
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Resolve which local profile to use based on session requirements.
+
+        This is the centralized profile resolution logic used by both
+        script_executor.py and nova_act_wrapper.py.
+
+        Priority:
+        1. Exact profile_name match (if provided)
+        2. Tag-based matching (required_tags with AND logic)
+        3. Temporary profile (if allowed)
+        4. Error (no suitable profile found)
+
+        Args:
+            session_config: Session configuration dict with optional keys:
+                - profile_name: Exact profile name to use
+                - required_tags: List of tags to match (AND logic)
+                - allow_temp_profile: Whether to allow temporary profile (default: True)
+            verbose: If True, print resolution progress to stderr
+
+        Returns:
+            Profile dict with name, user_data_dir, tags, etc.
+            None if using temporary profile
+
+        Raises:
+            ValueError: No suitable profile found and temp not allowed
+        """
+        import sys
+
+        # Priority 1: Try exact name match (backward compatibility)
+        profile_name = session_config.get('profile_name')
+        if profile_name:
+            profile = self.get_profile(profile_name)
+            if profile:
+                if verbose:
+                    print(f"✓ Resolved profile by exact name: '{profile_name}'", file=sys.stderr)
+                return profile
+            else:
+                if verbose:
+                    print(f"⚠ Profile '{profile_name}' not found, trying tag matching...", file=sys.stderr)
+
+        # Priority 2: Try tag-based matching (all required tags must match)
+        required_tags = session_config.get('required_tags', [])
+        if required_tags:
+            if verbose:
+                print(f"Looking for profiles with tags: {required_tags}", file=sys.stderr)
+
+            matched_profiles = self.find_profiles_by_tags(
+                required_tags=required_tags,
+                match_all=True  # AND logic
+            )
+
+            if matched_profiles:
+                selected_profile = matched_profiles[0]  # Most recently used
+                if verbose:
+                    print(
+                        f"✓ Resolved profile by tags: '{selected_profile['name']}' "
+                        f"(matched tags: {required_tags})",
+                        file=sys.stderr
+                    )
+                return selected_profile
+
+            if verbose:
+                print(f"⚠ No profiles found matching all required tags: {required_tags}", file=sys.stderr)
+
+        # Priority 3: Check if temporary profile allowed
+        allow_temp = session_config.get('allow_temp_profile', True)
+        if allow_temp:
+            if verbose:
+                print("→ Using temporary profile (no persistent session)", file=sys.stderr)
+            return None  # None signals temp profile
+
+        # Priority 4: Nothing matched and temp not allowed - ERROR
+        all_profiles = self.list_profiles()
+        error_msg = f"No suitable profile found. Required tags: {required_tags}"
+        if profile_name:
+            error_msg += f", Requested name: {profile_name}"
+
+        # Show available profiles to help user
+        if all_profiles and verbose:
+            print(f"\nAvailable profiles:", file=sys.stderr)
+            for p in all_profiles:
+                profile_tags = p.get('tags', [])
+                missing_tags = list(set(required_tags) - set(profile_tags)) if required_tags else []
+                print(f"  • {p['name']}: tags={profile_tags}", file=sys.stderr)
+                if missing_tags:
+                    print(f"    Missing: {missing_tags}", file=sys.stderr)
+
+        raise ValueError(error_msg)
+
     def update_profile_usage(self, profile_name: str):
         """
         Update profile usage statistics

@@ -159,36 +159,43 @@ def execute_act(command: Dict[str, Any]) -> Dict[str, Any]:
     clone_user_data_dir = command.get('clone_user_data_dir')
     browser_channel = command.get('browser_channel')  # "msedge", "chrome", "chromium"
 
-    # Handle profile configuration
-    # Priority: session_config.profile_name > command.profile_name > command.user_data_dir > temporary profile
-    session_config = command.get('session')
+    # Handle profile configuration using centralized tag-based resolution
+    session_config = command.get('session', {})
     profile_name = None
 
-    if session_config and isinstance(session_config, dict):
-        profile_name = session_config.get('profile_name')
+    # Resolve profile using ProfileManager's centralized resolution logic
+    from profile_manager import ProfileManager
+    profile_manager = ProfileManager()
 
-    if not profile_name:
-        profile_name = command.get('profile_name')
+    try:
+        # Build session config for resolution
+        # Handle legacy profile_name from command root (for backward compatibility)
+        if not session_config.get('profile_name') and command.get('profile_name'):
+            session_config['profile_name'] = command.get('profile_name')
 
-    if profile_name:
-        # Use named profile from profile manager
-        from profile_manager import ProfileManager
-        profile_manager = ProfileManager()
-        try:
-            clone_for_parallel = False
-            if session_config and isinstance(session_config, dict):
-                clone_for_parallel = session_config.get('clone_for_parallel', False)
+        resolved_profile = profile_manager.resolve_profile(session_config, verbose=True)
+
+        if resolved_profile:
+            # Using a named profile
+            profile_name = resolved_profile["name"]
+            clone_for_parallel = session_config.get('clone_for_parallel', False) if isinstance(session_config, dict) else False
 
             profile_config = profile_manager.get_nova_act_config(profile_name, clone_for_parallel=clone_for_parallel)
             user_data_dir = profile_config["user_data_dir"]
             clone_user_data_dir = profile_config["clone_user_data_dir"]
-            print(f"Using profile '{profile_name}' from path: {user_data_dir}", file=sys.stderr)
-        except Exception as e:
-            print(f"Warning: Could not load profile '{profile_name}': {e}", file=sys.stderr)
-            print(f"Falling back to temporary profile", file=sys.stderr)
-            user_data_dir = None
-            clone_user_data_dir = False
-    # else: use user_data_dir and clone_user_data_dir from command (already extracted above)
+        else:
+            # Using temporary profile (resolved_profile is None)
+            # Keep user_data_dir and clone_user_data_dir from command if provided
+            pass
+
+    except ValueError as e:
+        # Profile resolution failed
+        print(f"✗ Profile resolution failed: {e}", file=sys.stderr)
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": "ProfileResolutionError"
+        }
 
     # Create boto3 session with local credentials
     boto_session = boto3.Session(profile_name=aws_profile)
