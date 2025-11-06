@@ -75,6 +75,80 @@ class ScriptExecutor:
         self.boto_session = boto3.Session(profile_name=aws_profile)
         self.profile_manager = ProfileManager(profiles_dir) if profiles_dir else ProfileManager()
 
+    def resolve_profile(self, session_config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Resolve which local profile to use based on session requirements.
+
+        Priority:
+        1. Exact profile_name match (if provided)
+        2. Tag-based matching (required_tags with AND logic)
+        3. Temporary profile (if allowed)
+        4. Error (no suitable profile found)
+
+        Args:
+            session_config: Session configuration from script
+
+        Returns:
+            Profile dict with name, user_data_dir, tags, etc.
+            None if using temporary profile
+
+        Raises:
+            ValueError: No suitable profile found and temp not allowed
+        """
+        # Priority 1: Try exact name match (backward compatibility)
+        profile_name = session_config.get('profile_name')
+        if profile_name:
+            profile = self.profile_manager.get_profile(profile_name)
+            if profile:
+                print(f"✓ Resolved profile by exact name: '{profile_name}'", file=sys.stderr)
+                return profile
+            else:
+                print(f"⚠ Profile '{profile_name}' not found, trying tag matching...", file=sys.stderr)
+
+        # Priority 2: Try tag-based matching (all required tags must match)
+        required_tags = session_config.get('required_tags', [])
+        if required_tags:
+            print(f"Looking for profiles with tags: {required_tags}", file=sys.stderr)
+            matched_profiles = self.profile_manager.find_profiles_by_tags(
+                required_tags=required_tags,
+                match_all=True  # AND logic
+            )
+
+            if matched_profiles:
+                selected_profile = matched_profiles[0]  # Most recently used
+                print(
+                    f"✓ Resolved profile by tags: '{selected_profile['name']}' "
+                    f"(matched tags: {required_tags})",
+                    file=sys.stderr
+                )
+                return selected_profile
+
+            print(f"⚠ No profiles found matching all required tags: {required_tags}", file=sys.stderr)
+
+        # Priority 3: Check if temporary profile allowed
+        allow_temp = session_config.get('allow_temp_profile', True)
+        if allow_temp:
+            print("→ Using temporary profile (no persistent session)", file=sys.stderr)
+            return None  # None signals temp profile
+
+        # Priority 4: Nothing matched and temp not allowed - ERROR
+        all_profiles = self.profile_manager.list_profiles()
+        error_msg = f"No suitable profile found. Required tags: {required_tags}"
+        if profile_name:
+            error_msg += f", Requested name: {profile_name}"
+
+        # Show available profiles to help user
+        if all_profiles:
+            print(f"\nAvailable profiles:", file=sys.stderr)
+            for p in all_profiles:
+                profile_tags = p.get('tags', [])
+                missing_tags = list(set(required_tags) - set(profile_tags)) if required_tags else []
+                print(f"  • {p['name']}: tags={profile_tags}", file=sys.stderr)
+                if missing_tags:
+                    print(f"    Missing: {missing_tags}", file=sys.stderr)
+
+        raise ValueError(error_msg)
+
     def execute_script(self, script: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute a browser script
@@ -141,79 +215,45 @@ class ScriptExecutor:
                 print(f"Warning: Failed to initialize S3Writer: {e}", file=sys.stderr)
                 print(f"Continuing without S3 recording uploads", file=sys.stderr)
 
-        # Handle session/profile configuration
+        # Handle session/profile configuration using tag-based resolution
         profile_user_data_dir = self.user_data_dir
         # Default: do NOT clone, so sessions persist. Clone only when isolating/parallel.
         clone_user_data_dir = False
         profile_info = {}
+        profile_name = None
 
-        # Determine profile name and mode from session config
-        profile_name = session_config.get("profile_name") if session_config else None
+        # Resolve profile using new tag-based system
+        try:
+            if session_config:
+                resolved_profile = self.resolve_profile(session_config)
 
-        if profile_name:
-            # Check if we should create a new profile or use existing
-            if session_config and session_config.get("create_profile", False):
-                mode = "create_profile"
-            else:
-                mode = "use_profile"
-        elif self.user_data_dir:
-            # Use provided user_data_dir
-            mode = "use_existing"
-        else:
-            # Use temporary profile
-            mode = "temp_profile"
+                if resolved_profile:
+                    # Using a named profile
+                    profile_name = resolved_profile["name"]
+                    profile_config = self.profile_manager.get_nova_act_config(
+                        profile_name,
+                        clone_for_parallel=session_config.get("clone_for_parallel", False)
+                    )
+                    profile_user_data_dir = profile_config["user_data_dir"]
+                    clone_user_data_dir = profile_config["clone_user_data_dir"]
+                    profile_info = {"mode": "resolved", "profile": profile_name, "tags": resolved_profile.get("tags", [])}
 
-        if profile_name:
-            print(f"Using profile: {profile_name} (mode: {mode})", file=sys.stderr)
+                    # Check if session is still valid
+                    if not self.profile_manager.is_session_valid(profile_name):
+                        print(f"⚠ Warning: Profile session may have expired", file=sys.stderr)
+                        result["session_expired_warning"] = True
+                else:
+                    # Using temporary profile
+                    print(f"→ Using temporary profile (no persistent session)", file=sys.stderr)
+                    profile_info = {"mode": "temporary"}
 
-        if mode == "create_profile" and profile_name:
-            # Create a new profile for manual login
-            print(f"Creating profile: {profile_name}", file=sys.stderr)
-            try:
-                profile = self.profile_manager.create_profile(
-                    profile_name=profile_name,
-                    description=session_config.get("profile_description", ""),
-                    tags=session_config.get("profile_tags", []),
-                    auto_login_sites=session_config.get("auto_login_sites", [])
-                )
-                profile_user_data_dir = profile["user_data_dir"]
-                clone_user_data_dir = False  # Don't clone when creating profile
-                profile_info = {"mode": "create", "profile": profile_name}
-                result["profile_created"] = profile_name
-            except ValueError as e:
-                # Profile already exists, use it
-                print(f"Profile exists, using existing: {e}", file=sys.stderr)
-                profile_config = self.profile_manager.get_nova_act_config(
-                    profile_name,
-                    clone_for_parallel=session_config.get("clone_for_parallel", False)
-                )
-                profile_user_data_dir = profile_config["user_data_dir"]
-                clone_user_data_dir = profile_config["clone_user_data_dir"]
-                profile_info = {"mode": "existing", "profile": profile_name}
-
-        elif profile_name:
-            # Use existing profile
-            print(f"Using profile: {profile_name}", file=sys.stderr)
-            try:
-                profile_config = self.profile_manager.get_nova_act_config(
-                    profile_name,
-                    clone_for_parallel=session_config.get("clone_for_parallel", False)
-                )
-                profile_user_data_dir = profile_config["user_data_dir"]
-                clone_user_data_dir = profile_config["clone_user_data_dir"]
-                profile_info = {"mode": "use", "profile": profile_name}
-
-                # Check if session is still valid
-                if not self.profile_manager.is_session_valid(profile_name):
-                    print(f"Warning: Profile session may have expired", file=sys.stderr)
-                    result["session_expired_warning"] = True
-
-            except ValueError as e:
-                print(f"Profile not found: {e}", file=sys.stderr)
-                return {
-                    "success": False,
-                    "error": f"Profile '{profile_name}' not found"
-                }
+        except ValueError as e:
+            print(f"✗ Profile resolution failed: {e}", file=sys.stderr)
+            return {
+                "success": False,
+                "error": str(e),
+                "error_type": "ProfileResolutionError"
+            }
 
         # Execute script with Nova Act
         nova = None

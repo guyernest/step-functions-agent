@@ -136,6 +136,46 @@ class ProfileManager:
 
         return profiles
 
+    def find_profiles_by_tags(
+        self,
+        required_tags: List[str],
+        match_all: bool = True
+    ) -> List[Dict[str, Any]]:
+        """
+        Find profiles that match the required tags.
+
+        Args:
+            required_tags: List of tags to match
+            match_all: If True, profile must have ALL required tags (AND logic)
+                       If False, profile must have ANY required tag (OR logic)
+
+        Returns:
+            List of profile dicts that match the criteria, sorted by last_used (most recent first)
+        """
+        profiles = list(self.metadata["profiles"].values())
+        matched = []
+
+        for profile in profiles:
+            profile_tags = set(profile.get("tags", []))
+            required_set = set(required_tags)
+
+            if match_all:
+                # AND logic: profile must have ALL required tags
+                if required_set.issubset(profile_tags):
+                    matched.append(profile)
+            else:
+                # OR logic: profile must have ANY required tag
+                if required_set.intersection(profile_tags):
+                    matched.append(profile)
+
+        # Sort by last_used (most recent first), profiles never used go to end
+        matched.sort(
+            key=lambda p: datetime.fromisoformat(p["last_used"]) if p.get("last_used") else datetime.min,
+            reverse=True
+        )
+
+        return matched
+
     def update_profile_usage(self, profile_name: str):
         """
         Update profile usage statistics
