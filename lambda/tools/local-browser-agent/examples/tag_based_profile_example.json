@@ -1,0 +1,21 @@
+{
+  "name": "Tag-Based Profile Example",
+  "description": "Demonstrates tag-based profile resolution for flexible profile matching",
+  "starting_page": "https://www.google.com",
+  "session": {
+    "required_tags": ["google.com", "authenticated"],
+    "allow_temp_profile": true
+  },
+  "steps": [
+    {
+      "action": "act",
+      "description": "Search for something",
+      "prompt": "Search for 'browser automation' and press Enter"
+    },
+    {
+      "action": "act",
+      "description": "Get search results count",
+      "prompt": "Tell me approximately how many search results there are"
+    }
+  ]
+}
