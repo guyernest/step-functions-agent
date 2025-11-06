@@ -235,7 +235,7 @@ class ScriptExecutor:
 
             # Add browser channel if specified (for Edge, Chrome, Chromium selection)
             if self.browser_channel:
-                nova_act_kwargs["browser_channel"] = self.browser_channel
+                nova_act_kwargs["chrome_channel"] = self.browser_channel
 
             # Add profile info to result
             if profile_info:

@@ -229,7 +229,7 @@ def execute_act(command: Dict[str, Any]) -> Dict[str, Any]:
 
         # Add browser channel if specified (for Edge, Chrome, Chromium selection)
         if browser_channel:
-            nova_act_kwargs["browser_channel"] = browser_channel
+            nova_act_kwargs["chrome_channel"] = browser_channel
 
         # Add authentication: use API key if available, otherwise use boto_session
         # Nova Act doesn't allow both
@@ -619,7 +619,7 @@ def setup_login(command: Dict[str, Any]) -> Dict[str, Any]:
         # Add browser channel if specified
         browser_channel = command.get('browser_channel')
         if browser_channel:
-            nova_act_kwargs["browser_channel"] = browser_channel
+            nova_act_kwargs["chrome_channel"] = browser_channel
 
         if nova_act_api_key:
             nova_act_kwargs["nova_act_api_key"] = nova_act_api_key
