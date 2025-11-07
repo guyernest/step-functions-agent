@@ -323,6 +323,50 @@ pub async fn delete_profile(
     }
 }
 
+/// Tauri command to update profile tags
+#[tauri::command]
+pub async fn update_profile_tags(
+    profile_name: String,
+    tags: Vec<String>,
+) -> Result<String, String> {
+    let profile_manager = find_profile_manager()
+        .map_err(|e| format!("Failed to find profile_manager.py: {}", e))?;
+
+    let python_exe = find_python_executable()
+        .map_err(|e| format!("Failed to find Python executable: {}", e))?;
+
+    log::info!("Updating tags for profile: {}", profile_name);
+    log::debug!("Using Python: {}", python_exe.display());
+    log::debug!("New tags: {:?}", tags);
+
+    let mut cmd = Command::new(&python_exe);
+    cmd.arg(&profile_manager);
+
+    cmd.arg("update-tags");
+    cmd.arg("--profile").arg(&profile_name);
+    cmd.arg("--tags").arg(tags.join(","));
+
+    let output = cmd
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await
+        .map_err(|e| format!("Failed to execute profile_manager.py: {}", e))?;
+
+    let _stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    if !stderr.is_empty() {
+        log::debug!("profile_manager stderr: {}", stderr);
+    }
+
+    if output.status.success() {
+        Ok(format!("Tags updated successfully for profile '{}'", profile_name))
+    } else {
+        Err(format!("Failed to update tags: {}", stderr))
+    }
+}
+
 /// Tauri command to setup login for a profile
 /// This opens a browser window and waits for user to manually log in
 #[tauri::command]

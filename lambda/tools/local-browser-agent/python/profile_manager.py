@@ -384,6 +384,25 @@ class ProfileManager:
             profile["login_notes"] = notes
             self._save_metadata()
 
+    def update_profile_tags(self, profile_name: str, tags: List[str]) -> bool:
+        """
+        Update the tags for an existing profile
+
+        Args:
+            profile_name: Name of the profile to update
+            tags: New list of tags to set
+
+        Returns:
+            True if updated successfully, False if profile not found
+        """
+        if profile_name not in self.metadata["profiles"]:
+            return False
+
+        profile = self.metadata["profiles"][profile_name]
+        profile["tags"] = tags
+        self._save_metadata()
+        return True
+
     def export_profile(self, profile_name: str, export_path: str) -> str:
         """
         Export a profile for sharing or backup
@@ -639,12 +658,12 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Browser Profile Manager")
-    parser.add_argument("command", choices=["create", "list", "delete", "login"],
+    parser.add_argument("command", choices=["create", "list", "delete", "login", "update-tags"],
                        help="Command to execute")
     parser.add_argument("--profile", help="Profile name")
     parser.add_argument("--url", help="Starting URL for login")
     parser.add_argument("--description", help="Profile description")
-    parser.add_argument("--tags", nargs="+", help="Profile tags")
+    parser.add_argument("--tags", help="Profile tags (comma-separated for update-tags, space-separated for create)")
     parser.add_argument("--auto-login-sites", nargs="+", help="Sites where auto-login should be attempted")
     parser.add_argument("--timeout", type=int, default=24, help="Session timeout in hours (default: 24)")
 
@@ -658,10 +677,13 @@ if __name__ == "__main__":
             print("Error: --profile required")
             exit(1)
 
+        # For create, tags can be space-separated
+        tags_list = args.tags.split() if args.tags else []
+
         profile = manager.create_profile(
             profile_name=args.profile,
             description=args.description or "",
-            tags=args.tags or [],
+            tags=tags_list,
             auto_login_sites=args.auto_login_sites or []
         )
         # Set session timeout if provided
@@ -699,3 +721,22 @@ if __name__ == "__main__":
             exit(1)
 
         create_login_profile_interactive(manager, args.profile, args.url)
+
+    elif args.command == "update-tags":
+        if not args.profile:
+            print("Error: --profile required")
+            exit(1)
+        if not args.tags:
+            print("Error: --tags required")
+            exit(1)
+
+        # For update-tags, tags are comma-separated
+        tags_list = [tag.strip() for tag in args.tags.split(",") if tag.strip()]
+
+        success = manager.update_profile_tags(args.profile, tags_list)
+        if success:
+            print(f"Updated tags for profile: {args.profile}")
+            print(json.dumps({"tags": tags_list}, indent=2))
+        else:
+            print(f"Profile not found: {args.profile}", file=sys.stderr)
+            exit(1)

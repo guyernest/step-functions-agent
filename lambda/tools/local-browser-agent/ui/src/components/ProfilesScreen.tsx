@@ -30,6 +30,8 @@ export default function ProfilesScreen() {
   const [showValidateDialog, setShowValidateDialog] = useState(false)
   const [validationResult, setValidationResult] = useState<any | null>(null)
   const [validating, setValidating] = useState(false)
+  const [showEditTagsDialog, setShowEditTagsDialog] = useState(false)
+  const [editingTags, setEditingTags] = useState<string>('')
 
   // Validation form state
   const [validation, setValidation] = useState({
@@ -121,6 +123,36 @@ export default function ProfilesScreen() {
       await loadProfiles()
     } catch (error) {
       alert(`Failed to delete profile: ${error}`)
+    }
+  }
+
+  const handleOpenEditTags = () => {
+    if (selectedProfile) {
+      setEditingTags(selectedProfile.tags.join(', '))
+      setShowEditTagsDialog(true)
+    }
+  }
+
+  const handleUpdateTags = async () => {
+    if (!selectedProfile) return
+
+    try {
+      const tags = editingTags.split(',').map(t => t.trim()).filter(t => t)
+
+      await invoke('update_profile_tags', {
+        profileName: selectedProfile.name,
+        tags
+      })
+
+      // Update the selected profile in state
+      const updatedProfile = { ...selectedProfile, tags }
+      setSelectedProfile(updatedProfile)
+
+      // Close dialog and reload profiles
+      setShowEditTagsDialog(false)
+      await loadProfiles()
+    } catch (error) {
+      alert(`Failed to update tags: ${error}`)
     }
   }
 
@@ -276,7 +308,16 @@ export default function ProfilesScreen() {
               </div>
 
               <div className="detail-section">
-                <label>Tags</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <label style={{ margin: 0 }}>Tags</label>
+                  <button
+                    onClick={handleOpenEditTags}
+                    className="btn-secondary"
+                    style={{ padding: '0.25rem 0.75rem', fontSize: '0.875rem' }}
+                  >
+                    ✏️ Edit Tags
+                  </button>
+                </div>
                 <div className="profile-tags">
                   {selectedProfile.tags.length > 0 ? (
                     selectedProfile.tags.map(tag => (
@@ -624,6 +665,53 @@ export default function ProfilesScreen() {
                 <pre className="code-block">{JSON.stringify(validationResult, null, 2)}</pre>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Tags Dialog */}
+      {showEditTagsDialog && selectedProfile && (
+        <div className="dialog-overlay" onClick={() => setShowEditTagsDialog(false)}>
+          <div className="dialog" onClick={(e) => e.stopPropagation()}>
+            <h3>Edit Tags: {selectedProfile.name}</h3>
+            <p className="dialog-description">
+              Add or modify tags for this profile. Tags help with automatic profile selection and organization.
+            </p>
+
+            <div className="form-group">
+              <label>Tags (comma-separated)</label>
+              <input
+                type="text"
+                value={editingTags}
+                onChange={(e) => setEditingTags(e.target.value)}
+                placeholder="e.g., amazon.com, authenticated, buyer, personal"
+              />
+              <span className="form-hint">
+                Common tag types: domain (amazon.com), auth status (authenticated), permissions (buyer, read-only), purpose (personal, pool)
+              </span>
+            </div>
+
+            <div className="alert alert-info">
+              <strong>Tag Examples:</strong>
+              <ul style={{ marginTop: '0.5rem', marginLeft: '1.5rem' }}>
+                <li><strong>Domain:</strong> amazon.com, google.com, github.com</li>
+                <li><strong>Auth:</strong> authenticated, unauthenticated</li>
+                <li><strong>Permission:</strong> buyer, read-only, admin</li>
+                <li><strong>Purpose:</strong> personal, pool, testing, production</li>
+              </ul>
+            </div>
+
+            <div className="dialog-actions">
+              <button onClick={() => setShowEditTagsDialog(false)} className="btn-secondary">
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateTags}
+                className="btn-primary"
+              >
+                Save Tags
+              </button>
+            </div>
           </div>
         </div>
       )}

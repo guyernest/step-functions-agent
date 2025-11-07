@@ -2,6 +2,7 @@
   "name": "Tag-Based Profile Example",
   "description": "Demonstrates tag-based profile resolution for flexible profile matching",
   "starting_page": "https://www.google.com",
+  "abort_on_error": false,
   "session": {
     "required_tags": ["google.com", "authenticated"],
     "allow_temp_profile": true
