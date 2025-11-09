@@ -194,7 +194,8 @@ def main():
         description=f"E2B code execution tool for {environment} environment"
     )
     e2b_tool.add_dependency(shared_infrastructure_stack)
-    
+    e2b_tool.add_dependency(shared_llm_stack)
+
     # Google Maps Tool - provides location-based services
     google_maps_tool = GoogleMapsToolStack(
         app,
