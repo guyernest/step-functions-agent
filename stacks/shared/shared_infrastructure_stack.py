@@ -38,6 +38,9 @@ class SharedInfrastructureStack(Stack):
         # Create DynamoDB template registry
         self._create_template_registry()
 
+        # Create DynamoDB LLM models registry
+        self._create_llm_models_registry()
+
         # Create template renderer Lambda
         self._create_template_renderer_lambda()
 
@@ -151,6 +154,46 @@ class SharedInfrastructureStack(Stack):
             ),
             sort_key=dynamodb.Attribute(
                 name="updated_at",
+                type=dynamodb.AttributeType.STRING
+            )
+        )
+
+    def _create_llm_models_registry(self):
+        """Create DynamoDB table for LLM models registry
+
+        This table stores information about available LLM models including:
+        - Provider (anthropic, openai, bedrock, google)
+        - Model ID and display name
+        - Pricing information (input/output tokens)
+        - Capabilities (tools, vision support)
+        - Status and default selection
+        """
+        table_name = f"LLMModels-{self.env_name}"
+
+        self.llm_models_table = dynamodb.Table(
+            self,
+            "LLMModelsRegistry",
+            table_name=table_name,
+            partition_key=dynamodb.Attribute(
+                name="pk",  # Format: "provider#model_id"
+                type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.DESTROY,  # TODO: Change for production
+            point_in_time_recovery=True,
+            stream=dynamodb.StreamViewType.NEW_AND_OLD_IMAGES
+        )
+
+        # Global Secondary Index: Models by Provider
+        # Allows querying all models for a specific provider
+        self.llm_models_table.add_global_secondary_index(
+            index_name="provider-index",
+            partition_key=dynamodb.Attribute(
+                name="provider",
+                type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="is_active",  # String: "true" or "false"
                 type=dynamodb.AttributeType.STRING
             )
         )
@@ -511,7 +554,25 @@ def handler(event, context):
             export_name=NamingConventions.stack_export_name("TableStreamArn", "ToolRegistry", self.env_name),
             description="Stream ARN of the tool registry DynamoDB table"
         )
-        
+
+        # Export LLM Models table name
+        CfnOutput(
+            self,
+            "LLMModelsTableName",
+            value=self.llm_models_table.table_name,
+            export_name=f"LLMModelsTableName-{self.env_name}",
+            description="Name of the LLM models registry DynamoDB table"
+        )
+
+        # Export LLM Models table ARN
+        CfnOutput(
+            self,
+            "LLMModelsTableArn",
+            value=self.llm_models_table.table_arn,
+            export_name=f"LLMModelsTableArn-{self.env_name}",
+            description="ARN of the LLM models registry DynamoDB table"
+        )
+
         # Export consolidated tool secrets ARN
         CfnOutput(
             self,
