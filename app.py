@@ -55,6 +55,7 @@ from stacks.agents.test_automation_remote_agent_unified_llm_stack import TestAut
 from stacks.agents.browser_automation_agent_unified_llm_stack import BrowserAutomationAgentUnifiedLLMStack
 from stacks.agents.broadband_agent_unified_llm_stack import BroadbandAgentUnifiedLLMStack
 from stacks.agents.broadband_checker_structured_stack import BroadbandCheckerStructuredStack
+from stacks.agents.broadband_availability_bt_wholesale_stack import BroadbandAvailabilityBtWholesaleStack
 from stacks.agents.travel_time_checker_structured_stack import TravelTimeCheckerStructuredStack
 from stacks.agents.browser_automation_structured_stack import BrowserAutomationStructuredStack
 from stacks.shared.structured_output_infrastructure_stack import StructuredOutputInfrastructureStack
@@ -455,6 +456,19 @@ def main():
     broadband_checker.add_dependency(agent_registry_stack)
     broadband_checker.add_dependency(shared_infrastructure_stack)  # For ToolRegistry
     broadband_checker.add_dependency(agentcore_browser_tools)  # For browser tool
+
+    # BT Wholesale Broadband Availability Agent - Schema-driven with template support
+    bt_wholesale_agent = BroadbandAvailabilityBtWholesaleStack(
+        app,
+        f"BroadbandAvailabilityBtWholesaleStack-{environment}",
+        env_name=environment,
+        env=env,
+        description=f"Schema-driven BT Wholesale broadband availability checker with template support for {environment} environment"
+    )
+    bt_wholesale_agent.add_dependency(shared_llm_stack)
+    bt_wholesale_agent.add_dependency(agent_registry_stack)
+    bt_wholesale_agent.add_dependency(shared_infrastructure_stack)  # For TemplateRegistry and ToolRegistry
+    bt_wholesale_agent.add_dependency(browser_remote_tool)  # For browser_remote tool
 
     # Travel Time Checker with Structured Output - using unified LLM generator pattern
     travel_time_checker = TravelTimeCheckerStructuredStack(

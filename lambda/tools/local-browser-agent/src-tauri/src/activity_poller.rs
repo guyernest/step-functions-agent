@@ -71,6 +71,11 @@ impl ActivityPoller {
     /// Start polling for tasks
     pub async fn start_polling(&self) -> Result<()> {
         info!("Starting Activity polling loop...");
+        info!("Configuration:");
+        info!("  Activity ARN: {}", self.config.activity_arn);
+        info!("  AWS Profile: {}", self.config.aws_profile);
+        info!("  Worker Name: local-browser-agent");
+        info!("  Heartbeat Interval: {}s", self.config.heartbeat_interval);
 
         loop {
             // Update status
@@ -101,7 +106,33 @@ impl ActivityPoller {
                     debug!("No task available, continuing polling...");
                 }
                 Err(e) => {
+                    // Error already logged in poll_for_task with details
                     error!("Error polling for task: {}", e);
+
+                    // Provide troubleshooting hints based on common errors
+                    let error_str = e.to_string();
+                    if error_str.contains("AccessDenied") || error_str.contains("UnauthorizedOperation") {
+                        error!("TROUBLESHOOTING: This is a permission error. Check that:");
+                        error!("  1. Your AWS credentials have 'states:GetActivityTask' permission");
+                        error!("  2. The IAM policy allows access to this Activity ARN");
+                        error!("  3. The AWS profile '{}' has the correct permissions", self.config.aws_profile);
+                    } else if error_str.contains("InvalidArn") || error_str.contains("does not exist") {
+                        error!("TROUBLESHOOTING: The Activity ARN appears to be invalid or doesn't exist:");
+                        error!("  1. Verify the Activity ARN in your configuration");
+                        error!("  2. Ensure the Activity exists in the AWS region");
+                        error!("  3. Check the ARN format matches: arn:aws:states:region:account:activity:name");
+                    } else if error_str.contains("timeout") || error_str.contains("timed out") {
+                        error!("TROUBLESHOOTING: Network timeout error:");
+                        error!("  1. Check your internet connection");
+                        error!("  2. Verify AWS region is reachable");
+                        error!("  3. Check firewall/proxy settings");
+                    } else if error_str.contains("NoCredentials") || error_str.contains("CredentialsNotFound") {
+                        error!("TROUBLESHOOTING: AWS credentials not found:");
+                        error!("  1. Check that AWS profile '{}' exists in ~/.aws/credentials", self.config.aws_profile);
+                        error!("  2. Run 'aws configure --profile {}' to set up credentials", self.config.aws_profile);
+                        error!("  3. Or use 'assume {}' if using assume role", self.config.aws_profile);
+                    }
+
                     *self.status.write() = PollerStatus::Error(e.to_string());
 
                     // Wait before retrying
@@ -121,7 +152,26 @@ impl ActivityPoller {
             .worker_name("local-browser-agent")
             .send()
             .await
-            .context("Failed to poll for activity task")?;
+            .map_err(|e| {
+                // Extract detailed error information from AWS SDK
+                let error_msg = if let Some(service_err) = e.as_service_error() {
+                    // Get the error code and message from the service error
+                    format!("AWS Step Functions error: {} - {}",
+                        service_err.meta().code().unwrap_or("Unknown"),
+                        service_err.meta().message().unwrap_or("No message"))
+                } else {
+                    // Network, timeout, or other SDK errors
+                    format!("SDK error: {}", e)
+                };
+
+                // Log the detailed error
+                error!("Failed to poll for activity task: {}", error_msg);
+                error!("  Activity ARN: {}", self.config.activity_arn);
+                error!("  AWS Profile: {}", self.config.aws_profile);
+
+                // Return anyhow error with details
+                anyhow::anyhow!("{}", error_msg)
+            })?;
 
         // Check if we got a task (following local-agent pattern)
         if let (Some(task_token), Some(input)) = (response.task_token(), response.input()) {

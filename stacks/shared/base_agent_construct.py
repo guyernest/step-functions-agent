@@ -87,6 +87,7 @@ class BaseAgentConstruct(Construct):
             "parameters": self.agent_spec.get("parameters", {}),
             "metadata": self.agent_spec.get("metadata", {}),
             "structured_output": self.agent_spec.get("structured_output"),  # Add structured_output field
+            "template_config": self.agent_spec.get("template_config"),  # Add template_config field
             "state_machine_arn": self.agent_spec.get("state_machine_arn"),  # Add state machine ARN
             "environment": self.agent_spec.get("environment", self.env_name),  # Add environment
             "deployment_env": self.env_name,
@@ -115,6 +116,12 @@ class BaseAgentConstruct(Construct):
                 agent_spec_for_dynamo["structured_output"] = json.dumps(complete_agent_spec["structured_output"])
             else:
                 agent_spec_for_dynamo["structured_output"] = complete_agent_spec["structured_output"]
+        if "template_config" in complete_agent_spec:
+            # template_config is already a JSON string from the agent stack
+            if not isinstance(complete_agent_spec["template_config"], str):
+                agent_spec_for_dynamo["template_config"] = json.dumps(complete_agent_spec["template_config"])
+            else:
+                agent_spec_for_dynamo["template_config"] = complete_agent_spec["template_config"]
         
         # Create the custom resource for direct DynamoDB registration
         cr.AwsCustomResource(
