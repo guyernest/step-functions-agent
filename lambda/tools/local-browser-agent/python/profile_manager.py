@@ -235,9 +235,9 @@ class ProfileManager:
             if matched_profiles:
                 selected_profile = matched_profiles[0]  # Most recently used
                 if verbose:
-                    profile_path = self.get_profile_path(selected_profile['name'])
-                    abs_profile_path = os.path.abspath(profile_path)
-                    profile_exists = os.path.exists(abs_profile_path)
+                    profile_path = selected_profile.get('user_data_dir', '')
+                    abs_profile_path = os.path.abspath(profile_path) if profile_path else 'N/A'
+                    profile_exists = os.path.exists(abs_profile_path) if profile_path else False
 
                     print(
                         f"✓ Resolved profile by tags: '{selected_profile['name']}' "

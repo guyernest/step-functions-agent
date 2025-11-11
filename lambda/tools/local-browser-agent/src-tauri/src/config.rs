@@ -165,23 +165,33 @@ impl Config {
     fn fix_browser_channel(&mut self) {
         #[cfg(target_os = "windows")]
         {
-            if let Some(ref channel) = self.browser_channel {
-                if channel == "chrome" || channel == "chromium" {
+            match &self.browser_channel {
+                None => {
+                    log::info!("ℹ Config missing browser_channel, setting to 'msedge' for Windows");
+                    self.browser_channel = Some("msedge".to_string());
+                }
+                Some(channel) if channel == "chrome" || channel == "chromium" => {
                     log::warn!("⚠ Config has '{}' on Windows, auto-correcting to 'msedge'", channel);
                     log::warn!("  Reason: Browser profiles are typically set up for Edge on Windows");
                     self.browser_channel = Some("msedge".to_string());
                 }
+                _ => {} // Already correct
             }
         }
 
         #[cfg(not(target_os = "windows"))]
         {
-            if let Some(ref channel) = self.browser_channel {
-                if channel == "msedge" {
+            match &self.browser_channel {
+                None => {
+                    log::info!("ℹ Config missing browser_channel, setting to 'chrome' for non-Windows");
+                    self.browser_channel = Some("chrome".to_string());
+                }
+                Some(channel) if channel == "msedge" => {
                     log::warn!("⚠ Config has 'msedge' on non-Windows, auto-correcting to 'chrome'");
                     log::warn!("  Reason: Edge is not typically available on macOS/Linux");
                     self.browser_channel = Some("chrome".to_string());
                 }
+                _ => {} // Already correct
             }
         }
     }
