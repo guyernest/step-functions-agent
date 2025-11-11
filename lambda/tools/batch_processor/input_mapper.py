@@ -83,6 +83,10 @@ def lambda_handler(event, context):
     # Default to transform action
     try:
         row = event['row']
+        # Strip BOM from all column names in the row
+        # BOM (\ufeff) appears at the start of CSV files saved with UTF-8 encoding from Excel/Windows
+        row = {key.lstrip('\ufeff'): value for key, value in row.items()}
+
         # Support both mapping_config (old) and input_mapping (new state machine format)
         mapping = event.get('mapping_config') or event.get('input_mapping', {})
         target = event.get('target', {})
@@ -148,6 +152,10 @@ def create_natural_language_input(row: Dict[str, Any], mapping: Dict[str, Any]) 
             "data": {...raw row data...}
         }
     """
+    # Strip BOM from all column names in the row
+    # BOM (\ufeff) appears at the start of CSV files saved with UTF-8 encoding from Excel/Windows
+    cleaned_row = {key.lstrip('\ufeff'): value for key, value in row.items()}
+
     # Determine which columns to include
     include_columns = []
     exclude_columns = mapping.get('exclude_columns', [])
@@ -165,28 +173,28 @@ def create_natural_language_input(row: Dict[str, Any], mapping: Dict[str, Any]) 
 
     # 3. Default: include all columns from row
     if not include_columns:
-        include_columns = [col for col in row.keys() if col not in exclude_columns]
+        include_columns = [col for col in cleaned_row.keys() if col not in exclude_columns]
 
-    # Build natural language prompt
+    # Build natural language prompt using cleaned column names
     prompt_parts = []
     for col in include_columns:
-        if col in row and row[col]:
+        if col in cleaned_row and cleaned_row[col]:
             # Make it human-readable:
             # - Replace underscores with spaces
             # - Title case the column name
             # Format: "Column Name: value"
             readable_name = col.replace('_', ' ').title()
-            value = str(row[col]).strip()
+            value = str(cleaned_row[col]).strip()
             prompt_parts.append(f"{readable_name}: {value}")
 
     # Join with periods for natural language flow
-    prompt = ". ".join(prompt_parts) if prompt_parts else json.dumps(row)
+    prompt = ". ".join(prompt_parts) if prompt_parts else json.dumps(cleaned_row)
 
     logger.info(f"Created natural language prompt: {prompt}")
 
     return {
         "prompt": prompt,
-        "data": row  # Keep raw data for debugging/traceability
+        "data": cleaned_row  # Use cleaned data for consistency
     }
 
 def apply_concat(row: Dict[str, Any], config: Dict[str, Any]) -> str:
