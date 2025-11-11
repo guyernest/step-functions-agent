@@ -322,6 +322,7 @@ pub struct ConfigData {
     pub nova_act_api_key: Option<String>,
     pub headless: bool,
     pub heartbeat_interval: u64,
+    pub browser_channel: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

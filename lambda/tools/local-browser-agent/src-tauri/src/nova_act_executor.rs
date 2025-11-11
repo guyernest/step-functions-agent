@@ -241,10 +241,17 @@ impl NovaActExecutor {
             // Add record_video (always true for Activity pattern)
             obj.insert("record_video".to_string(), json!(true));
 
-            // Add browser_channel if configured
-            if let Some(ref browser_channel) = self.config.browser_channel {
-                obj.insert("browser_channel".to_string(), json!(browser_channel));
-            }
+            // Add browser_channel - always provide a value, using platform default if not configured
+            let browser_channel = self.config.browser_channel.as_ref()
+                .map(|s| s.as_str())
+                .unwrap_or_else(|| {
+                    #[cfg(target_os = "windows")]
+                    { "msedge" }
+                    #[cfg(not(target_os = "windows"))]
+                    { "chrome" }
+                });
+            obj.insert("browser_channel".to_string(), json!(browser_channel));
+            debug!("Using browser_channel: {}", browser_channel);
 
             // Detect command type based on input structure
             if !obj.contains_key("command_type") {
