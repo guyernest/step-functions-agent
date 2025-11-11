@@ -19,7 +19,7 @@
         "validation": "{% $states.result %}",
         "input_mapping": "{% $states.input.input_mapping %}",
         "output_mapping": "{% $states.input.output_mapping %}",
-        "fileProcessingId": "{% $states.input.fileProcessingId %}"
+        "fileProcessingId": "{% $states.input.fileProcessingId ? $states.input.fileProcessingId : 'unknown' %}"
       },
       "Next": "CheckValidation"
     },
