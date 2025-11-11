@@ -113,6 +113,19 @@ impl Config {
         Ok(config)
     }
 
+    /// Save configuration to YAML file
+    pub fn save_to_file(&self, path: &PathBuf) -> Result<()> {
+        let yaml = serde_yaml::to_string(self)
+            .context("Failed to serialize config to YAML")?;
+
+        std::fs::write(path, yaml)
+            .context(format!("Failed to write config file: {}", path.display()))?;
+
+        log::info!("✓ Configuration saved to: {}", path.display());
+
+        Ok(())
+    }
+
     /// Validate configuration for activity polling
     /// This is stricter than basic validation - requires all fields for polling to work
     pub fn validate_for_polling(&self) -> Result<()> {
@@ -133,6 +146,78 @@ impl Config {
         }
 
         Ok(())
+    }
+
+    /// Validate and auto-fix configuration issues
+    /// This method fixes common configuration problems automatically
+    pub fn validate_and_fix(&mut self) {
+        // Fix browser channel for platform
+        self.fix_browser_channel();
+
+        // Fix S3 bucket name if using old format
+        self.fix_s3_bucket_name();
+
+        // Log configuration for debugging
+        self.log_configuration();
+    }
+
+    /// Fix browser channel to match platform
+    fn fix_browser_channel(&mut self) {
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(ref channel) = self.browser_channel {
+                if channel == "chrome" || channel == "chromium" {
+                    log::warn!("⚠ Config has '{}' on Windows, auto-correcting to 'msedge'", channel);
+                    log::warn!("  Reason: Browser profiles are typically set up for Edge on Windows");
+                    self.browser_channel = Some("msedge".to_string());
+                }
+            }
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            if let Some(ref channel) = self.browser_channel {
+                if channel == "msedge" {
+                    log::warn!("⚠ Config has 'msedge' on non-Windows, auto-correcting to 'chrome'");
+                    log::warn!("  Reason: Edge is not typically available on macOS/Linux");
+                    self.browser_channel = Some("chrome".to_string());
+                }
+            }
+        }
+    }
+
+    /// Fix S3 bucket name if using old/incorrect format
+    fn fix_s3_bucket_name(&mut self) {
+        // Check for old bucket name pattern
+        if self.s3_bucket.starts_with("nova-act-browser-results") {
+            let old_name = self.s3_bucket.clone();
+            // Extract account ID from old name
+            if let Some(account_id) = old_name.split('-').last() {
+                let new_name = format!("browser-agent-recordings-prod-{}", account_id);
+                log::warn!("⚠ S3 bucket name is using old format, auto-correcting");
+                log::warn!("  Old: {}", old_name);
+                log::warn!("  New: {}", new_name);
+                self.s3_bucket = new_name;
+            }
+        }
+    }
+
+    /// Log configuration with absolute paths for debugging
+    fn log_configuration(&self) {
+        log::info!("═══ Configuration ═══");
+        log::info!("Activity ARN: {}", if self.activity_arn.is_empty() { "(not set)" } else { &self.activity_arn });
+        log::info!("AWS Profile: {}", self.aws_profile);
+        log::info!("AWS Region: {}", self.aws_region.as_deref().unwrap_or("(use profile default)"));
+        log::info!("S3 Bucket: {}", if self.s3_bucket.is_empty() { "(not set)" } else { &self.s3_bucket });
+        log::info!("Browser Channel: {}", self.browser_channel.as_deref().unwrap_or("(platform default)"));
+        log::info!("Headless Mode: {}", self.headless);
+        log::info!("Heartbeat Interval: {}s", self.heartbeat_interval);
+
+        if let Some(ref user_data_dir) = self.user_data_dir {
+            log::info!("User Data Dir: {}", user_data_dir.display());
+        }
+
+        log::info!("═════════════════════");
     }
 
     /// Basic validation - just ensures critical fields are valid

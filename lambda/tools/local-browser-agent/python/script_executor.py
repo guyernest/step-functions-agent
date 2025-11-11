@@ -228,15 +228,28 @@ class ScriptExecutor:
             # Track active user_data_dir for validation steps
             self._active_user_data_dir = profile_user_data_dir
 
-            # Log comprehensive session startup information
+            # Log comprehensive session startup information with absolute paths
             print(f"[INFO] Starting browser session with:", file=sys.stderr)
             print(f"  - Script: {name}", file=sys.stderr)
             print(f"  - Profile: {profile_name}", file=sys.stderr)
-            print(f"  - Profile Path: {profile_user_data_dir}", file=sys.stderr)
+
+            # Log absolute path for profile
+            abs_profile_path = os.path.abspath(profile_user_data_dir) if profile_user_data_dir else "N/A"
+            profile_exists = os.path.exists(abs_profile_path) if profile_user_data_dir else False
+            print(f"  - Profile Path (absolute): {abs_profile_path}", file=sys.stderr)
+            print(f"  - Profile Exists: {'✓' if profile_exists else '✗'}", file=sys.stderr)
+
             print(f"  - Headless Mode: {nova_act_kwargs['headless']}", file=sys.stderr)
             print(f"  - Clone Profile: {clone_user_data_dir}", file=sys.stderr)
             print(f"  - Starting Page: {starting_page}", file=sys.stderr)
             print(f"  - Record Video: {self.record_video}", file=sys.stderr)
+
+            # Log S3 bucket with validation
+            if self.s3_bucket:
+                print(f"  - S3 Bucket: {self.s3_bucket.strip()}", file=sys.stderr)
+            else:
+                print(f"  - S3 Bucket: (not configured)", file=sys.stderr)
+
             print(f"  - Max Steps per Action: {self.max_steps}", file=sys.stderr)
             print(f"  - Timeout per Action: {self.timeout}s", file=sys.stderr)
             print(f"  - Navigation Timeout: {nova_act_kwargs.get('go_to_url_timeout', 'default')}s", file=sys.stderr)

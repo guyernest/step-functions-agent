@@ -39,8 +39,16 @@ async fn main() -> Result<()> {
         Config::from_file(&path).map(|c| (c, path))
     });
 
-    let (config, poller, session_manager) = if let Ok((cfg, path)) = config_result {
+    let (config, poller, session_manager) = if let Ok((mut cfg, path)) = config_result {
         info!("Configuration loaded from: {}", path.display());
+
+        // Validate and auto-fix configuration issues
+        cfg.validate_and_fix();
+
+        // Save fixed configuration back to file
+        if let Err(e) = cfg.save_to_file(&path) {
+            warn!("Failed to save auto-corrected config: {}", e);
+        }
 
         let config = Arc::new(cfg);
         let session_manager = Arc::new(RwLock::new(SessionManager::new()));
