@@ -18,7 +18,8 @@
       "Assign": {
         "validation": "{% $states.result %}",
         "input_mapping": "{% $states.input.input_mapping %}",
-        "output_mapping": "{% $states.input.output_mapping %}"
+        "output_mapping": "{% $states.input.output_mapping %}",
+        "fileProcessingId": "{% $states.input.fileProcessingId %}"
       },
       "Next": "CheckValidation"
     },
@@ -31,6 +32,34 @@
       "Default": "ValidationFailed"
     },
     "ValidationFailed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Arguments": {
+        "TopicArn": "TOPIC_ARN_PLACEHOLDER",
+        "Subject": "Batch Processing Failed - Validation Error",
+        "Message": "{% 'Batch processing failed during validation.\\n\\n' & 'Execution ID: ' & $states.context.Execution.Name & '\\n' & 'Error: Input validation failed\\n' & 'Cause: Check that output_mapping.structured_output_fields is provided and agent has structured output enabled.\\n\\n' & 'CSV S3 URI: ' & $states.input.csv_s3_uri & '\\n' & 'Started: ' & $states.context.Execution.StartTime %}",
+        "MessageAttributes": {
+          "execution_id": {
+            "DataType": "String",
+            "StringValue": "{% $states.context.Execution.Name %}"
+          },
+          "status": {
+            "DataType": "String",
+            "StringValue": "FAILED"
+          },
+          "fileProcessingId": {
+            "DataType": "String",
+            "StringValue": "{% $fileProcessingId %}"
+          },
+          "errorMessage": {
+            "DataType": "String",
+            "StringValue": "Validation failed: output_mapping.structured_output_fields required"
+          }
+        }
+      },
+      "Next": "ValidationFailedState"
+    },
+    "ValidationFailedState": {
       "Type": "Fail",
       "Error": "ValidationError",
       "Cause": "Input validation failed. Check that output_mapping.structured_output_fields is provided and agent has structured output enabled."
@@ -49,6 +78,13 @@
       "Assign": {
         "csv_data": "{% $states.result %}"
       },
+      "Catch": [{
+        "ErrorEquals": ["States.ALL"],
+        "Assign": {
+          "error_info": "{% $states.errorOutput %}"
+        },
+        "Next": "ProcessingFailed"
+      }],
       "Next": "ProcessCSV"
     },
     "ProcessCSV": {
@@ -169,6 +205,13 @@
       "Assign": {
         "final_output": "{% $states.result %}"
       },
+      "Catch": [{
+        "ErrorEquals": ["States.ALL"],
+        "Assign": {
+          "error_info": "{% $states.errorOutput %}"
+        },
+        "Next": "ProcessingFailed"
+      }],
       "Next": "PublishNotification"
     },
     "PublishNotification": {
@@ -177,7 +220,7 @@
       "Arguments": {
         "TopicArn": "TOPIC_ARN_PLACEHOLDER",
         "Subject": "Batch Processing Completed",
-        "Message": "{% 'Batch processing completed successfully.\\n\\n' & 'Execution ID: ' & $states.context.Execution.Name & '\\n' & 'Target Agent: ' & $validation.Payload.target.name & '\\n' & 'Rows Processed: ' & $string($final_output.Payload.total_rows) & '\\n' & 'Rows Successful: ' & $string($final_output.Payload.successful_rows) & '\\n' & 'Rows Failed: ' & $string($final_output.Payload.failed_rows) & '\\n' & 'Result S3 URI: ' & $final_output.Payload.result_s3_uri & '\\n' & 'Duration: ' & $string($final_output.Payload.duration_seconds) & ' seconds\\n\\n' & 'Started: ' & $states.context.Execution.StartTime & '\\n' & 'Completed: ' & $final_output.Payload.completed_at %}",
+        "Message": "{% 'Batch processing completed successfully.\\n\\n' & 'Execution ID: ' & $states.context.Execution.Name & '\\n' & 'Target Agent: ' & $validation.Payload.target.name & '\\n' & 'Rows Processed: ' & $string($final_output.Payload.total_rows) & '\\n' & 'Rows Successful: ' & $string($final_output.Payload.successful_rows) & '\\n' & 'Rows Failed: ' & $string($final_output.Payload.failed_rows) & '\\n' & 'Success Rate: ' & $final_output.Payload.success_rate & '\\n' & 'Result S3 URI: ' & $final_output.Payload.output_location & '\\n\\n' & 'Started: ' & $states.context.Execution.StartTime & '\\n' & 'Completed: ' & $final_output.Payload.timestamp %}",
         "MessageAttributes": {
           "execution_id": {
             "DataType": "String",
@@ -186,6 +229,14 @@
           "status": {
             "DataType": "String",
             "StringValue": "SUCCESS"
+          },
+          "fileProcessingId": {
+            "DataType": "String",
+            "StringValue": "{% $fileProcessingId %}"
+          },
+          "resultFileKey": {
+            "DataType": "String",
+            "StringValue": "{% $final_output.Payload.output_key %}"
           },
           "target_agent": {
             "DataType": "String",
@@ -212,6 +263,39 @@
     "Success": {
       "Type": "Succeed",
       "Output": "{% $final_output.Payload %}"
+    },
+    "ProcessingFailed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Arguments": {
+        "TopicArn": "TOPIC_ARN_PLACEHOLDER",
+        "Subject": "Batch Processing Failed",
+        "Message": "{% 'Batch processing failed.\\n\\n' & 'Execution ID: ' & $states.context.Execution.Name & '\\n' & 'Error: ' & $error_info.Error & '\\n' & 'Cause: ' & $error_info.Cause & '\\n\\n' & 'CSV S3 URI: ' & $states.input.csv_s3_uri & '\\n' & 'Started: ' & $states.context.Execution.StartTime %}",
+        "MessageAttributes": {
+          "execution_id": {
+            "DataType": "String",
+            "StringValue": "{% $states.context.Execution.Name %}"
+          },
+          "status": {
+            "DataType": "String",
+            "StringValue": "FAILED"
+          },
+          "fileProcessingId": {
+            "DataType": "String",
+            "StringValue": "{% $fileProcessingId %}"
+          },
+          "errorMessage": {
+            "DataType": "String",
+            "StringValue": "{% $error_info.Cause %}"
+          }
+        }
+      },
+      "Next": "ProcessingFailedState"
+    },
+    "ProcessingFailedState": {
+      "Type": "Fail",
+      "Error": "ProcessingError",
+      "Cause": "Batch processing failed. Check logs for details."
     }
   }
 }
