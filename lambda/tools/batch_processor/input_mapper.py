@@ -1,8 +1,24 @@
 """
 Input Mapper Lambda
-Transforms CSV row data into agent/tool input format
-Validates agents have structured output capability
-Used within Distributed Map iterator
+Transforms CSV row data into agent/tool input format using natural language approach.
+
+Key Design Principles:
+1. AGENTS get NATURAL LANGUAGE prompts (flexible, robust)
+   - Extraction agent (LLM) parses natural language into template schema
+   - Works with ANY CSV format (split fields, combined fields, varied naming)
+   - Example: "Address: 40 Withers Place. Postcode: CB7 5LG"
+
+2. TOOLS get STRUCTURED input (precise field mapping)
+   - Direct column mappings and transformations
+   - Used for non-LLM Lambda functions
+
+Architecture:
+- Batch Orchestrator Agent: Analyzes CSV structure ONCE, creates mapping config
+- Input Mapper Lambda: Applies mapping to EACH row (not an LLM)
+- Extraction Agent: Receives natural language, parses to template schema (LLM)
+
+Used within Step Functions Distributed Map iterator for parallel processing.
+Validates agents have structured output capability.
 """
 
 import json
@@ -67,37 +83,38 @@ def lambda_handler(event, context):
     # Default to transform action
     try:
         row = event['row']
-        mapping = event.get('mapping_config', {})
+        # Support both mapping_config (old) and input_mapping (new state machine format)
+        mapping = event.get('mapping_config') or event.get('input_mapping', {})
         target = event.get('target', {})
-        
-        # Build the input for the agent/tool
-        result = {}
-        
-        # Apply column mappings
-        column_mappings = mapping.get('column_mappings', {})
-        for csv_col, target_field in column_mappings.items():
-            if csv_col in row:
-                result[target_field] = row[csv_col]
-        
-        # Add static values
-        static_values = mapping.get('static_values', {})
-        result.update(static_values)
-        
-        # Apply transformations
-        transformations = mapping.get('transformations', {})
-        for field_name, transform_config in transformations.items():
-            transform_type = transform_config.get('type')
-            config = transform_config.get('config', {})
-            
-            if transform_type == 'concat':
-                result[field_name] = apply_concat(row, config)
-            elif transform_type == 'template':
-                result[field_name] = apply_template(row, config)
-            elif transform_type == 'jsonpath':
-                result[field_name] = apply_jsonpath(row, config)
-        
+
         # Format based on target type
         if target.get('type') == 'tool':
+            # For tools, build structured input
+            result = {}
+
+            # Apply column mappings
+            column_mappings = mapping.get('column_mappings', {})
+            for csv_col, target_field in column_mappings.items():
+                if csv_col in row:
+                    result[target_field] = row[csv_col]
+
+            # Add static values
+            static_values = mapping.get('static_values', {})
+            result.update(static_values)
+
+            # Apply transformations
+            transformations = mapping.get('transformations', {})
+            for field_name, transform_config in transformations.items():
+                transform_type = transform_config.get('type')
+                config = transform_config.get('config', {})
+
+                if transform_type == 'concat':
+                    result[field_name] = apply_concat(row, config)
+                elif transform_type == 'template':
+                    result[field_name] = apply_template(row, config)
+                elif transform_type == 'jsonpath':
+                    result[field_name] = apply_jsonpath(row, config)
+
             # Wrap in tool invocation format
             return {
                 "name": target.get('name'),
@@ -105,31 +122,72 @@ def lambda_handler(event, context):
                 "id": f"batch_{context.request_id}"
             }
         else:
-            # For agents, create a simple prompt if mapping is simple
-            # Check if we have a simple address/postcode mapping
-            if 'address' in mapping and isinstance(mapping['address'], str):
-                # Simple string mapping - concatenate the field values
-                prompt_parts = []
-                for field in ['address', 'postcode']:
-                    if field in mapping and mapping[field] in row:
-                        prompt_parts.append(row[mapping[field]])
-
-                prompt = ', '.join(prompt_parts) if prompt_parts else str(row)
-            elif result:
-                # Use the mapped result
-                prompt = json.dumps(result) if isinstance(result, dict) else str(result)
-            else:
-                # Fallback: use the raw row data
-                prompt = json.dumps(row) if isinstance(row, dict) else str(row)
-
-            return {
-                "prompt": prompt,
-                "data": result if result else row
-            }
+            # For agents, use NATURAL LANGUAGE approach
+            # Create descriptive prompt that extraction agent can parse
+            return create_natural_language_input(row, mapping)
             
     except Exception as e:
         logger.error(f"Error mapping input: {str(e)}")
         raise
+
+def create_natural_language_input(row: Dict[str, Any], mapping: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Create natural language prompt from CSV row for agent processing.
+
+    This is the GENERIC, FLEXIBLE approach that works with ANY CSV format.
+    The extraction agent (LLM) will intelligently parse the natural language
+    into whatever structured format the template requires.
+
+    Args:
+        row: CSV row data as dict
+        mapping: Input mapping config (can be simple dict or config object)
+
+    Returns:
+        {
+            "prompt": "Address: 1 Church view, London. Postcode: DN12 1RH",
+            "data": {...raw row data...}
+        }
+    """
+    # Determine which columns to include
+    include_columns = []
+    exclude_columns = mapping.get('exclude_columns', [])
+
+    # Handle different mapping formats:
+    # 1. New format: {"include_columns": ["col1", "col2"], "exclude_columns": [...]}
+    if 'include_columns' in mapping:
+        include_columns = mapping['include_columns']
+
+    # 2. Simple dict format: {"address": "address", "postcode": "postcode"}
+    #    This comes from the state machine when batch orchestrator creates simple mappings
+    elif isinstance(mapping, dict) and mapping and not any(k in mapping for k in ['column_mappings', 'transformations', 'static_values']):
+        # It's a simple key-value mapping - use the keys (CSV column names)
+        include_columns = list(mapping.keys())
+
+    # 3. Default: include all columns from row
+    if not include_columns:
+        include_columns = [col for col in row.keys() if col not in exclude_columns]
+
+    # Build natural language prompt
+    prompt_parts = []
+    for col in include_columns:
+        if col in row and row[col]:
+            # Make it human-readable:
+            # - Replace underscores with spaces
+            # - Title case the column name
+            # Format: "Column Name: value"
+            readable_name = col.replace('_', ' ').title()
+            value = str(row[col]).strip()
+            prompt_parts.append(f"{readable_name}: {value}")
+
+    # Join with periods for natural language flow
+    prompt = ". ".join(prompt_parts) if prompt_parts else json.dumps(row)
+
+    logger.info(f"Created natural language prompt: {prompt}")
+
+    return {
+        "prompt": prompt,
+        "data": row  # Keep raw data for debugging/traceability
+    }
 
 def apply_concat(row: Dict[str, Any], config: Dict[str, Any]) -> str:
     """Concatenate multiple columns"""
@@ -412,37 +470,104 @@ def load_csv_data(event: Dict[str, Any], context) -> Dict[str, Any]:
             'message': f'Failed to load CSV: {e}'
         }
 
-# Test case
+# Test cases
 if __name__ == "__main__":
-    test_event = {
+    # Mock context
+    mock_context = type('Context', (), {'request_id': 'test123'})
+
+    print("=" * 80)
+    print("TEST 1: State Machine Format (Simple Mapping)")
+    print("=" * 80)
+    test_event_1 = {
+        "row": {
+            "address": "40 Withers Place, Fordham, Ely, Cambridgeshire",
+            "postcode": "CB7 5LG"
+        },
+        "input_mapping": {
+            "address": "address",
+            "postcode": "postcode"
+        },
+        "target": {
+            "type": "agent",
+            "name": "broadband-availability-bt-wholesale",
+            "arn": "arn:aws:states:eu-west-1:923154134542:stateMachine:broadband-availability-bt-wholesale-prod"
+        }
+    }
+    print("\nInput:")
+    print(json.dumps(test_event_1, indent=2))
+    print("\nOutput:")
+    result_1 = lambda_handler(test_event_1, mock_context)
+    print(json.dumps(result_1, indent=2))
+    print("\nExpected prompt: 'Address: 40 Withers Place, Fordham, Ely, Cambridgeshire. Postcode: CB7 5LG'")
+
+    print("\n" + "=" * 80)
+    print("TEST 2: Include Columns Format")
+    print("=" * 80)
+    test_event_2 = {
+        "row": {
+            "building_number": "1",
+            "street": "Church view, London",
+            "postcode": "DN12 1RH",
+            "internal_id": "12345"
+        },
+        "input_mapping": {
+            "include_columns": ["building_number", "street", "postcode"]
+        },
+        "target": {
+            "type": "agent",
+            "name": "broadband-availability-bt-wholesale"
+        }
+    }
+    print("\nInput:")
+    print(json.dumps(test_event_2, indent=2))
+    print("\nOutput:")
+    result_2 = lambda_handler(test_event_2, mock_context)
+    print(json.dumps(result_2, indent=2))
+    print("\nNote: 'internal_id' should be excluded")
+
+    print("\n" + "=" * 80)
+    print("TEST 3: All Columns (No Mapping)")
+    print("=" * 80)
+    test_event_3 = {
+        "row": {
+            "full_address": "1 Church view, London",
+            "postcode": "DN12 1RH"
+        },
+        "input_mapping": {},
+        "target": {
+            "type": "agent",
+            "name": "broadband-availability-bt-wholesale"
+        }
+    }
+    print("\nInput:")
+    print(json.dumps(test_event_3, indent=2))
+    print("\nOutput:")
+    result_3 = lambda_handler(test_event_3, mock_context)
+    print(json.dumps(result_3, indent=2))
+    print("\nNote: All columns included when no mapping specified")
+
+    print("\n" + "=" * 80)
+    print("TEST 4: Tool Target (Structured Format)")
+    print("=" * 80)
+    test_event_4 = {
         "row": {
             "customer_id": "123",
-            "first_name": "John",
-            "last_name": "Doe",
             "query": "Help with billing"
         },
         "mapping_config": {
             "column_mappings": {
                 "customer_id": "customerId",
                 "query": "userQuery"
-            },
-            "transformations": {
-                "fullName": {
-                    "type": "concat",
-                    "config": {
-                        "columns": ["first_name", "last_name"],
-                        "separator": " "
-                    }
-                }
             }
         },
         "target": {
-            "type": "agent",
-            "name": "support_agent"
+            "type": "tool",
+            "name": "support_tool"
         }
     }
-    
-    print("Test input:")
-    print(json.dumps(test_event, indent=2))
-    print("\nWould produce:")
-    print(json.dumps(lambda_handler(test_event, type('Context', (), {'request_id': 'test123'})), indent=2))
+    print("\nInput:")
+    print(json.dumps(test_event_4, indent=2))
+    print("\nOutput:")
+    result_4 = lambda_handler(test_event_4, mock_context)
+    print(json.dumps(result_4, indent=2))
+    print("\nNote: Tools still get structured format, not natural language")

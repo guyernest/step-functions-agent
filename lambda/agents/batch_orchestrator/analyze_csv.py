@@ -46,7 +46,7 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
 
         # Get the CSV file from S3
         response = s3_client.get_object(Bucket=bucket, Key=key)
-        content = response['Body'].read().decode('utf-8')
+        content = response['Body'].read().decode('utf-8-sig')  # Strip BOM to match csv_loader
 
         # Parse CSV
         csv_reader = csv.DictReader(io.StringIO(content))
