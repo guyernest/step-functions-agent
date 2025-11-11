@@ -120,6 +120,7 @@ pub async fn load_config_from_file(path: String) -> Result<ConfigData, String> {
         nova_act_api_key: config.nova_act_api_key,
         headless: config.headless,
         heartbeat_interval: config.heartbeat_interval,
+        browser_channel: config.browser_channel,
     })
 }
 
