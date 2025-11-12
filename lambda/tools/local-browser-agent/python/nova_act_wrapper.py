@@ -706,6 +706,14 @@ def setup_login(command: Dict[str, Any]) -> Dict[str, Any]:
             print(f"[INFO] User interrupted login setup", file=sys.stderr)
             sys.stderr.flush()
             raise
+        except SystemExit as sys_exit:
+            print(f"[WARNING] Browser process exited early (exit code: {sys_exit.code})", file=sys.stderr)
+            print(f"[WARNING] This may happen if:", file=sys.stderr)
+            print(f"  - User closed the browser window", file=sys.stderr)
+            print(f"  - Browser crashed due to compatibility issues", file=sys.stderr)
+            print(f"  - Profile directory has permission problems", file=sys.stderr)
+            sys.stderr.flush()
+            raise
         except Exception as nova_error:
             print(f"[ERROR] Failed to create/use NovaAct instance: {str(nova_error)}", file=sys.stderr)
             print(f"[ERROR] Error type: {type(nova_error).__name__}", file=sys.stderr)
