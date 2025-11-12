@@ -250,10 +250,8 @@ pub async fn create_profile(
     cmd.arg("--description").arg(&description);
 
     if !tags.is_empty() {
-        cmd.arg("--tags");
-        for tag in tags {
-            cmd.arg(&tag);
-        }
+        // Python script expects tags as a single space-separated string
+        cmd.arg("--tags").arg(tags.join(" "));
     }
 
     if !auto_login_sites.is_empty() {
