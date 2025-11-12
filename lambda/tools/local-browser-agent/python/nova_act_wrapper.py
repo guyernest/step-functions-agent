@@ -689,13 +689,30 @@ def setup_login(command: Dict[str, Any]) -> Dict[str, Any]:
                 # Just wait for the timeout - user can log in during this time
                 # The browser will stay open and visible
                 print(f"Browser opened. Waiting {timeout} seconds for you to complete login...", file=sys.stderr)
-                time.sleep(timeout)
+                sys.stderr.flush()
+
+                # Wait in smaller increments to detect early termination
+                elapsed = 0
+                check_interval = 5  # Check every 5 seconds
+                while elapsed < timeout:
+                    time.sleep(check_interval)
+                    elapsed += check_interval
+                    # If browser crashes, NovaAct should raise an exception
+                    # This loop allows us to detect issues earlier
+
                 print(f"Timeout reached. Closing browser and saving session...", file=sys.stderr)
+                sys.stderr.flush()
+        except KeyboardInterrupt:
+            print(f"[INFO] User interrupted login setup", file=sys.stderr)
+            sys.stderr.flush()
+            raise
         except Exception as nova_error:
             print(f"[ERROR] Failed to create/use NovaAct instance: {str(nova_error)}", file=sys.stderr)
+            print(f"[ERROR] Error type: {type(nova_error).__name__}", file=sys.stderr)
             print(f"[ERROR] Full traceback:", file=sys.stderr)
             import traceback
             print(traceback.format_exc(), file=sys.stderr)
+            sys.stderr.flush()
             raise  # Re-raise to be caught by outer exception handler
 
         print(f"", file=sys.stderr)

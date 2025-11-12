@@ -34,7 +34,7 @@ class ProfileManager:
         Args:
             profiles_dir: Directory to store profiles (default: ./browser-profiles)
         """
-        self.profiles_dir = Path(profiles_dir or "./browser-profiles")
+        self.profiles_dir = Path(profiles_dir or "./browser-profiles").resolve()
         self.profiles_dir.mkdir(parents=True, exist_ok=True)
 
         # Metadata file tracks all profiles
