@@ -379,6 +379,7 @@ mod tests {
             headless: false,
             heartbeat_interval: 60,
             aws_region: None,
+            browser_channel: Some("chrome".to_string()),
         });
 
         let executor = NovaActExecutor {
@@ -397,6 +398,7 @@ mod tests {
         assert_eq!(command.get("aws_profile").unwrap(), "browser-agent");
         assert_eq!(command.get("record_video").unwrap(), true);
         assert_eq!(command.get("command_type").unwrap(), "act");
+        assert_eq!(command.get("browser_channel").unwrap(), "chrome");
     }
 
     #[tokio::test]
@@ -411,6 +413,7 @@ mod tests {
             headless: false,
             heartbeat_interval: 60,
             aws_region: None,
+            browser_channel: Some("chrome".to_string()),
         });
 
         let executor = NovaActExecutor {
@@ -439,5 +442,41 @@ mod tests {
         assert_eq!(command.get("aws_profile").unwrap(), "browser-agent");
         assert_eq!(command.get("record_video").unwrap(), true);
         assert_eq!(command.get("command_type").unwrap(), "script");
+        assert_eq!(command.get("browser_channel").unwrap(), "chrome");
+    }
+
+    #[tokio::test]
+    async fn test_browser_channel_defaults_to_platform() {
+        // Test that browser_channel defaults to platform default when None
+        let config = Arc::new(Config {
+            activity_arn: "arn:aws:states:us-west-2:123456789:activity:browser-remote-prod".to_string(),
+            aws_profile: "browser-agent".to_string(),
+            s3_bucket: "browser-agent-recordings-prod".to_string(),
+            user_data_dir: None,
+            ui_port: 3000,
+            nova_act_api_key: Some("test-key".to_string()),
+            headless: false,
+            heartbeat_interval: 60,
+            aws_region: None,
+            browser_channel: None,  // Not configured
+        });
+
+        let executor = NovaActExecutor {
+            config,
+            python_wrapper_path: PathBuf::from("/tmp/nova_act_wrapper.py"),
+        };
+
+        let input = json!({
+            "prompt": "Test prompt"
+        });
+
+        let command = executor.build_command(input).unwrap();
+
+        // Should default to platform-specific browser
+        #[cfg(target_os = "windows")]
+        assert_eq!(command.get("browser_channel").unwrap(), "msedge");
+
+        #[cfg(not(target_os = "windows"))]
+        assert_eq!(command.get("browser_channel").unwrap(), "chrome");
     }
 }

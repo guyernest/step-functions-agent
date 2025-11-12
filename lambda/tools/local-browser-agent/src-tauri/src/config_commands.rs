@@ -1114,3 +1114,75 @@ pub async fn setup_python_environment() -> Result<SetupResult, String> {
         steps,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    /// Test that Config and ConfigData have matching fields
+    /// This prevents compilation errors when adding new fields to one but not the other
+    #[test]
+    fn test_config_and_config_data_field_compatibility() {
+        // Create a Config instance with all fields
+        let config = Config {
+            activity_arn: "test-arn".to_string(),
+            aws_profile: "test-profile".to_string(),
+            aws_region: Some("us-west-2".to_string()),
+            s3_bucket: "test-bucket".to_string(),
+            user_data_dir: Some(PathBuf::from("/tmp/test")),
+            ui_port: 3000,
+            nova_act_api_key: Some("test-key".to_string()),
+            headless: false,
+            heartbeat_interval: 60,
+            browser_channel: Some("chrome".to_string()),
+        };
+
+        // Convert to ConfigData - this will fail to compile if fields don't match
+        let config_data = ConfigData {
+            activity_arn: config.activity_arn.clone(),
+            aws_profile: config.aws_profile.clone(),
+            aws_region: config.aws_region.clone(),
+            s3_bucket: config.s3_bucket.clone(),
+            user_data_dir: config.user_data_dir.map(|p| p.to_string_lossy().to_string()),
+            ui_port: config.ui_port,
+            nova_act_api_key: config.nova_act_api_key.clone(),
+            headless: config.headless,
+            heartbeat_interval: config.heartbeat_interval,
+            browser_channel: config.browser_channel.clone(),
+        };
+
+        // Verify all fields are transferred correctly
+        assert_eq!(config_data.activity_arn, config.activity_arn);
+        assert_eq!(config_data.aws_profile, config.aws_profile);
+        assert_eq!(config_data.aws_region, config.aws_region);
+        assert_eq!(config_data.s3_bucket, config.s3_bucket);
+        assert_eq!(config_data.ui_port, config.ui_port);
+        assert_eq!(config_data.nova_act_api_key, config.nova_act_api_key);
+        assert_eq!(config_data.headless, config.headless);
+        assert_eq!(config_data.heartbeat_interval, config.heartbeat_interval);
+        assert_eq!(config_data.browser_channel, config.browser_channel);
+    }
+
+    #[test]
+    fn test_config_data_serialization_includes_browser_channel() {
+        let config_data = ConfigData {
+            activity_arn: "test-arn".to_string(),
+            aws_profile: "test-profile".to_string(),
+            aws_region: None,
+            s3_bucket: "test-bucket".to_string(),
+            user_data_dir: None,
+            ui_port: 3000,
+            nova_act_api_key: None,
+            headless: false,
+            heartbeat_interval: 60,
+            browser_channel: Some("msedge".to_string()),
+        };
+
+        // Serialize to YAML
+        let yaml = serde_yaml::to_string(&config_data).unwrap();
+
+        // Verify browser_channel is in the output
+        assert!(yaml.contains("browser_channel: msedge"));
+    }
+}
