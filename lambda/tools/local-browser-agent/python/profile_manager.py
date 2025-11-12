@@ -11,6 +11,7 @@ Supports:
 """
 
 import os
+import sys
 import json
 import shutil
 from typing import Dict, Any, List, Optional
@@ -32,9 +33,11 @@ class ProfileManager:
         Initialize profile manager
 
         Args:
-            profiles_dir: Directory to store profiles (default: ./browser-profiles)
+            profiles_dir: Directory to store profiles.
+                Defaults to an OS-specific per-user directory while preserving
+                backward compatibility with ./browser-profiles if it already exists.
         """
-        self.profiles_dir = Path(profiles_dir or "./browser-profiles").resolve()
+        self.profiles_dir = self._resolve_default_profiles_dir(profiles_dir)
         self.profiles_dir.mkdir(parents=True, exist_ok=True)
 
         # Metadata file tracks all profiles
@@ -56,6 +59,52 @@ class ProfileManager:
         """Save profiles metadata"""
         with open(self.metadata_file, 'w') as f:
             json.dump(self.metadata, f, indent=2)
+
+    @staticmethod
+    def _resolve_default_profiles_dir(explicit: Optional[str]) -> Path:
+        """Resolve the default profiles directory with sensible OS defaults.
+
+        Resolution order (first match wins):
+        1) Explicit argument
+        2) Env var BROWSER_AGENT_PROFILES_DIR
+        3) Existing ./browser-profiles (backward compatibility)
+        4) OS-specific per-user data directory
+
+        Returns absolute Path.
+        """
+        # 1) Explicit argument provided
+        if explicit:
+            return Path(explicit).expanduser().resolve()
+
+        # 2) Environment override
+        env_dir = os.environ.get("BROWSER_AGENT_PROFILES_DIR")
+        if env_dir:
+            return Path(env_dir).expanduser().resolve()
+
+        # 3) Backward compat: existing local folder
+        local_rel = Path("./browser-profiles")
+        if local_rel.exists():
+            return local_rel.resolve()
+
+        # 4) OS-specific default
+        # Windows: %LOCALAPPDATA%\Local Browser Agent\profiles
+        # macOS:   ~/Library/Application Support/Local Browser Agent/profiles
+        # Linux:   ~/.local/share/local-browser-agent/profiles
+        if os.name == "nt":
+            base = os.environ.get("LOCALAPPDATA") or os.environ.get("USERPROFILE")
+            if not base:
+                base = str(Path.home())
+            return Path(base) / "Local Browser Agent" / "profiles"
+
+        # macOS (darwin)
+        if sys.platform == "darwin":
+            return Path.home() / "Library" / "Application Support" / "Local Browser Agent" / "profiles"
+
+        # Linux and others
+        xdg_data_home = os.environ.get("XDG_DATA_HOME")
+        if xdg_data_home:
+            return Path(xdg_data_home) / "local-browser-agent" / "profiles"
+        return Path.home() / ".local" / "share" / "local-browser-agent" / "profiles"
 
     def create_profile(
         self,

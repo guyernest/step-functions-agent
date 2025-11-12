@@ -58,14 +58,38 @@ fn default_browser_channel() -> Option<String> {
 }
 
 impl Config {
-    /// Get the default config directory (~/.local-browser-agent)
-    /// Cross-platform: works on macOS, Windows, and Linux
+    /// Get the default config directory using OS-specific conventions
+    ///
+    /// Uses:
+    /// - Windows: `%LOCALAPPDATA%\Local Browser Agent`
+    /// - macOS: `~/Library/Application Support/Local Browser Agent`
+    /// - Linux: `~/.config/local-browser-agent`
+    ///
+    /// Falls back to `~/.local-browser-agent` if dirs crate fails
     pub fn default_config_dir() -> Result<PathBuf> {
-        let home = std::env::var("HOME")
-            .or_else(|_| std::env::var("USERPROFILE"))
-            .context("Could not determine home directory (HOME or USERPROFILE not set)")?;
+        // Try to use OS-specific config directory via dirs crate
+        let config_dir = if let Some(config_base) = dirs::config_dir() {
+            // Linux: ~/.config/local-browser-agent
+            // macOS/Windows will use data_local_dir below
+            #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+            {
+                config_base.join("local-browser-agent")
+            }
 
-        let config_dir = PathBuf::from(home).join(".local-browser-agent");
+            // macOS and Windows: use data_local_dir for consistency
+            #[cfg(any(target_os = "windows", target_os = "macos"))]
+            {
+                dirs::data_local_dir()
+                    .unwrap_or(config_base)
+                    .join("Local Browser Agent")
+            }
+        } else {
+            // Fallback to legacy path if dirs crate fails
+            let home = std::env::var("HOME")
+                .or_else(|_| std::env::var("USERPROFILE"))
+                .context("Could not determine home directory (HOME or USERPROFILE not set)")?;
+            PathBuf::from(home).join(".local-browser-agent")
+        };
 
         // Create directory if it doesn't exist
         if !config_dir.exists() {

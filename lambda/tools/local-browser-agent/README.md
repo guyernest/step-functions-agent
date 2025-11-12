@@ -577,6 +577,17 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed system architecture, compo
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for AWS infrastructure setup and deployment instructions.
 
+## Resource Locations
+
+- Config file: `~/.local-browser-agent/config.yaml` (Windows uses `%USERPROFILE%\.local-browser-agent\config.yaml`).
+- Browser profiles (default):
+  - Windows: `%LOCALAPPDATA%\Local Browser Agent\profiles`
+  - macOS: `~/Library/Application Support/Local Browser Agent/profiles`
+  - Linux: `~/.local/share/local-browser-agent/profiles`
+  - Legacy fallback: `./browser-profiles` (used if this folder already exists)
+  - Override with env var: `BROWSER_AGENT_PROFILES_DIR`
+- Python venv (packaged): under the app bundle resources (release) or `python/.venv` (dev).
+
 ## Security Considerations
 
 - **Credentials**: Never commit AWS credentials or Nova Act API keys
