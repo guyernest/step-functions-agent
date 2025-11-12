@@ -1,0 +1,82 @@
+{
+  "name": "BT Wholesale Broadband Availability Check",
+  "description": "Check broadband availability for UK addresses using BT Wholesale Broadband Checker",
+  "starting_page": "https://bbactotl.btwholesale.com/bbac-ui/totl/totlSearch/#/ADSL/AddressHome",
+  "abort_on_error": true,
+  "session": {
+    "required_tags": ["btwholesale.com", "authenticated"],
+    "allow_temp_profile": false,
+    "clone_for_parallel": false,
+    "requires_human_login": false,
+    "session_timeout_hours": 24
+  },
+  "steps": [
+    {
+      "action": "act",
+      "prompt": "Look at the current page. IF you see a login form with username and password fields, do these steps in order: (1) Type 'nterizakis' in the username field, (2) Click Next, (3) Wait for password page to load, (4) Verify password field has dots/asterisks, (5) Click Next button. IF you already see the Broadband Availability Checker form with Building Number, Street, PostCode fields, do nothing - you're already on the right page.",
+      "description": "Handle authentication if needed"
+    },
+    {
+      "action": "act",
+      "prompt": "In the Building Number field, type: {{building_number}}\nIn the Street/Road field, type: {{street}}\nIn the PostCode field, type: {{postcode}}\nAfter filling all three fields, click the Submit button.",
+      "description": "Fill address form and submit"
+    },
+    {
+      "action": "act",
+      "prompt": "Check what happened after clicking Submit. IF you see an address selection dropdown with multiple options: (1) Click on the dropdown to open it, (2) Click on the address option that matches '{{building_number}} WITHERS PLACE, FORDHAM, ELY, CB7 5LG', (3) Click the Submit button. IF you already see the broadband availability results page, do nothing - you're on the right page.",
+      "description": "Handle address dropdown selection if needed"
+    },
+    {
+      "action": "act_with_schema",
+      "prompt": "Extract broadband availability information from the results page following these steps:\n\n1. ALWAYS CAPTURE (if visible):\n   - ALK (Access Line Key) - usually displayed near top\n   - Exchange Code - BT exchange identifier\n\n2. CHECK FEATURED PRODUCTS SECTION:\n   Look for a section called 'Featured Products'\n   Search for a row/line containing 'WBC FTTP'\n\n3. IF 'WBC FTTP' IS FOUND:\n   - Set fttp_avail = true\n   - From the WBC FTTP row, capture 'Downstream Line Rate' (this is the SOADSL DSL speed in Mbps)\n   \n   Then navigate to OTHER SECTIONS:\n   \n   a) OTHER OFFERINGS section:\n      - Check if ANY row has 'Service Availability' field = 'Enabled'\n      - If found, set sogea_avail = true, otherwise false\n   \n   b) ONT DETAILS section:\n      - Find the LAST row in this section\n      - Capture: 'Reference' field (this is ont_reference)\n      - Capture: 'ONT Serial Number' field (this is ont_serial_no)\n      - Capture: 'Port Service ID' field (this is port_service_id)\n   \n   c) PREMISE ENVIRONMENT section:\n      - Capture: 'Recommended Minimum SVR NLP' field (this is install_type)\n      - Valid values are typically 'Standard' or 'Premium'\n\n4. IF 'WBC FTTP' IS NOT FOUND:\n   - Set fttp_avail = false\n   - Leave all FTTP-related fields blank (install_type, sogea_avail, soadsl_dsl_speed, ont_reference, ont_serial_no, port_service_id)\n\nIMPORTANT: fttp_avail is REQUIRED and must always be set to true or false based on whether WBC FTTP is present in Featured Products.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "alk": {
+            "type": "string",
+            "description": "Access Line Key identifier (e.g., A00022059784)"
+          },
+          "exchange_code": {
+            "type": "string",
+            "description": "BT exchange code (e.g., CAMBRIDGE)"
+          },
+          "fttp_avail": {
+            "type": "boolean",
+            "description": "Whether WBC FTTP is found in Featured Products section"
+          },
+          "install_type": {
+            "type": "string",
+            "enum": ["Standard", "Premium", "N/A"],
+            "description": "Value from Premise Environment -> Recommended Minimum SVR NLP (only if WBC FTTP found)"
+          },
+          "sogea_avail": {
+            "type": "boolean",
+            "description": "Whether Other Offerings has Service Availability = Enabled (only if WBC FTTP found)"
+          },
+          "soadsl_dsl_speed": {
+            "type": "number",
+            "description": "Downstream Line Rate from WBC FTTP row in Mbps (only if WBC FTTP found)"
+          },
+          "ont_reference": {
+            "type": "string",
+            "description": "Reference field from last row of ONT Details section (only if WBC FTTP found)"
+          },
+          "ont_serial_no": {
+            "type": "string",
+            "description": "ONT Serial Number from last row of ONT Details section (only if WBC FTTP found)"
+          },
+          "port_service_id": {
+            "type": "string",
+            "description": "Port Service ID from last row of ONT Details section (only if WBC FTTP found)"
+          }
+        },
+        "required": ["fttp_avail"]
+      },
+      "description": "Extract structured broadband availability data with FTTP-specific fields"
+    },
+    {
+      "action": "screenshot",
+      "description": "Capture the results page"
+    }
+  ]
+}
