@@ -157,7 +157,13 @@ def execute_act(command: Dict[str, Any]) -> Dict[str, Any]:
     record_video = command.get('record_video', True)
     aws_profile = command.get('aws_profile', 'browser-agent')
     clone_user_data_dir = command.get('clone_user_data_dir')
-    browser_channel = command.get('browser_channel')  # "msedge", "chrome", "chromium"
+
+    # Browser channel: default to msedge on Windows, chrome elsewhere
+    browser_channel = command.get('browser_channel')
+    if not browser_channel:
+        import platform
+        browser_channel = 'msedge' if platform.system() == 'Windows' else 'chrome'
+        print(f"[INFO] No browser_channel specified, defaulting to '{browser_channel}' for {platform.system()}", file=sys.stderr)
 
     # Handle profile configuration using centralized tag-based resolution
     session_config = command.get('session', {})
@@ -236,7 +242,11 @@ def execute_act(command: Dict[str, Any]) -> Dict[str, Any]:
 
         # Add browser channel if specified (for Edge, Chrome, Chromium selection)
         if browser_channel:
+            print(f"[DEBUG] Received browser_channel from Rust: '{browser_channel}'", file=sys.stderr)
             nova_act_kwargs["chrome_channel"] = browser_channel
+            print(f"[DEBUG] Passing chrome_channel to NovaAct: '{nova_act_kwargs['chrome_channel']}'", file=sys.stderr)
+        else:
+            print(f"[DEBUG] No browser_channel received from Rust, NovaAct will use default", file=sys.stderr)
 
         # Add authentication: use API key if available, otherwise use boto_session
         # Nova Act doesn't allow both
@@ -302,6 +312,13 @@ def execute_script(command: Dict[str, Any]) -> Dict[str, Any]:
     try:
         from script_executor import ScriptExecutor
 
+        # Browser channel: default to msedge on Windows, chrome elsewhere
+        browser_channel = command.get('browser_channel')
+        if not browser_channel:
+            import platform
+            browser_channel = 'msedge' if platform.system() == 'Windows' else 'chrome'
+            print(f"[INFO] Script execution - no browser_channel specified, defaulting to '{browser_channel}' for {platform.system()}", file=sys.stderr)
+
         # ScriptExecutor expects the full script structure with steps, session, etc.
         # The command already contains these fields from the template
         executor = ScriptExecutor(
@@ -312,7 +329,8 @@ def execute_script(command: Dict[str, Any]) -> Dict[str, Any]:
             record_video=command.get('record_video', True),
             max_steps=command.get('max_steps', 30),
             timeout=command.get('timeout', 300),
-            nova_act_api_key=os.environ.get('NOVA_ACT_API_KEY')
+            nova_act_api_key=os.environ.get('NOVA_ACT_API_KEY'),
+            browser_channel=browser_channel
         )
 
         return executor.execute_script(command)
@@ -626,7 +644,11 @@ def setup_login(command: Dict[str, Any]) -> Dict[str, Any]:
         # Add browser channel if specified
         browser_channel = command.get('browser_channel')
         if browser_channel:
+            print(f"[DEBUG] Script execution - received browser_channel from Rust: '{browser_channel}'", file=sys.stderr)
             nova_act_kwargs["chrome_channel"] = browser_channel
+            print(f"[DEBUG] Script execution - passing chrome_channel to NovaAct: '{nova_act_kwargs['chrome_channel']}'", file=sys.stderr)
+        else:
+            print(f"[DEBUG] Script execution - no browser_channel received from Rust", file=sys.stderr)
 
         if nova_act_api_key:
             nova_act_kwargs["nova_act_api_key"] = nova_act_api_key
