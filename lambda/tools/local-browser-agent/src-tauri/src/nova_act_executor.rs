@@ -251,7 +251,8 @@ impl NovaActExecutor {
                     { "chrome" }
                 });
             obj.insert("browser_channel".to_string(), json!(browser_channel));
-            debug!("Using browser_channel: {}", browser_channel);
+            info!("→ Passing browser_channel to Python: {} (config value: {:?})",
+                  browser_channel, self.config.browser_channel);
 
             // Detect command type based on input structure
             if !obj.contains_key("command_type") {
