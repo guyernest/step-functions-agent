@@ -4,86 +4,48 @@ This directory contains example Nova Act browser automation scripts that you can
 
 ## Available Examples
 
-### Simple Tests
+### Basic Examples
 
 #### `simple_test_example.json`
-Basic test to verify browser automation is working.
-- Opens a simple webpage
-- Takes a screenshot
-- Validates the environment
-
-#### `wikipedia_search_example.json`
-Search for information on Wikipedia.
-- Navigates to Wikipedia
-- Performs a search
-- Extracts information from results
-- Good first test for navigation and information extraction
-
-### E-commerce Examples
-
-#### `product_search_example.json`
-Search for products on an e-commerce site.
-- Demonstrates search functionality
-- Shows result filtering
-- Extracts product information
-
-#### `search_filter_example.json`
-Advanced search with filters and sorting.
-- Multi-step navigation
-- Form interaction
-- Data extraction from filtered results
-
-### Form Interaction
+Simple test to verify Nova Act is working.
+- Opens Google homepage
+- Extracts page title using schema
+- Good first test to verify environment setup
+- **Use this to verify your installation is working**
 
 #### `form_filling_example.json`
-Demonstrates form filling capabilities.
+Demonstrates comprehensive form filling capabilities.
+- Uses HTTPBin test form for safe practice
 - Input text fields
 - Select dropdowns
 - Checkbox/radio button interaction
-- Form submission
-
-#### `login_check_example.json`
-Test login functionality.
-- Navigate to login page
-- Fill credentials
-- Submit form
-- Verify login success
-
-### Multi-Page Navigation
-
-#### `multi_page_navigation_example.json`
-Navigate across multiple pages.
-- Click links and buttons
-- Wait for page loads
-- Extract data from different pages
-- Maintain session state
+- Form validation and data extraction
+- **Use this to learn form interaction patterns**
 
 #### `information_extraction_example.json`
-Extract structured data from web pages.
-- Navigate to target page
-- Locate specific elements
-- Extract text, attributes, and metadata
-- Return structured JSON
+Extract structured data from web pages using schemas.
+- Demonstrates different extraction patterns
+- Array extraction (lists of items)
+- Boolean extraction (yes/no questions)
+- Nested object extraction
+- Multi-page navigation with data extraction
+- **Use this to learn data extraction techniques**
 
 ### Industry-Specific Examples
 
 #### `bt_broadband_example.json`
-BT broadband availability checker.
-- Navigate to BT Wholesale site
-- Search for address
-- Extract availability information
+BT Wholesale broadband availability checker.
+- Navigate to BT Wholesale public site
+- Fill address search form
+- Handle address selection dropdown
+- Extract structured availability data
+- **Real-world use case demonstration**
 
-#### `script_bt_broadband_test.json`
-Simplified BT broadband test.
-- Quick availability check
-- Demonstrates real-world use case
-
-#### `script_bt_broadband_login_full.json`
-Full BT broadband login and search.
-- Login with credentials
-- Navigate authenticated sections
-- Perform availability check
-- Demonstrates session management
+For production BT Wholesale checks with authentication, see the template system:
+- Template: `templates/broadband_availability_bt_wholesale_v1.0.1.json`
+- Uses browser profiles with saved credentials
+- Handles conditional login flow
+- Extracts comprehensive FTTP/SOGEA data
 
 ## How to Use Examples Locally
 
@@ -105,7 +67,7 @@ cd lambda/tools/local-browser-agent
 
 # Run an example script directly
 python python/script_executor.py \
-  --script examples/wikipedia_search_example.json \
+  --script examples/simple_test_example.json \
   --config config.yaml
 ```
 
@@ -120,29 +82,49 @@ curl -X POST http://localhost:3000/api/execute \
 
 ## Script Structure
 
-All example scripts follow the Nova Act command format:
+All example scripts follow this structure:
 
 ```json
 {
+  "name": "Script Name",
+  "description": "What this script does",
   "starting_page": "https://example.com",
-  "prompt": "Navigate to the homepage and click the search button",
-  "max_steps": 10,
-  "timeout": 60,
-  "user_data_dir": null,
-  "headless": false,
-  "session_id": null
+  "abort_on_error": false,
+  "steps": [
+    {
+      "action": "act",
+      "prompt": "Natural language instruction for what to do",
+      "description": "Brief description of this step"
+    },
+    {
+      "action": "act_with_schema",
+      "prompt": "Extract specific data from the page",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "field_name": {"type": "string"}
+        },
+        "required": ["field_name"]
+      },
+      "description": "Extract structured data"
+    }
+  ]
 }
 ```
 
 ### Key Fields
 
+- **`name`**: Human-readable script name
+- **`description`**: What the script does
 - **`starting_page`**: The URL to start at
-- **`prompt`**: Natural language instruction for what to do
-- **`max_steps`**: Maximum automation steps (default: 10)
-- **`timeout`**: Timeout in seconds (default: 300)
-- **`user_data_dir`**: Chrome profile path (null = temporary profile)
-- **`headless`**: Run browser in headless mode (false = visible)
-- **`session_id`**: Resume existing session (null = new session)
+- **`abort_on_error`**: Stop execution on first error (default: false)
+- **`steps`**: Array of actions to perform
+
+### Step Actions
+
+- **`act`**: Perform browser actions (click, type, navigate)
+- **`act_with_schema`**: Extract structured data using JSON schema
+- **`screenshot`**: Capture screenshot of current page
 
 ## Creating Your Own Examples
 
@@ -150,32 +132,76 @@ All example scripts follow the Nova Act command format:
 
 ```json
 {
+  "name": "My Custom Script",
+  "description": "Brief description of what this does",
   "starting_page": "https://your-target-site.com",
-  "prompt": "Your natural language instruction here",
-  "max_steps": 15,
-  "timeout": 120
+  "abort_on_error": false,
+  "steps": [
+    {
+      "action": "act",
+      "prompt": "Your natural language instruction here",
+      "description": "Step description"
+    }
+  ]
 }
 ```
 
-### Best Practices
+### Best Practices from Nova Act Documentation
 
-1. **Start Simple**: Begin with navigation to a single page
-2. **Clear Instructions**: Write specific, step-by-step prompts
-3. **Set Realistic Limits**:
-   - `max_steps`: 10-20 for simple tasks, 30-50 for complex ones
-   - `timeout`: 60-300 seconds depending on page load times
-4. **Test Without Headless**: Run with `headless: false` first to see what happens
-5. **Use Profiles for Auth**: If the site requires login, create a profile with saved credentials
+1. **Be prescriptive and succinct**: Tell the agent exactly what to do
+   - ❌ "Let's see what routes are available"
+   - ✅ "Navigate to the routes tab"
+
+2. **Break up large acts into smaller ones**: One step per logical action
+   - ❌ One step that searches, filters, and extracts data
+   - ✅ Separate steps for search, filter, and extract
+
+3. **Use numbered steps for multi-action prompts**:
+   ```
+   "IF you see a dropdown: (1) Click to open it, (2) Click the matching option, (3) Click Submit"
+   ```
+
+4. **Handle conditionals explicitly**:
+   ```
+   "IF condition A, do action 1. IF condition B, do action 2."
+   ```
+
+5. **Always use schemas for data extraction**:
+   - Even for simple yes/no, define a boolean schema
+   - Put extraction in its own separate `act_with_schema` step
 
 ### Example: Custom Script
 
 ```json
 {
+  "name": "News Headline Extractor",
+  "description": "Extract top news headlines from Hacker News",
   "starting_page": "https://news.ycombinator.com",
-  "prompt": "Find the top 5 stories on the front page and extract their titles and URLs",
-  "max_steps": 10,
-  "timeout": 60,
-  "headless": false
+  "abort_on_error": false,
+  "steps": [
+    {
+      "action": "act_with_schema",
+      "prompt": "Extract the top 5 story titles and their point counts",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "stories": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {"type": "string"},
+                "points": {"type": "number"}
+              },
+              "required": ["title"]
+            }
+          }
+        },
+        "required": ["stories"]
+      },
+      "description": "Extract headline data"
+    }
+  ]
 }
 ```
 
@@ -186,26 +212,26 @@ All example scripts follow the Nova Act command format:
 **Check**:
 - Is the starting URL accessible?
 - Is your internet connection working?
-- Try increasing `timeout` value
+- Check logs for detailed error messages
 
 ### Script Times Out
 
 **Reasons**:
 - Page takes too long to load
 - Prompt is too complex
-- Max steps too low for the task
+- Navigation getting stuck
 
 **Solutions**:
-- Increase `timeout` and `max_steps`
-- Break complex tasks into smaller scripts
-- Use session_id to chain multiple scripts
+- Break complex tasks into smaller steps
+- Use more prescriptive prompts with numbered steps
+- Check if page requires authentication
 
 ### Bot Detection / CAPTCHA
 
 **Solutions**:
-- Use a real Chrome profile: Set `user_data_dir`
-- Run in non-headless mode: Set `headless: false`
-- Use authenticated profile with saved cookies
+- Use a real Chrome profile with browser history
+- Set up authentication profile using Profile Manager
+- Run in non-headless mode for testing
 - Some sites may require manual intervention
 
 ### "Examples directory not found"
@@ -213,65 +239,44 @@ All example scripts follow the Nova Act command format:
 **Windows**:
 ```powershell
 # Check if examples are bundled
-Test-Path "C:\Program Files\Local Browser Agent\_up_\examples"
+Test-Path "C:\Users\<username>\AppData\Local\Local Browser Agent\_up_\examples"
 ```
 
 **macOS**:
 ```bash
 # Check if examples are bundled
-ls "/Applications/Local Browser Agent.app/Contents/Resources/_up_/examples"
+ls "$HOME/Library/Application Support/Local Browser Agent/_up_/examples"
 ```
 
-If examples are missing, they may not have been included in the build. Reinstall from the latest release.
+If examples are missing, they may not have been included in the build. Check the application bundle or source directory.
 
-## Session Management
+## Browser Profiles for Authentication
 
-For multi-step workflows that require maintaining state:
+For sites requiring login (like BT Wholesale authenticated portal):
 
-### Step 1: Start Session
-```json
-{
-  "command": "start_session",
-  "starting_page": "https://example.com/login",
-  "user_data_dir": "/path/to/profile"
-}
-```
+1. **Create a profile** using Profile Manager
+2. **Manually login** in that profile
+3. **Tag the profile** (e.g., `btwholesale.com`, `authenticated`)
+4. **Use template system** to reference profile by tags
 
-Returns: `{ "session_id": "abc-123" }`
-
-### Step 2: Use Session
-```json
-{
-  "command": "act",
-  "session_id": "abc-123",
-  "prompt": "Navigate to the dashboard"
-}
-```
-
-### Step 3: End Session
-```json
-{
-  "command": "end_session",
-  "session_id": "abc-123"
-}
-```
+See template: `templates/broadband_availability_bt_wholesale_v1.0.1.json` for an example.
 
 ## Testing Before Production
 
-Before using these scripts in AWS Step Functions:
+Before using scripts in AWS Step Functions:
 
 1. ✅ **Test Locally First**: Run via UI or CLI
 2. ✅ **Verify Output**: Check that extracted data is correct
 3. ✅ **Test with Profile**: If site requires auth, test with profile
-4. ✅ **Check Recordings**: Review S3 uploads work correctly
+4. ✅ **Check Recordings**: Review video recordings
 5. ✅ **Optimize Prompts**: Refine instructions for better accuracy
-6. ✅ **Set Appropriate Limits**: Tune `max_steps` and `timeout`
+6. ✅ **Test Edge Cases**: Handle dropdowns, popups, conditional flows
 
-## S3 Recordings
+## Recordings
 
 When running locally, recordings are saved to:
-- **Windows**: `%LOCALAPPDATA%\local-browser-agent\recordings\`
-- **macOS**: `~/Library/Application Support/local-browser-agent/recordings/`
+- **Windows**: `%LOCALAPPDATA%\Local Browser Agent\recordings\`
+- **macOS**: `~/Library/Application Support/Local Browser Agent/recordings/`
 - **Linux**: `~/.local/share/local-browser-agent/recordings/`
 
 When running via Step Functions, recordings are uploaded to the S3 bucket configured in your `config.yaml`.
@@ -279,17 +284,17 @@ When running via Step Functions, recordings are uploaded to the S3 bucket config
 ## Need Help?
 
 - See main [README.md](../README.md) for setup instructions
-- See [IAM_PERMISSIONS.md](../docs/IAM_PERMISSIONS.md) for AWS permissions
+- See Nova Act documentation for prompting best practices
 - Check logs for detailed error messages
-- Create an issue if you find bugs in examples
 
 ## Contributing Examples
 
-Have a useful browser automation script? Consider contributing!
+Have a useful browser automation pattern? Consider adding it:
 
 1. Create a descriptive filename (e.g., `github_issue_search.json`)
-2. Test thoroughly
-3. Add clear comments in the prompt
-4. Submit a pull request
+2. Test thoroughly with multiple runs
+3. Add clear descriptions and comments
+4. Follow Nova Act best practices
+5. Keep it simple and focused on one pattern
 
 Your example could help others learn browser automation!
