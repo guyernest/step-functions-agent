@@ -200,8 +200,9 @@ pub async fn list_profiles(tags: Option<Vec<String>>) -> Result<ProfileListRespo
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
+    // Log stderr if present (stdout for list is expected JSON, don't log it)
     if !stderr.is_empty() {
-        log::debug!("profile_manager stderr: {}", stderr);
+        log::info!("profile_manager stderr:\n{}", stderr);
     }
 
     if output.status.success() {
@@ -211,7 +212,15 @@ pub async fn list_profiles(tags: Option<Vec<String>>) -> Result<ProfileListRespo
 
         Ok(response)
     } else {
-        Err(format!("Failed to list profiles: {}", stderr))
+        // Include both stdout and stderr in error message for debugging
+        let error_msg = if !stderr.is_empty() {
+            stderr.to_string()
+        } else if !stdout.is_empty() {
+            stdout.to_string()
+        } else {
+            "Unknown error (no output)".to_string()
+        };
+        Err(format!("Failed to list profiles: {}", error_msg))
     }
 }
 
@@ -263,17 +272,29 @@ pub async fn create_profile(
         .await
         .map_err(|e| format!("Failed to execute profile_manager.py: {}", e))?;
 
-    let _stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
+    // Log both stdout and stderr at info level to diagnose issues
+    if !stdout.is_empty() {
+        log::info!("profile_manager stdout:\n{}", stdout);
+    }
     if !stderr.is_empty() {
-        log::debug!("profile_manager stderr: {}", stderr);
+        log::info!("profile_manager stderr:\n{}", stderr);
     }
 
     if output.status.success() {
         Ok(format!("Profile '{}' created successfully", profile_name))
     } else {
-        Err(format!("Failed to create profile: {}", stderr))
+        // Include both stdout and stderr in error message for debugging
+        let error_msg = if !stderr.is_empty() {
+            stderr.to_string()
+        } else if !stdout.is_empty() {
+            stdout.to_string()
+        } else {
+            "Unknown error (no output)".to_string()
+        };
+        Err(format!("Failed to create profile: {}", error_msg))
     }
 }
 
@@ -309,17 +330,29 @@ pub async fn delete_profile(
         .await
         .map_err(|e| format!("Failed to execute profile_manager.py: {}", e))?;
 
-    let _stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
+    // Log both stdout and stderr at info level to diagnose issues
+    if !stdout.is_empty() {
+        log::info!("profile_manager stdout:\n{}", stdout);
+    }
     if !stderr.is_empty() {
-        log::debug!("profile_manager stderr: {}", stderr);
+        log::info!("profile_manager stderr:\n{}", stderr);
     }
 
     if output.status.success() {
         Ok(format!("Profile '{}' deleted successfully", profile_name))
     } else {
-        Err(format!("Failed to delete profile: {}", stderr))
+        // Include both stdout and stderr in error message for debugging
+        let error_msg = if !stderr.is_empty() {
+            stderr.to_string()
+        } else if !stdout.is_empty() {
+            stdout.to_string()
+        } else {
+            "Unknown error (no output)".to_string()
+        };
+        Err(format!("Failed to delete profile: {}", error_msg))
     }
 }
 
@@ -353,17 +386,29 @@ pub async fn update_profile_tags(
         .await
         .map_err(|e| format!("Failed to execute profile_manager.py: {}", e))?;
 
-    let _stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
+    // Log both stdout and stderr at info level to diagnose issues
+    if !stdout.is_empty() {
+        log::info!("profile_manager stdout:\n{}", stdout);
+    }
     if !stderr.is_empty() {
-        log::debug!("profile_manager stderr: {}", stderr);
+        log::info!("profile_manager stderr:\n{}", stderr);
     }
 
     if output.status.success() {
         Ok(format!("Tags updated successfully for profile '{}'", profile_name))
     } else {
-        Err(format!("Failed to update tags: {}", stderr))
+        // Include both stdout and stderr in error message for debugging
+        let error_msg = if !stderr.is_empty() {
+            stderr.to_string()
+        } else if !stdout.is_empty() {
+            stdout.to_string()
+        } else {
+            "Unknown error (no output)".to_string()
+        };
+        Err(format!("Failed to update tags: {}", error_msg))
     }
 }
 
