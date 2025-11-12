@@ -672,12 +672,31 @@ def setup_login(command: Dict[str, Any]) -> Dict[str, Any]:
 
         # Open browser for manual login
         import time
-        with NovaAct(**nova_act_kwargs) as nova:
-            # Just wait for the timeout - user can log in during this time
-            # The browser will stay open and visible
-            print(f"Browser opened. Waiting {timeout} seconds for you to complete login...", file=sys.stderr)
-            time.sleep(timeout)
-            print(f"Timeout reached. Closing browser and saving session...", file=sys.stderr)
+        print(f"[DEBUG] About to create NovaAct instance with kwargs:", file=sys.stderr)
+        print(f"[DEBUG]   user_data_dir: {nova_act_kwargs.get('user_data_dir')}", file=sys.stderr)
+        print(f"[DEBUG]   chrome_channel: {nova_act_kwargs.get('chrome_channel', 'NOT SET')}", file=sys.stderr)
+        print(f"[DEBUG]   headless: {nova_act_kwargs.get('headless')}", file=sys.stderr)
+        print(f"[DEBUG]   starting_page: {nova_act_kwargs.get('starting_page')}", file=sys.stderr)
+        sys.stderr.flush()
+
+        print(f"[DEBUG] Creating NovaAct instance...", file=sys.stderr)
+        sys.stderr.flush()
+
+        try:
+            with NovaAct(**nova_act_kwargs) as nova:
+                print(f"[DEBUG] NovaAct instance created successfully!", file=sys.stderr)
+                sys.stderr.flush()
+                # Just wait for the timeout - user can log in during this time
+                # The browser will stay open and visible
+                print(f"Browser opened. Waiting {timeout} seconds for you to complete login...", file=sys.stderr)
+                time.sleep(timeout)
+                print(f"Timeout reached. Closing browser and saving session...", file=sys.stderr)
+        except Exception as nova_error:
+            print(f"[ERROR] Failed to create/use NovaAct instance: {str(nova_error)}", file=sys.stderr)
+            print(f"[ERROR] Full traceback:", file=sys.stderr)
+            import traceback
+            print(traceback.format_exc(), file=sys.stderr)
+            raise  # Re-raise to be caught by outer exception handler
 
         print(f"", file=sys.stderr)
         print(f"✓ Profile '{profile_name}' login setup completed!", file=sys.stderr)
