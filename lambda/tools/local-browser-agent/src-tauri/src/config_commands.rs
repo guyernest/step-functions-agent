@@ -5,6 +5,7 @@ use anyhow::Result;
 use log::{info, error};
 
 use crate::config::Config;
+use crate::paths::AppPaths;
 
 /// List available AWS profiles by reading both credentials and config files
 /// Automatically handles platform-specific paths (Windows: %USERPROFILE%\.aws, Unix: ~/.aws)
@@ -368,49 +369,33 @@ pub async fn check_python_environment() -> Result<SetupResult, String> {
 
     let mut steps = Vec::new();
 
-    // Step 1: Find app path (platform-aware)
-    let exe_path = std::env::current_exe()
-        .map_err(|e| format!("Failed to get executable path: {}", e))?;
+    // Step 1: Initialize AppPaths
+    let paths = AppPaths::new()
+        .map_err(|e| format!("Failed to initialize app paths: {}", e))?;
 
-    info!("Current executable: {}", exe_path.display());
-
-    // Determine app root based on platform
-    let app_path = if os == "macos" {
-        exe_path.parent()
-            .and_then(|p| p.parent())
-            .and_then(|p| p.parent())
-            .ok_or_else(|| "Failed to determine app bundle path on macOS".to_string())?
-            .to_path_buf()
-    } else if os == "windows" {
-        exe_path.parent()
-            .ok_or_else(|| "Failed to determine app directory on Windows".to_string())?
-            .to_path_buf()
-    } else {
-        exe_path.parent()
-            .ok_or_else(|| "Failed to determine app directory on Linux".to_string())?
-            .to_path_buf()
-    };
-
-    info!("App root directory: {}", app_path.display());
+    info!("App root directory: {}", paths.install_dir.display());
 
     steps.push(SetupStep {
         name: "Locate application".to_string(),
         status: "success".to_string(),
-        details: format!("Found app at {}", app_path.display()),
+        details: format!("Found app at {}", paths.install_dir.display()),
     });
 
-    // Step 2: Check Python directory (platform-aware)
-    let python_dir = if os == "macos" {
-        app_path.join("Contents").join("Resources").join("_up_").join("python")
-    } else {
-        // Windows/Linux: Try multiple possible locations
+    // Step 2: Check Python scripts directory (read-only)
+    let python_scripts_dir = paths.python_scripts_dir();
+
+    info!("Checking for Python scripts at: {}", python_scripts_dir.display());
+
+    let python_dir = if !python_scripts_dir.exists() {
+        info!("Python scripts not found at: {}", python_scripts_dir.display());
+        // Try legacy location for backward compatibility
         let candidates = vec![
-            app_path.join("python"),
-            app_path.join("resources").join("python"),
-            app_path.join("_up_").join("python"),
+            paths.install_dir.join("python"),
+            paths.install_dir.join("resources").join("python"),
+            paths.install_dir.join("_up_").join("python"),
         ];
 
-        info!("Searching for Python directory in Windows/Linux...");
+        info!("Searching for Python directory in fallback locations...");
         let mut found_path = None;
         for candidate in &candidates {
             info!("  Trying: {}", candidate.display());
@@ -423,7 +408,9 @@ pub async fn check_python_environment() -> Result<SetupResult, String> {
             }
         }
 
-        found_path.unwrap_or_else(|| app_path.join("python"))
+        found_path.unwrap_or_else(|| paths.install_dir.join("python"))
+    } else {
+        python_scripts_dir
     };
 
     info!("Looking for Python scripts at: {}", python_dir.display());
@@ -445,23 +432,25 @@ pub async fn check_python_environment() -> Result<SetupResult, String> {
     steps.push(SetupStep {
         name: "Locate Python scripts".to_string(),
         status: "success".to_string(),
-        details: format!("Found Python scripts at {}", python_dir.display()),
+        details: format!("Found Python scripts at {} (read-only)", python_dir.display()),
     });
 
-    // Step 3: Check venv (platform-aware)
+    // Step 3: Check venv in LOCALAPPDATA (writable location)
+    let venv_dir = paths.python_env_dir();
     let venv_python = if os == "windows" {
-        python_dir.join(".venv").join("Scripts").join("python.exe")
+        venv_dir.join("Scripts").join("python.exe")
     } else {
-        python_dir.join(".venv").join("bin").join("python")
+        venv_dir.join("bin").join("python")
     };
 
-    info!("Checking for Python at: {}", venv_python.display());
+    info!("Checking for Python venv at: {}", venv_dir.display());
+    info!("Checking for Python executable at: {}", venv_python.display());
 
     if !venv_python.exists() {
         steps.push(SetupStep {
             name: "Check Python virtual environment".to_string(),
             status: "failed".to_string(),
-            details: format!("Python venv not found at {}. Please run setup.", venv_python.display()),
+            details: format!("Python venv not found at {}. Please run setup.", venv_dir.display()),
         });
 
         return Ok(SetupResult {
@@ -474,7 +463,7 @@ pub async fn check_python_environment() -> Result<SetupResult, String> {
     steps.push(SetupStep {
         name: "Check Python virtual environment".to_string(),
         status: "success".to_string(),
-        details: format!("Python venv found at {}", venv_python.display()),
+        details: format!("Python venv found at {}", venv_dir.display()),
     });
 
     // Step 4: Check if Python executable works
@@ -580,49 +569,29 @@ pub async fn setup_python_environment() -> Result<SetupResult, String> {
 
     let mut steps = Vec::new();
 
-    // Step 1: Find app bundle path (platform-aware)
-    let exe_path = std::env::current_exe()
-        .map_err(|e| format!("Failed to get executable path: {}", e))?;
+    // Step 1: Initialize AppPaths for platform-aware path detection
+    let paths = AppPaths::new()
+        .map_err(|e| format!("Failed to initialize app paths: {}", e))?;
 
-    info!("Current executable: {}", exe_path.display());
+    // Log all paths for debugging
+    paths.log_paths();
 
-    // Determine app root based on platform
-    let app_path = if os == "macos" {
-        // On macOS: exe is at /Applications/Local Browser Agent.app/Contents/MacOS/Local Browser Agent
-        // We need: /Applications/Local Browser Agent.app
-        exe_path.parent()  // Contents/MacOS
-            .and_then(|p| p.parent())  // Contents
-            .and_then(|p| p.parent())  // Local Browser Agent.app
-            .ok_or_else(|| "Failed to determine app bundle path on macOS".to_string())?
-            .to_path_buf()
-    } else if os == "windows" {
-        // On Windows: exe is at C:\Program Files\Local Browser Agent\Local Browser Agent.exe
-        // We need: C:\Program Files\Local Browser Agent
-        exe_path.parent()
-            .ok_or_else(|| "Failed to determine app directory on Windows".to_string())?
-            .to_path_buf()
-    } else {
-        // Linux: similar to Windows
-        exe_path.parent()
-            .ok_or_else(|| "Failed to determine app directory on Linux".to_string())?
-            .to_path_buf()
-    };
-
-    info!("App root directory: {}", app_path.display());
-
-    if !app_path.exists() {
-        error!("App path not found: {}", app_path.display());
+    // Ensure user directories exist (LOCALAPPDATA on Windows, etc.)
+    if let Err(e) = paths.ensure_user_dirs_exist() {
+        error!("Failed to create user directories: {}", e);
         return Ok(SetupResult {
             success: false,
-            message: format!("Application directory not found: {}", app_path.display()),
+            message: format!("Failed to create necessary directories: {}", e),
             steps,
         });
     }
 
     steps.push(SetupStep {
-        name: "Locate application".to_string(),
+        name: "Locate application and create directories".to_string(),
         status: "success".to_string(),
-        details: format!("Found app at: {}", app_path.display()),
+        details: format!("App at: {}\nUser data at: {}",
+            paths.install_dir.display(),
+            paths.user_data_dir.display()),
     });
 
     // Step 2: Find or install uv
@@ -844,42 +813,17 @@ pub async fn setup_python_environment() -> Result<SetupResult, String> {
         uv_command
     };
 
-    // Step 3: Locate Python scripts directory (platform-aware)
-    let python_dir = if os == "macos" {
-        // macOS: inside .app bundle at Contents/Resources/_up_/python
-        app_path.join("Contents").join("Resources").join("_up_").join("python")
-    } else {
-        // Windows/Linux: Try multiple possible locations
-        let candidates = vec![
-            app_path.join("python"),
-            app_path.join("resources").join("python"),
-            app_path.join("_up_").join("python"),
-        ];
+    // Step 3: Locate Python scripts directory (read-only in install dir)
+    let python_scripts_dir = paths.python_scripts_dir();
 
-        info!("Searching for Python directory in Windows/Linux...");
-        let mut found_path = None;
-        for candidate in &candidates {
-            info!("  Trying: {}", candidate.display());
-            if candidate.exists() {
-                info!("  ✓ Found at: {}", candidate.display());
-                found_path = Some(candidate.clone());
-                break;
-            } else {
-                info!("  ✗ Not found");
-            }
-        }
+    info!("Looking for Python scripts at: {}", python_scripts_dir.display());
 
-        found_path.unwrap_or_else(|| app_path.join("python"))
-    };
-
-    info!("Looking for Python scripts at: {}", python_dir.display());
-
-    if !python_dir.exists() {
-        error!("Python directory not found at {:?}", python_dir);
+    if !python_scripts_dir.exists() {
+        error!("Python directory not found at {:?}", python_scripts_dir);
         steps.push(SetupStep {
             name: "Locate Python scripts".to_string(),
             status: "failed".to_string(),
-            details: format!("Python scripts not found at {}. App may not be properly installed.", python_dir.display()),
+            details: format!("Python scripts not found at {}. App may not be properly installed.", python_scripts_dir.display()),
         });
 
         return Ok(SetupResult {
@@ -892,17 +836,22 @@ pub async fn setup_python_environment() -> Result<SetupResult, String> {
     steps.push(SetupStep {
         name: "Locate Python scripts".to_string(),
         status: "success".to_string(),
-        details: format!("Python scripts found at {}", python_dir.display()),
+        details: format!("Python scripts found at {} (read-only)", python_scripts_dir.display()),
     });
 
-    info!("Creating Python venv at {:?}", python_dir);
+    // Step 4: Create Python venv in LOCALAPPDATA (writable location)
+    let venv_dir = paths.python_env_dir();
+    let uv_cache = paths.uv_cache_dir();
+
+    info!("Creating Python venv at: {}", venv_dir.display());
+    info!("UV cache directory: {}", uv_cache.display());
 
     let venv_result = Command::new(&uv_command)
         .arg("venv")
         .arg("--python")
         .arg("3.11")
-        .arg(".venv")
-        .current_dir(&python_dir)
+        .arg(&venv_dir)  // Full path to venv in LOCALAPPDATA
+        .env("UV_CACHE_DIR", &uv_cache)  // Set UV cache to LOCALAPPDATA
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output();
@@ -943,22 +892,25 @@ pub async fn setup_python_environment() -> Result<SetupResult, String> {
     steps.push(SetupStep {
         name: "Create Python virtual environment".to_string(),
         status: "success".to_string(),
-        details: "Python 3.11 venv created".to_string(),
+        details: format!("Python 3.11 venv created at {}", venv_dir.display()),
     });
 
-    // Step 4: Install dependencies
+    // Step 5: Install dependencies from requirements.txt
     info!("Installing Python dependencies from requirements.txt");
 
-    // Platform-aware venv Python path
+    // Platform-aware venv Python path (in LOCALAPPDATA)
     let venv_python = if os == "windows" {
-        python_dir.join(".venv").join("Scripts").join("python.exe")
+        venv_dir.join("Scripts").join("python.exe")
     } else {
-        python_dir.join(".venv").join("bin").join("python")
+        venv_dir.join("bin").join("python")
     };
 
     info!("Using Python at: {}", venv_python.display());
 
-    let requirements_txt = python_dir.join("requirements.txt");
+    // Read requirements.txt from install dir (read-only)
+    let requirements_txt = python_scripts_dir.join("requirements.txt");
+
+    info!("Reading requirements from: {}", requirements_txt.display());
 
     // Disable UV debug logging to avoid buffer overflow
     let install_result = Command::new(&uv_command)
@@ -969,7 +921,7 @@ pub async fn setup_python_environment() -> Result<SetupResult, String> {
         .arg("-r")
         .arg(&requirements_txt)
         .arg("--quiet")  // Reduce UV verbosity
-        .current_dir(&python_dir)
+        .env("UV_CACHE_DIR", &uv_cache)  // Use LOCALAPPDATA for cache
         .env("UV_NO_PROGRESS", "1")  // Disable progress bars
         .env_remove("RUST_LOG")  // Remove any debug logging env vars
         .stdout(Stdio::piped())
@@ -1043,7 +995,7 @@ pub async fn setup_python_environment() -> Result<SetupResult, String> {
         .arg("install")
         .arg("chromium")  // Use chromium instead of chrome (no admin needed)
         .arg("--with-deps")  // Install system dependencies
-        .current_dir(&python_dir)
+        .current_dir(&python_scripts_dir)  // Use scripts dir for current_dir
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output();

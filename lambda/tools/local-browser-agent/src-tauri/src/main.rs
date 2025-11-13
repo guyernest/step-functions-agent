@@ -8,6 +8,7 @@ mod commands;
 mod config;
 mod config_commands;
 mod nova_act_executor;
+mod paths;
 mod profile_commands;
 mod session_manager;
 mod test_commands;
