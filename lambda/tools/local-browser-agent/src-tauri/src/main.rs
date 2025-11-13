@@ -22,6 +22,7 @@ use parking_lot::RwLock;
 use activity_poller::ActivityPoller;
 use config::Config;
 use nova_act_executor::NovaActExecutor;
+use paths::AppPaths;
 use session_manager::SessionManager;
 
 #[tokio::main]
@@ -138,9 +139,10 @@ fn parse_config_path(args: &[String]) -> Result<PathBuf> {
         }
     }
 
-    // Default to config.yaml in ~/.local-browser-agent directory
-    let default_path = Config::default_config_path()
-        .context("Failed to get default config path")?;
+    // Default to config.yaml using AppPaths (roaming config on Windows)
+    let paths = AppPaths::new()
+        .context("Failed to initialize application paths")?;
+    let default_path = paths.user_config_file();
 
     info!("Looking for config at: {}", default_path.display());
 

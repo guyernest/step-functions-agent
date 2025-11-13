@@ -438,7 +438,7 @@ pub async fn execute_browser_script(
     // Try to reload config from file to get latest values
     // (in case user saved config without restarting app)
     let current_config = {
-        let config_path = Config::default_config_path().ok();
+        let config_path = AppPaths::new().ok().map(|p| p.user_config_file());
 
         if let Some(path) = config_path {
             if path.exists() {

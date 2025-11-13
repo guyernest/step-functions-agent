@@ -162,21 +162,21 @@ impl AppPaths {
     pub fn python_scripts_dir(&self) -> PathBuf {
         #[cfg(target_os = "windows")]
         {
-            // Windows: Check multiple possible locations
-            // First try: install_dir/python (bundled with resources)
+            // Windows: Tauri bundles resources in resources\_up_\python
+            // because the resource path is "../python" from src-tauri
+            let tauri_resources = self.install_dir.join("resources").join("_up_").join("python");
+            if tauri_resources.exists() {
+                return tauri_resources;
+            }
+
+            // Fallback: install_dir/python (dev mode or alternate structure)
             let python_dir = self.install_dir.join("python");
             if python_dir.exists() {
                 return python_dir;
             }
 
-            // Fallback: install_dir/runtime/python (future structure)
-            let runtime_python = self.install_dir.join("runtime").join("python");
-            if runtime_python.exists() {
-                return runtime_python;
-            }
-
-            // Default: return python even if doesn't exist yet
-            python_dir
+            // Default: return Tauri location even if doesn't exist yet
+            tauri_resources
         }
 
         #[cfg(target_os = "macos")]
@@ -206,8 +206,33 @@ impl AppPaths {
                 .join("examples")
         }
 
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(target_os = "windows")]
         {
+            // Windows: Tauri bundles resources in resources\_up_\examples
+            let tauri_resources = self.install_dir.join("resources").join("_up_").join("examples");
+            if tauri_resources.exists() {
+                return tauri_resources;
+            }
+
+            // Fallback: install_dir/examples (dev mode)
+            let examples_dir = self.install_dir.join("examples");
+            if examples_dir.exists() {
+                return examples_dir;
+            }
+
+            // Default: return Tauri location
+            tauri_resources
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            // Linux: Tauri bundles resources in resources/_up_/examples
+            let tauri_resources = self.install_dir.join("resources").join("_up_").join("examples");
+            if tauri_resources.exists() {
+                return tauri_resources;
+            }
+
+            // Fallback: install_dir/examples (dev mode)
             self.install_dir.join("examples")
         }
     }

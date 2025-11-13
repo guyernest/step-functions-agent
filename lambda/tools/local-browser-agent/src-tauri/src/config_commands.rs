@@ -76,10 +76,11 @@ pub async fn list_aws_profiles() -> Result<Vec<String>, String> {
 
 /// Resolve config path to absolute path in user's home directory
 fn resolve_config_path(path: &str) -> Result<PathBuf, String> {
-    // If path is "config.yaml" (the default), use the new default path
+    // If path is "config.yaml" (the default), use AppPaths
     if path == "config.yaml" {
-        let default_path = Config::default_config_path()
-            .map_err(|e| format!("Failed to get default config path: {}", e))?;
+        let paths = AppPaths::new()
+            .map_err(|e| format!("Failed to initialize application paths: {}", e))?;
+        let default_path = paths.user_config_file();
         info!("Using default config path: {}", default_path.display());
         return Ok(default_path);
     }
@@ -91,8 +92,9 @@ fn resolve_config_path(path: &str) -> Result<PathBuf, String> {
     }
 
     // Otherwise, resolve relative to config directory
-    let config_dir = Config::default_config_dir()
-        .map_err(|e| format!("Failed to get config directory: {}", e))?;
+    let paths = AppPaths::new()
+        .map_err(|e| format!("Failed to initialize application paths: {}", e))?;
+    let config_dir = paths.user_config_dir;
 
     let config_path = config_dir.join(path);
 
