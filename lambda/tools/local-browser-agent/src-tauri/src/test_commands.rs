@@ -8,6 +8,7 @@ use url::Url;
 use tauri::State;
 
 use crate::config::Config;
+use crate::paths::AppPaths;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BrowserScript {
@@ -51,7 +52,16 @@ pub struct ExecutionResult {
 
 /// Find examples directory
 fn find_examples_dir() -> Result<PathBuf> {
-    // Try relative to executable (release mode / app bundle)
+    // Try AppPaths first (recommended for production)
+    if let Ok(paths) = AppPaths::new() {
+        let examples_dir = paths.examples_dir();
+        if examples_dir.exists() {
+            log::info!("Found examples via AppPaths at: {}", examples_dir.display());
+            return Ok(examples_dir);
+        }
+    }
+
+    // Try relative to executable (release mode / app bundle - fallback)
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
             // For macOS app bundle

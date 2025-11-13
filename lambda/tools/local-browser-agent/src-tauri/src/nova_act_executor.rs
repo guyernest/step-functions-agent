@@ -7,6 +7,7 @@ use std::io::Write;
 use std::sync::Arc;
 
 use crate::config::Config;
+use crate::paths::AppPaths;
 
 /// Nova Act executor that spawns Python subprocess to execute browser commands
 pub struct NovaActExecutor {
@@ -31,6 +32,15 @@ impl NovaActExecutor {
 
     /// Find Python wrapper script
     fn find_python_wrapper() -> Result<PathBuf> {
+        // Try AppPaths first (recommended for production)
+        if let Ok(paths) = AppPaths::new() {
+            let wrapper_path = paths.python_scripts_dir().join("nova_act_wrapper.py");
+            if wrapper_path.exists() {
+                debug!("Found Python wrapper via AppPaths at: {}", wrapper_path.display());
+                return Ok(wrapper_path);
+            }
+        }
+
         // Try relative path from current directory (for dev mode)
         let current_dir = std::env::current_dir()
             .context("Failed to get current directory")?;
@@ -45,12 +55,12 @@ impl NovaActExecutor {
 
         for path in &locations {
             if path.exists() {
-                debug!("Found Python wrapper at: {}", path.display());
+                debug!("Found Python wrapper (dev mode) at: {}", path.display());
                 return Ok(path.canonicalize()?);
             }
         }
 
-        // Try relative path from executable (for release builds)
+        // Try relative path from executable (for release builds - fallback)
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_dir) = exe_path.parent() {
                 // macOS .app bundle: executable is at Contents/MacOS/, resources are at Contents/Resources/
@@ -81,7 +91,7 @@ impl NovaActExecutor {
 
                 for wrapper_path in wrapper_paths {
                     if wrapper_path.exists() {
-                        debug!("Found Python wrapper at: {}", wrapper_path.display());
+                        debug!("Found Python wrapper (fallback) at: {}", wrapper_path.display());
                         return Ok(wrapper_path.canonicalize()?);
                     }
                 }
@@ -110,11 +120,29 @@ impl NovaActExecutor {
             return Ok(PathBuf::from("uvx"));
         }
 
-        // Try to find venv Python
+        // Try AppPaths first (recommended for production - venv in LOCALAPPDATA)
+        if let Ok(paths) = AppPaths::new() {
+            let venv_dir = paths.python_env_dir();
+
+            #[cfg(target_os = "windows")]
+            let venv_python = venv_dir.join("Scripts").join("python.exe");
+
+            #[cfg(not(target_os = "windows"))]
+            let venv_python = venv_dir.join("bin").join("python");
+
+            if venv_python.exists() {
+                info!("Found Python venv via AppPaths at: {}", venv_python.display());
+                return Ok(venv_python);
+            }
+
+            info!("Python venv not found at AppPaths location: {}", venv_dir.display());
+        }
+
+        // Try to find venv Python (dev mode)
         let current_dir = std::env::current_dir()
             .context("Failed to get current directory")?;
 
-        // Platform-specific venv paths
+        // Platform-specific venv paths (dev mode)
         #[cfg(target_os = "windows")]
         let venv_paths = vec![
             current_dir.join("python\\.venv\\Scripts\\python.exe"),
@@ -131,12 +159,12 @@ impl NovaActExecutor {
 
         for path in &venv_paths {
             if path.exists() {
-                info!("Found Python venv at: {}", path.display());
+                info!("Found Python venv (dev mode) at: {}", path.display());
                 return Ok(path.canonicalize()?);
             }
         }
 
-        // Try relative to executable (for release builds)
+        // Try relative to executable (for release builds - legacy fallback)
         if let Ok(exe_path) = std::env::current_exe() {
             info!("Executable path: {}", exe_path.display());
 
@@ -163,13 +191,13 @@ impl NovaActExecutor {
                     exe_dir.join("../python/.venv/bin/python"),                 // Linux
                 ];
 
-                info!("Searching for Python venv in app bundle...");
+                info!("Searching for Python venv in app bundle (legacy fallback)...");
                 for venv_python in &venv_paths_release {
                     let absolute_path = std::fs::canonicalize(venv_python).ok();
                     info!("Checking: {} (absolute: {:?})", venv_python.display(), absolute_path);
 
                     if venv_python.exists() {
-                        info!("✓ Found Python venv at: {}", venv_python.display());
+                        info!("✓ Found Python venv (legacy) at: {}", venv_python.display());
                         return Ok(venv_python.canonicalize()?);
                     }
                 }

@@ -8,6 +8,7 @@ use tauri::State;
 
 use crate::config::Config;
 use crate::nova_act_executor::NovaActExecutor;
+use crate::paths::AppPaths;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Profile {
@@ -32,7 +33,15 @@ pub struct ProfileListResponse {
 
 /// Find profile_manager.py script
 fn find_profile_manager() -> Result<PathBuf> {
-    // Try relative to executable (release mode / app bundle)
+    // Try AppPaths first (recommended for production)
+    if let Ok(paths) = AppPaths::new() {
+        let script_path = paths.python_scripts_dir().join("profile_manager.py");
+        if script_path.exists() {
+            return Ok(script_path);
+        }
+    }
+
+    // Try relative to executable (release mode / app bundle - fallback)
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
             // For macOS app bundle

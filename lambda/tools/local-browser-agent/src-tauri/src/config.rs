@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use anyhow::{Context, Result};
 
+use crate::paths::AppPaths;
+
 /// Configuration for the local browser agent
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -58,7 +60,24 @@ fn default_browser_channel() -> Option<String> {
 }
 
 impl Config {
-    /// Get the default config directory using OS-specific conventions
+    /// Get the default config directory using AppPaths (recommended)
+    ///
+    /// Uses the new AppPaths system for proper Windows path separation.
+    /// - Windows: `%APPDATA%\Local Browser Agent` (roaming config)
+    /// - macOS: `~/Library/Application Support/Local Browser Agent`
+    /// - Linux: `~/.config/local-browser-agent`
+    pub fn default_config_dir_v2() -> Result<PathBuf> {
+        let paths = AppPaths::new()?;
+        Ok(paths.user_config_dir)
+    }
+
+    /// Get the default config file path using AppPaths (recommended)
+    pub fn default_config_path_v2() -> Result<PathBuf> {
+        let paths = AppPaths::new()?;
+        Ok(paths.user_config_file())
+    }
+
+    /// Get the default config directory using OS-specific conventions (legacy)
     ///
     /// Uses:
     /// - Windows: `%LOCALAPPDATA%\Local Browser Agent`
@@ -66,6 +85,8 @@ impl Config {
     /// - Linux: `~/.config/local-browser-agent`
     ///
     /// Falls back to `~/.local-browser-agent` if dirs crate fails
+    ///
+    /// Note: This is kept for backward compatibility. Use default_config_dir_v2() instead.
     pub fn default_config_dir() -> Result<PathBuf> {
         // Try to use OS-specific config directory via dirs crate
         let config_dir = if let Some(config_base) = dirs::config_dir() {
