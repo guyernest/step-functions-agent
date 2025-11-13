@@ -818,10 +818,13 @@ pub async fn setup_python_environment(app: tauri::AppHandle) -> Result<SetupResu
         uv_command
     };
 
-    // Step 3: Locate Python scripts directory (read-only in install dir)
-    let python_scripts_dir = paths.python_scripts_dir();
+    // Step 3: Locate Python scripts directory using Tauri PathResolver
+    // On Windows MSI, resources are embedded, so we use resolve_resource
+    let python_scripts_dir = app.path_resolver()
+        .resolve_resource("python")
+        .unwrap_or_else(|| paths.python_scripts_dir());
 
-    info!("Looking for Python scripts at: {}", python_scripts_dir.display());
+    info!("Resolved Python scripts directory: {}", python_scripts_dir.display());
 
     if !python_scripts_dir.exists() {
         error!("Python directory not found at {:?}", python_scripts_dir);
