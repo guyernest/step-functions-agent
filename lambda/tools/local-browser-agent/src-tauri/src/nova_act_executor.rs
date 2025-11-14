@@ -112,13 +112,11 @@ impl NovaActExecutor {
             .unwrap_or(false)
     }
 
-    /// Find Python executable or use uvx
+    /// Find Python executable from venv
     fn find_python_executable() -> Result<PathBuf> {
-        // First check if uvx is available (best option for automatic dependency management)
-        if Self::is_uvx_available() {
-            debug!("Using uvx for automatic dependency management");
-            return Ok(PathBuf::from("uvx"));
-        }
+        // IMPORTANT: Always use the venv we set up, NOT uvx
+        // uvx downloads packages to its own cache with potentially incompatible versions
+        // We need to use the venv created by "Setup Python Environment"
 
         // Try AppPaths first (recommended for production - venv in LOCALAPPDATA)
         if let Ok(paths) = AppPaths::new() {
