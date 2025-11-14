@@ -103,44 +103,28 @@ fn find_profile_manager() -> Result<PathBuf> {
 
 /// Find Python executable from venv
 fn find_python_executable() -> Result<PathBuf> {
-    if let Ok(exe_path) = std::env::current_exe() {
-        log::info!("Executable path: {}", exe_path.display());
+    // Try AppPaths first (production mode - venv in LOCALAPPDATA)
+    if let Ok(paths) = AppPaths::new() {
+        let venv_dir = paths.python_env_dir();
 
-        if let Some(exe_dir) = exe_path.parent() {
-            log::info!("Executable directory: {}", exe_dir.display());
+        #[cfg(target_os = "windows")]
+        let venv_python = venv_dir.join("Scripts").join("python.exe");
 
-            #[cfg(not(target_os = "windows"))]
-            let venv_paths_release = vec![
-                exe_dir.join("../Resources/_up_/python/.venv/bin/python"),
-                exe_dir.join("../Resources/python/.venv/bin/python"),
-                exe_dir.join("../python/.venv/bin/python"),
-            ];
+        #[cfg(not(target_os = "windows"))]
+        let venv_python = venv_dir.join("bin").join("python");
 
-            #[cfg(target_os = "windows")]
-            let venv_paths_release = vec![
-                exe_dir.join("python\\.venv\\Scripts\\python.exe"),
-                exe_dir.join("resources\\python\\.venv\\Scripts\\python.exe"),
-                exe_dir.join("_up_\\python\\.venv\\Scripts\\python.exe"),
-                exe_dir.join("..\\python\\.venv\\Scripts\\python.exe"),
-            ];
+        log::info!("Looking for Python venv at: {}", venv_python.display());
 
-            log::info!("Searching for Python venv in app bundle...");
-            for venv_python in &venv_paths_release {
-                log::info!("Checking: {}", venv_python.display());
-
-                if venv_python.exists() {
-                    log::info!("✓ Found Python venv at: {}", venv_python.display());
-                    // DO NOT canonicalize - we need to use the venv symlink directly
-                    // so that Python loads the venv's site-packages
-                    return Ok(venv_python.clone());
-                }
-            }
-
-            log::error!("None of the expected venv paths exist");
+        if venv_python.exists() {
+            log::info!("✓ Found Python venv at: {}", venv_python.display());
+            return Ok(venv_python);
+        } else {
+            log::warn!("Python venv not found at expected location: {}", venv_python.display());
+            log::warn!("Please run 'Setup Python Environment' from the Configuration tab");
         }
     }
 
-    // Fallback: try current directory (for development)
+    // Fallback: try development mode (venv in python/.venv)
     let current_dir = std::env::current_dir()
         .context("Failed to get current directory")?;
 
@@ -158,6 +142,7 @@ fn find_python_executable() -> Result<PathBuf> {
         current_dir.join("..\\..\\python\\.venv\\Scripts\\python.exe"),
     ];
 
+    log::info!("Trying development mode paths...");
     for venv_python in &dev_venv_paths {
         log::info!("Checking dev venv: {}", venv_python.display());
         if venv_python.exists() {
