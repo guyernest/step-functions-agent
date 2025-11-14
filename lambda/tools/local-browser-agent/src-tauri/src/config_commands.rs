@@ -365,7 +365,7 @@ pub struct SetupStep {
 
 /// Check if Python environment is properly set up
 #[tauri::command]
-pub async fn check_python_environment(app: tauri::AppHandle) -> Result<SetupResult, String> {
+pub async fn check_python_environment() -> Result<SetupResult, String> {
     let os = std::env::consts::OS;
     info!("Checking Python environment status on OS: {}", os);
 
@@ -383,12 +383,10 @@ pub async fn check_python_environment(app: tauri::AppHandle) -> Result<SetupResu
         details: format!("Found app at {}", paths.install_dir.display()),
     });
 
-    // Step 2: Check Python scripts directory using Tauri PathResolver (for bundled resources)
-    let python_scripts_dir = app.path_resolver()
-        .resolve_resource("python")
-        .unwrap_or_else(|| paths.python_scripts_dir());
+    // Step 2: Check Python scripts directory
+    let python_scripts_dir = paths.python_scripts_dir();
 
-    info!("Resolved Python scripts directory: {}", python_scripts_dir.display());
+    info!("Looking for Python scripts at: {}", python_scripts_dir.display());
 
     let python_dir = if !python_scripts_dir.exists() {
         error!("Python directory not found at \"{}\"", python_scripts_dir.display());
@@ -568,7 +566,7 @@ pub async fn check_python_environment(app: tauri::AppHandle) -> Result<SetupResu
 
 /// Setup Python environment inside the app bundle
 #[tauri::command]
-pub async fn setup_python_environment(app: tauri::AppHandle) -> Result<SetupResult, String> {
+pub async fn setup_python_environment() -> Result<SetupResult, String> {
     let os = std::env::consts::OS;
     info!("Starting Python environment setup on OS: {}", os);
 
@@ -818,13 +816,10 @@ pub async fn setup_python_environment(app: tauri::AppHandle) -> Result<SetupResu
         uv_command
     };
 
-    // Step 3: Locate Python scripts directory using Tauri PathResolver
-    // On Windows MSI, resources are embedded, so we use resolve_resource
-    let python_scripts_dir = app.path_resolver()
-        .resolve_resource("python")
-        .unwrap_or_else(|| paths.python_scripts_dir());
+    // Step 3: Locate Python scripts directory
+    let python_scripts_dir = paths.python_scripts_dir();
 
-    info!("Resolved Python scripts directory: {}", python_scripts_dir.display());
+    info!("Looking for Python scripts at: {}", python_scripts_dir.display());
 
     if !python_scripts_dir.exists() {
         error!("Python directory not found at {:?}", python_scripts_dir);

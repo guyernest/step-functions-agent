@@ -162,21 +162,21 @@ impl AppPaths {
     pub fn python_scripts_dir(&self) -> PathBuf {
         #[cfg(target_os = "windows")]
         {
-            // Windows: Tauri bundles resources in resources\_up_\python
-            // because the resource path is "../python" from src-tauri
-            let tauri_resources = self.install_dir.join("resources").join("_up_").join("python");
-            if tauri_resources.exists() {
-                return tauri_resources;
+            // Windows MSI: Tauri bundles resources directly in _up_\python
+            // (no "resources" subdirectory for MSI installations)
+            let tauri_msi = self.install_dir.join("_up_").join("python");
+            if tauri_msi.exists() {
+                return tauri_msi;
             }
 
-            // Fallback: install_dir/python (dev mode or alternate structure)
+            // Fallback: install_dir/python (dev mode)
             let python_dir = self.install_dir.join("python");
             if python_dir.exists() {
                 return python_dir;
             }
 
-            // Default: return Tauri location even if doesn't exist yet
-            tauri_resources
+            // Default: return MSI location
+            tauri_msi
         }
 
         #[cfg(target_os = "macos")]
@@ -208,10 +208,10 @@ impl AppPaths {
 
         #[cfg(target_os = "windows")]
         {
-            // Windows: Tauri bundles resources in resources\_up_\examples
-            let tauri_resources = self.install_dir.join("resources").join("_up_").join("examples");
-            if tauri_resources.exists() {
-                return tauri_resources;
+            // Windows MSI: Tauri bundles resources directly in _up_\examples
+            let tauri_msi = self.install_dir.join("_up_").join("examples");
+            if tauri_msi.exists() {
+                return tauri_msi;
             }
 
             // Fallback: install_dir/examples (dev mode)
@@ -220,8 +220,8 @@ impl AppPaths {
                 return examples_dir;
             }
 
-            // Default: return Tauri location
-            tauri_resources
+            // Default: return MSI location
+            tauri_msi
         }
 
         #[cfg(target_os = "linux")]
