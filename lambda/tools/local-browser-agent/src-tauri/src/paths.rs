@@ -181,12 +181,37 @@ impl AppPaths {
 
         #[cfg(target_os = "macos")]
         {
-            // macOS: inside .app bundle at Contents/Resources/_up_/python
-            self.install_dir
+            // macOS production: inside .app bundle at Contents/Resources/_up_/python
+            let bundle_path = self.install_dir
                 .join("Contents")
                 .join("Resources")
                 .join("_up_")
-                .join("python")
+                .join("python");
+
+            if bundle_path.exists() {
+                return bundle_path;
+            }
+
+            // Development mode: look for python directory relative to install_dir
+            // In dev mode, install_dir is like: .../src-tauri/target/debug
+            // We need to go up to project root and find python/
+            let dev_paths = vec![
+                self.install_dir.join("../../../python"),  // From target/debug
+                self.install_dir.join("../../python"),      // From target
+                self.install_dir.join("../python"),         // From src-tauri
+            ];
+
+            for dev_path in &dev_paths {
+                if dev_path.exists() {
+                    // Canonicalize to get absolute path
+                    if let Ok(canonical) = dev_path.canonicalize() {
+                        return canonical;
+                    }
+                }
+            }
+
+            // Default: return bundle path (for error messages)
+            bundle_path
         }
 
         #[cfg(target_os = "linux")]

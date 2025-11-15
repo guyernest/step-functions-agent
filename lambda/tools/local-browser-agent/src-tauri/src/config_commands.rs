@@ -124,6 +124,11 @@ pub async fn load_config_from_file(path: String) -> Result<ConfigData, String> {
         headless: config.headless,
         heartbeat_interval: config.heartbeat_interval,
         browser_channel: config.browser_channel,
+        browser_engine: config.browser_engine,
+        openai_api_key: config.openai_api_key,
+        openai_model: config.openai_model,
+        enable_replanning: config.enable_replanning,
+        max_replans: config.max_replans,
     })
 }
 
@@ -327,6 +332,12 @@ pub struct ConfigData {
     pub headless: bool,
     pub heartbeat_interval: u64,
     pub browser_channel: Option<String>,
+    // Browser engine configuration
+    pub browser_engine: String,
+    pub openai_api_key: Option<String>,
+    pub openai_model: String,
+    pub enable_replanning: bool,
+    pub max_replans: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1091,6 +1102,11 @@ mod tests {
             headless: false,
             heartbeat_interval: 60,
             browser_channel: Some("chrome".to_string()),
+            browser_engine: "nova_act".to_string(),
+            openai_api_key: None,
+            openai_model: "gpt-4o-mini".to_string(),
+            enable_replanning: false,
+            max_replans: 2,
         };
 
         // Convert to ConfigData - this will fail to compile if fields don't match
@@ -1105,6 +1121,11 @@ mod tests {
             headless: config.headless,
             heartbeat_interval: config.heartbeat_interval,
             browser_channel: config.browser_channel.clone(),
+            browser_engine: config.browser_engine.clone(),
+            openai_api_key: config.openai_api_key.clone(),
+            openai_model: config.openai_model.clone(),
+            enable_replanning: config.enable_replanning,
+            max_replans: config.max_replans,
         };
 
         // Verify all fields are transferred correctly
@@ -1132,6 +1153,11 @@ mod tests {
             headless: false,
             heartbeat_interval: 60,
             browser_channel: Some("msedge".to_string()),
+            browser_engine: "computer_agent".to_string(),
+            openai_api_key: Some("test-openai-key".to_string()),
+            openai_model: "gpt-4o".to_string(),
+            enable_replanning: true,
+            max_replans: 3,
         };
 
         // Serialize to YAML
