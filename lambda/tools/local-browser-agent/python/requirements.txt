@@ -12,6 +12,7 @@ anyio==4.11.0
     # via
     #   httpx
     #   mcp
+    #   openai
     #   sse-starlette
     #   starlette
 attrs==25.4.0
@@ -57,6 +58,8 @@ deprecated==1.2.18
     # via nova-act
 dill==0.4.0
     # via strands-agents-tools
+distro==1.9.0
+    # via openai
 docstring-parser==0.17.0
     # via strands-agents
 fire==0.7.1
@@ -74,7 +77,9 @@ h11==0.16.0
 httpcore==1.0.9
     # via httpx
 httpx==0.28.1
-    # via mcp
+    # via
+    #   mcp
+    #   openai
 httpx-sse==0.4.3
     # via mcp
 idna==3.11
@@ -87,6 +92,8 @@ importlib-metadata==8.7.0
     # via opentelemetry-api
 install-playwright==0.1.1
     # via nova-act
+jiter==0.12.0
+    # via openai
 jmespath==1.0.1
     # via
     #   boto3
@@ -119,6 +126,8 @@ numpy==2.2.6
     # via
     #   nova-act
     #   pandas
+openai==2.8.0
+    # via -r requirements.in
 openai-computer-agent @ git+https://github.com/ai-on-cloud/browser-agent.git@0cdfdf31e6a6e8b15e3e6325ede1d468a34e4048
     # via -r requirements.in
 opentelemetry-api==1.37.0
@@ -165,6 +174,7 @@ pydantic==2.12.1
     # via
     #   mcp
     #   nova-act
+    #   openai
     #   pydantic-settings
     #   strands-agents
 pydantic-core==2.41.3
@@ -217,7 +227,9 @@ slack-bolt==1.26.0
 slack-sdk==3.37.0
     # via slack-bolt
 sniffio==1.3.1
-    # via anyio
+    # via
+    #   anyio
+    #   openai
 soupsieve==2.8
     # via beautifulsoup4
 sse-starlette==3.0.2
@@ -236,6 +248,8 @@ tenacity==9.1.2
     # via strands-agents-tools
 termcolor==3.1.0
     # via fire
+tqdm==4.67.1
+    # via openai
 types-awscrt==0.28.1
     # via botocore-stubs
 types-s3transfer==0.14.0
@@ -247,6 +261,7 @@ typing-extensions==4.15.0
     #   beautifulsoup4
     #   boto3-stubs
     #   mypy-boto3-s3
+    #   openai
     #   opentelemetry-api
     #   opentelemetry-sdk
     #   opentelemetry-semantic-conventions

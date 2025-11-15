@@ -4,6 +4,7 @@
 # Browser automation engines (dual-library support for gradual migration)
 nova-act>=0.1.0
 git+https://github.com/ai-on-cloud/browser-agent.git@main
+openai>=1.0.0  # Required by openai-computer-agent
 
 # AWS & Browser
 boto3>=1.28.0
