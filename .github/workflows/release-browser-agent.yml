@@ -67,7 +67,7 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             patchelf \
-            libsoup-3.0-dev
+            libsoup2.4-dev
 
       - name: Setup Python
         uses: actions/setup-python@v5
