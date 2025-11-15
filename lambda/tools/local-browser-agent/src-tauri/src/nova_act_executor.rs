@@ -18,11 +18,14 @@ pub struct NovaActExecutor {
 impl NovaActExecutor {
     /// Create a new Nova Act executor
     pub fn new(config: Arc<Config>) -> Result<Self> {
-        // Find Python wrapper script
-        let python_wrapper_path = Self::find_python_wrapper()
-            .context("Failed to find Nova Act Python wrapper")?;
+        // Find Python wrapper script (passing config to check browser_engine setting)
+        let python_wrapper_path = Self::find_python_wrapper(&config)
+            .context("Failed to find browser automation Python wrapper")?;
 
-        info!("Nova Act executor initialized with wrapper: {}", python_wrapper_path.display());
+        info!("Browser automation executor initialized with wrapper: {}", python_wrapper_path.display());
+
+        // Set environment variables for Python wrapper based on config
+        Self::set_environment_variables(&config)?;
 
         Ok(Self {
             config,
@@ -30,11 +33,51 @@ impl NovaActExecutor {
         })
     }
 
+    /// Set environment variables for Python wrapper based on config
+    fn set_environment_variables(config: &Config) -> Result<()> {
+        // Set USE_COMPUTER_AGENT based on browser_engine config
+        let use_computer_agent = config.browser_engine == "computer_agent";
+        std::env::set_var("USE_COMPUTER_AGENT", use_computer_agent.to_string());
+
+        // Set OpenAI configuration if Computer Agent is selected
+        if use_computer_agent {
+            if let Some(ref api_key) = config.openai_api_key {
+                std::env::set_var("OPENAI_API_KEY", api_key);
+            }
+            std::env::set_var("OPENAI_MODEL", &config.openai_model);
+        }
+
+        // Set Nova Act API key if provided
+        if let Some(ref api_key) = config.nova_act_api_key {
+            std::env::set_var("NOVA_ACT_API_KEY", api_key);
+        }
+
+        Ok(())
+    }
+
     /// Find Python wrapper script
-    fn find_python_wrapper() -> Result<PathBuf> {
+    ///
+    /// Determines which wrapper to use based on config.browser_engine or USE_COMPUTER_AGENT env var
+    /// Returns computer_agent_wrapper.py if enabled, otherwise nova_act_wrapper.py
+    fn find_python_wrapper(config: &Config) -> Result<PathBuf> {
+        // Check config first, then fall back to environment variable
+        let use_computer_agent = config.browser_engine == "computer_agent" ||
+            std::env::var("USE_COMPUTER_AGENT")
+                .ok()
+                .and_then(|v| v.parse::<bool>().ok())
+                .unwrap_or(false);
+
+        let wrapper_filename = if use_computer_agent {
+            info!("Using OpenAI Computer Agent (browser_engine = computer_agent)");
+            "computer_agent_wrapper.py"
+        } else {
+            info!("Using Nova Act (browser_engine = nova_act)");
+            "nova_act_wrapper.py"
+        };
+
         // Try AppPaths first (recommended for production)
         if let Ok(paths) = AppPaths::new() {
-            let wrapper_path = paths.python_scripts_dir().join("nova_act_wrapper.py");
+            let wrapper_path = paths.python_scripts_dir().join(wrapper_filename);
             if wrapper_path.exists() {
                 debug!("Found Python wrapper via AppPaths at: {}", wrapper_path.display());
                 return Ok(wrapper_path);
@@ -48,9 +91,9 @@ impl NovaActExecutor {
         // Dev mode: current dir might be ui/ or project root
         // Use Path::join which handles platform-specific separators automatically
         let locations = vec![
-            current_dir.join("python").join("nova_act_wrapper.py"),
-            current_dir.join("..").join("python").join("nova_act_wrapper.py"),
-            current_dir.join("..").join("..").join("python").join("nova_act_wrapper.py"),
+            current_dir.join("python").join(wrapper_filename),
+            current_dir.join("..").join("python").join(wrapper_filename),
+            current_dir.join("..").join("..").join("python").join(wrapper_filename),
         ];
 
         for path in &locations {
@@ -66,27 +109,27 @@ impl NovaActExecutor {
                 // macOS .app bundle: executable is at Contents/MacOS/, resources are at Contents/Resources/
                 #[cfg(target_os = "macos")]
                 let wrapper_paths = vec![
-                    exe_dir.join("..").join("Resources").join("_up_").join("python").join("nova_act_wrapper.py"),  // macOS bundle (primary)
-                    exe_dir.join("..").join("Resources").join("python").join("nova_act_wrapper.py"),                // macOS bundle (alternative)
-                    exe_dir.join("..").join("python").join("nova_act_wrapper.py"),                                  // fallback
+                    exe_dir.join("..").join("Resources").join("_up_").join("python").join(wrapper_filename),  // macOS bundle (primary)
+                    exe_dir.join("..").join("Resources").join("python").join(wrapper_filename),                // macOS bundle (alternative)
+                    exe_dir.join("..").join("python").join(wrapper_filename),                                  // fallback
                 ];
 
                 // For Linux - check same locations as other Python scripts
                 #[cfg(target_os = "linux")]
                 let wrapper_paths = vec![
-                    exe_dir.join("python").join("nova_act_wrapper.py"),
-                    exe_dir.join("resources").join("python").join("nova_act_wrapper.py"),
-                    exe_dir.join("_up_").join("python").join("nova_act_wrapper.py"),
-                    exe_dir.join("..").join("python").join("nova_act_wrapper.py"),
+                    exe_dir.join("python").join(wrapper_filename),
+                    exe_dir.join("resources").join("python").join(wrapper_filename),
+                    exe_dir.join("_up_").join("python").join(wrapper_filename),
+                    exe_dir.join("..").join("python").join(wrapper_filename),
                 ];
 
                 // For Windows - check same locations as other Python scripts
                 #[cfg(target_os = "windows")]
                 let wrapper_paths = vec![
-                    exe_dir.join("python").join("nova_act_wrapper.py"),
-                    exe_dir.join("resources").join("python").join("nova_act_wrapper.py"),
-                    exe_dir.join("_up_").join("python").join("nova_act_wrapper.py"),
-                    exe_dir.join("..").join("python").join("nova_act_wrapper.py"),
+                    exe_dir.join("python").join(wrapper_filename),
+                    exe_dir.join("resources").join("python").join(wrapper_filename),
+                    exe_dir.join("_up_").join("python").join(wrapper_filename),
+                    exe_dir.join("..").join("python").join(wrapper_filename),
                 ];
 
                 for wrapper_path in wrapper_paths {
@@ -98,7 +141,7 @@ impl NovaActExecutor {
             }
         }
 
-        anyhow::bail!("Could not find nova_act_wrapper.py in expected locations")
+        anyhow::bail!("Could not find {} in expected locations", wrapper_filename)
     }
 
     /// Check if uvx is available

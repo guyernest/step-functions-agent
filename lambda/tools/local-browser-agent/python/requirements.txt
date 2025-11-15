@@ -119,6 +119,8 @@ numpy==2.2.6
     # via
     #   nova-act
     #   pandas
+openai-computer-agent @ git+https://github.com/ai-on-cloud/browser-agent.git@0cdfdf31e6a6e8b15e3e6325ede1d468a34e4048
+    # via -r requirements.in
 opentelemetry-api==1.37.0
     # via
     #   opentelemetry-instrumentation
@@ -243,6 +245,8 @@ typing-extensions==4.15.0
     #   aiosignal
     #   anyio
     #   beautifulsoup4
+    #   boto3-stubs
+    #   mypy-boto3-s3
     #   opentelemetry-api
     #   opentelemetry-sdk
     #   opentelemetry-semantic-conventions

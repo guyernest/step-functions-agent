@@ -23,8 +23,27 @@ pub struct Config {
     #[serde(default = "default_ui_port")]
     pub ui_port: u16,
 
+    /// Browser automation engine: "nova_act" or "computer_agent"
+    #[serde(default = "default_browser_engine")]
+    pub browser_engine: String,
+
     /// Nova Act API key (optional, can use env var)
     pub nova_act_api_key: Option<String>,
+
+    /// OpenAI API key (required when browser_engine = "computer_agent")
+    pub openai_api_key: Option<String>,
+
+    /// OpenAI model: "gpt-4o-mini" or "gpt-4o"
+    #[serde(default = "default_openai_model")]
+    pub openai_model: String,
+
+    /// Enable automatic replanning for OpenAI Computer Agent
+    #[serde(default = "default_enable_replanning")]
+    pub enable_replanning: bool,
+
+    /// Maximum replanning attempts
+    #[serde(default = "default_max_replans")]
+    pub max_replans: u32,
 
     /// Run browser in headless mode
     #[serde(default)]
@@ -48,6 +67,23 @@ fn default_ui_port() -> u16 {
 
 fn default_heartbeat_interval() -> u64 {
     60
+}
+
+fn default_browser_engine() -> String {
+    // Default to Nova Act for backward compatibility
+    "nova_act".to_string()
+}
+
+fn default_openai_model() -> String {
+    "gpt-4o-mini".to_string()
+}
+
+fn default_enable_replanning() -> bool {
+    true
+}
+
+fn default_max_replans() -> u32 {
+    2
 }
 
 fn default_browser_channel() -> Option<String> {
@@ -136,7 +172,12 @@ impl Config {
             s3_bucket: String::new(),
             user_data_dir: None,
             ui_port: default_ui_port(),
+            browser_engine: default_browser_engine(),
             nova_act_api_key: None,
+            openai_api_key: None,
+            openai_model: default_openai_model(),
+            enable_replanning: default_enable_replanning(),
+            max_replans: default_max_replans(),
             headless: false,
             heartbeat_interval: default_heartbeat_interval(),
             aws_region: None,

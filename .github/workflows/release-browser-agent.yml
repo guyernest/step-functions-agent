@@ -63,6 +63,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
+            libwebkit2gtk-4.0-dev \
+            libjavascriptcoregtk-4.0-dev \
             libgtk-3-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
@@ -169,7 +171,7 @@ jobs:
       - name: Upload Python scripts artifact
         uses: actions/upload-artifact@v4
         with:
-          name: python-scripts-${{ matrix.platform.os }}
+          name: python-scripts-${{ matrix.platform.target }}
           path: |
             lambda/tools/local-browser-agent/python/*.py
             lambda/tools/local-browser-agent/python/requirements.txt
