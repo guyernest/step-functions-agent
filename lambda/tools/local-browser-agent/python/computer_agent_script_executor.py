@@ -373,6 +373,7 @@ class ComputerAgentScriptExecutor:
 
 if __name__ == "__main__":
     import argparse
+    import asyncio
 
     parser = argparse.ArgumentParser(description="Execute browser automation scripts using OpenAI Computer Agent")
     parser.add_argument("--script", required=True, help="Path to script file (JSON)")
@@ -387,6 +388,7 @@ if __name__ == "__main__":
 
     # Read environment variables for OpenAI Computer Agent configuration
     openai_model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+    openai_api_key = os.environ.get("OPENAI_API_KEY")
     enable_replanning = os.environ.get("ENABLE_REPLANNING", "true").lower() == "true"
     max_replans = int(os.environ.get("MAX_REPLANS", "2"))
 
@@ -395,18 +397,51 @@ if __name__ == "__main__":
         with open(args.script, 'r') as f:
             script = json.load(f)
 
-        # Create executor
-        executor = ComputerAgentScriptExecutor(
-            s3_bucket=args.s3_bucket,
-            aws_profile=args.aws_profile,
-            openai_model=openai_model,
-            headless=args.headless,
-            enable_replanning=enable_replanning,
-            browser_channel=args.browser_channel,
-        )
+        # Detect script format and route to appropriate executor
+        # New format has "type" field in steps (e.g., "navigate", "click", "extract")
+        # Old format has "action" field in steps (e.g., "act", "act_with_schema")
 
-        # Execute script
-        result = executor.execute_script(script)
+        is_new_format = False
+        if "steps" in script and len(script["steps"]) > 0:
+            first_step = script["steps"][0]
+            if "type" in first_step:
+                is_new_format = True
+                print("[INFO] Detected new OpenAI Playwright format", file=sys.stderr)
+            elif "action" in first_step:
+                print("[INFO] Detected legacy Nova Act format", file=sys.stderr)
+
+        if is_new_format:
+            # Use new OpenAI Playwright executor
+            from openai_playwright_executor import OpenAIPlaywrightExecutor
+
+            executor = OpenAIPlaywrightExecutor(
+                llm_provider=script.get("llm_provider", "openai"),
+                llm_model=script.get("llm_model", openai_model),
+                llm_api_key=openai_api_key,
+                s3_bucket=args.s3_bucket,
+                aws_profile=args.aws_profile,
+                headless=args.headless,
+                browser_channel=args.browser_channel,
+                user_data_dir=Path(args.user_data_dir) if args.user_data_dir else None,
+                navigation_timeout=args.navigation_timeout,
+            )
+
+            # Execute script (async)
+            result = asyncio.run(executor.execute_script(script))
+
+        else:
+            # Use legacy computer agent executor
+            executor = ComputerAgentScriptExecutor(
+                s3_bucket=args.s3_bucket,
+                aws_profile=args.aws_profile,
+                openai_model=openai_model,
+                headless=args.headless,
+                enable_replanning=enable_replanning,
+                browser_channel=args.browser_channel,
+            )
+
+            # Execute script (sync)
+            result = executor.execute_script(script)
 
         # Print result as JSON to stdout
         print(json.dumps(result, indent=2))

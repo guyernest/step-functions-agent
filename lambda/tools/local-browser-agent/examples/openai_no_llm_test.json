@@ -1,0 +1,25 @@
+{
+  "name": "OpenAI Playwright Test (No LLM)",
+  "description": "Test Playwright actions without requiring LLM API calls",
+  "llm_provider": "openai",
+  "llm_model": "gpt-4o-mini",
+  "starting_page": "https://example.com",
+  "abort_on_error": false,
+  "steps": [
+    {
+      "type": "wait",
+      "description": "Wait for page to load",
+      "duration": 2000
+    },
+    {
+      "type": "screenshot",
+      "description": "Take screenshot",
+      "save_to": "example_page.png"
+    },
+    {
+      "type": "execute_js",
+      "description": "Get page title via JavaScript",
+      "script": "return document.title;"
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "name": "OpenAI Simple Test",
+  "description": "Simple test using OpenAI Playwright executor - extracts Google page title",
+  "llm_provider": "openai",
+  "llm_model": "gpt-4o-mini",
+  "starting_page": "https://www.google.com",
+  "abort_on_error": false,
+  "steps": [
+    {
+      "type": "wait",
+      "description": "Wait for page to load",
+      "duration": 2000
+    },
+    {
+      "type": "screenshot",
+      "description": "Take screenshot of page",
+      "save_to": "google_homepage.png"
+    },
+    {
+      "type": "extract",
+      "description": "Extract page title using vision",
+      "method": "vision",
+      "prompt": "What is the title of this webpage? Look at the browser tab or page header.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The page title"
+          }
+        },
+        "required": ["title"]
+      }
+    }
+  ]
+}
