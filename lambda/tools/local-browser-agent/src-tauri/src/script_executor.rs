@@ -197,9 +197,12 @@ impl ScriptExecutor {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
 
-        log::debug!("Script execution stdout: {}", stdout);
+        // Always log stdout/stderr at info level for debugging
+        if !stdout.is_empty() {
+            log::info!("Script execution stdout:\n{}", stdout);
+        }
         if !stderr.is_empty() {
-            log::debug!("Script execution stderr: {}", stderr);
+            log::info!("Script execution stderr:\n{}", stderr);
         }
 
         if output.status.success() {
