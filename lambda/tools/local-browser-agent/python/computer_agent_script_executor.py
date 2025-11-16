@@ -369,3 +369,67 @@ class ComputerAgentScriptExecutor:
         except Exception as e:
             print(f"Warning: Failed to upload screenshot to S3: {e}", file=sys.stderr)
             return None
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Execute browser automation scripts using OpenAI Computer Agent")
+    parser.add_argument("--script", required=True, help="Path to script file (JSON)")
+    parser.add_argument("--aws-profile", default="browser-agent", help="AWS profile name")
+    parser.add_argument("--s3-bucket", help="S3 bucket for screenshots")
+    parser.add_argument("--headless", action="store_true", help="Run browser in headless mode")
+    parser.add_argument("--browser-channel", help="Browser channel (chrome, msedge, chromium)")
+    parser.add_argument("--navigation-timeout", type=int, default=60000, help="Navigation timeout in milliseconds")
+    parser.add_argument("--user-data-dir", help="Chrome user data directory for profile")
+
+    args = parser.parse_args()
+
+    # Read environment variables for OpenAI Computer Agent configuration
+    openai_model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+    enable_replanning = os.environ.get("ENABLE_REPLANNING", "true").lower() == "true"
+    max_replans = int(os.environ.get("MAX_REPLANS", "2"))
+
+    try:
+        # Load script from file
+        with open(args.script, 'r') as f:
+            script = json.load(f)
+
+        # Create executor
+        executor = ComputerAgentScriptExecutor(
+            s3_bucket=args.s3_bucket,
+            aws_profile=args.aws_profile,
+            openai_model=openai_model,
+            headless=args.headless,
+            enable_replanning=enable_replanning,
+            browser_channel=args.browser_channel,
+        )
+
+        # Execute script
+        result = executor.execute_script(script)
+
+        # Print result as JSON to stdout
+        print(json.dumps(result, indent=2))
+
+        # Exit with appropriate code
+        sys.exit(0 if result.get("success", False) else 1)
+
+    except FileNotFoundError:
+        print(json.dumps({
+            "success": False,
+            "error": f"Script file not found: {args.script}"
+        }), file=sys.stderr)
+        sys.exit(1)
+    except json.JSONDecodeError as e:
+        print(json.dumps({
+            "success": False,
+            "error": f"Invalid JSON in script file: {e}"
+        }), file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(json.dumps({
+            "success": False,
+            "error": f"Unexpected error: {str(e)}",
+            "traceback": traceback.format_exc()
+        }), file=sys.stderr)
+        sys.exit(1)
