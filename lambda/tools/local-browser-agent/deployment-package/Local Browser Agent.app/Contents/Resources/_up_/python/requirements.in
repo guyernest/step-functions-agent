@@ -1,0 +1,6 @@
+# Direct dependencies only
+# Use `uv pip compile requirements.in -o requirements.txt` to generate requirements.txt
+
+nova-act>=0.1.0
+boto3>=1.28.0
+playwright>=1.40.0

@@ -1,0 +1,38 @@
+{
+  "tool_name": "broadband-availability-bt-wholesale",
+  "description": "Check broadband availability for UK addresses using BT Wholesale Broadband Checker portal",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "building_number": {
+        "type": "",
+        "description": "Building number (e.g., &#x27;1&#x27;, &#x27;23A&#x27;)"
+      },
+            "full_address": {
+        "type": "",
+        "description": "Full address for disambiguation when multiple matches exist"
+      },
+            "postcode": {
+        "type": "",
+        "description": "UK postcode in format like SW1A 1AA",
+        "pattern": "^[A-Z]{1,2}[0-9][A-Z0-9]? [0-9][A-Z]{2}$"
+      },
+            "street": {
+        "type": "",
+        "description": "Street or road name (e.g., &#x27;High Street&#x27;, &#x27;Park Road&#x27;)"
+      }
+      ,
+      "profile_name": {
+        "type": "string",
+        "description": "Browser profile to use (fixed)",
+        "default": "Bt_broadband"
+      },
+      "timeout": {
+        "type": "integer",
+        "description": "Execution timeout in seconds",
+        "default": 300
+      }
+    },
+    "required": ["postcode", "building_number", "street"]
+  }
+}

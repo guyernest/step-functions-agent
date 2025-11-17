@@ -71,12 +71,15 @@ You will receive:
 CANONICAL SCHEMA - OUTPUT:
 You must extract and return:
 - success: Whether the check succeeded (boolean) [REQUIRED]
-- exchange: BT exchange station name (string)
-- cabinet: Street cabinet number (string)
-- downstream_mbps: Maximum download speed in Mbps (number)
-- upstream_mbps: Maximum upload speed in Mbps (number)
-- availability: Whether broadband service is available (boolean)
-- service_type: Type of service ("ADSL", "VDSL", "FTTC", "FTTP", "unknown")
+- fttp_avail: Whether FTTP is available (boolean) [REQUIRED]
+- alk: Access Line Key identifier (e.g., A00022059784) (string)
+- exchange_code: BT exchange code (e.g., CAMBRIDGE) (string)
+- install_type: Installation type - "Standard", "Premium", or "N/A" (string)
+- sogea_avail: Whether SoGEA is available (boolean)
+- soadsl_dsl_speed: SOADSL DSL speed in Mbps (number)
+- ont_reference: ONT reference number from ONT section (string)
+- ont_serial_no: ONT serial number from ONT section (string)
+- port_service_id: Port Service ID from last line of ONT section (string)
 - screenshot_url: URL of browser recording (string)
 - metadata: Additional metadata (object)
 
@@ -118,30 +121,42 @@ IMPORTANT: When you have completed the extraction and validated the data, you MU
                     "type": "boolean",
                     "description": "Whether the broadband availability check succeeded"
                 },
-                "exchange": {
+                "alk": {
                     "type": "string",
-                    "description": "BT exchange station name"
+                    "description": "Access Line Key identifier (e.g., A00022059784)"
                 },
-                "cabinet": {
+                "exchange_code": {
                     "type": "string",
-                    "description": "Street cabinet number"
+                    "description": "BT exchange code (e.g., CAMBRIDGE)"
                 },
-                "downstream_mbps": {
-                    "type": "number",
-                    "description": "Maximum download speed in Mbps"
-                },
-                "upstream_mbps": {
-                    "type": "number",
-                    "description": "Maximum upload speed in Mbps"
-                },
-                "availability": {
+                "fttp_avail": {
                     "type": "boolean",
-                    "description": "Whether broadband service is available"
+                    "description": "Whether FTTP (Fibre to the Premises) is available"
                 },
-                "service_type": {
+                "install_type": {
                     "type": "string",
-                    "enum": ["ADSL", "VDSL", "FTTC", "FTTP", "unknown"],
-                    "description": "Type of broadband service available"
+                    "enum": ["Standard", "Premium", "N/A"],
+                    "description": "Installation type for FTTP service"
+                },
+                "sogea_avail": {
+                    "type": "boolean",
+                    "description": "Whether SoGEA (Single Order Generic Ethernet Access) is available"
+                },
+                "soadsl_dsl_speed": {
+                    "type": "number",
+                    "description": "SOADSL DSL speed in Mbps"
+                },
+                "ont_reference": {
+                    "type": "string",
+                    "description": "ONT (Optical Network Terminal) reference number from ONT section"
+                },
+                "ont_serial_no": {
+                    "type": "string",
+                    "description": "ONT serial number from ONT section"
+                },
+                "port_service_id": {
+                    "type": "string",
+                    "description": "Port Service ID from the last line of ONT section"
                 },
                 "screenshot_url": {
                     "type": "string",
@@ -152,7 +167,7 @@ IMPORTANT: When you have completed the extraction and validated the data, you MU
                     "description": "Additional metadata from the extraction"
                 }
             },
-            "required": ["success"]
+            "required": ["success", "fttp_avail"]
         }
 
         # Tool configurations
@@ -246,7 +261,14 @@ IMPORTANT: When you have completed the extraction and validated the data, you MU
             }
         )
 
-        # Tag the resources
+        # Tag the state machine for UI discovery
+        Tags.of(self.state_machine).add("Application", "StepFunctionsAgent")
+        Tags.of(self.state_machine).add("Type", "Agent")
+        Tags.of(self.state_machine).add("AgentName", self.agent_name)
+        Tags.of(self.state_machine).add("Environment", self.env_name)
+        Tags.of(self.state_machine).add("ManagedBy", "StepFunctionsAgentUI")
+
+        # Tag the stack resources
         Tags.of(self).add("Agent", self.agent_name)
         Tags.of(self).add("Environment", self.env_name)
         Tags.of(self).add("Type", "structured-output")
@@ -274,8 +296,9 @@ IMPORTANT: When you have completed the extraction and validated the data, you MU
                         "canonical_schema_id": "broadband_availability_bt_wholesale"
                     }
                 },
-                "output_fields": ["success", "exchange", "cabinet", "downstream_mbps",
-                                "upstream_mbps", "availability", "service_type",
+                "output_fields": ["success", "fttp_avail", "alk", "exchange_code",
+                                "install_type", "sogea_avail", "soadsl_dsl_speed",
+                                "ont_reference", "ont_serial_no", "port_service_id",
                                 "screenshot_url", "metadata"]
             }),
             "template_config": json.dumps({

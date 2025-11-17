@@ -49,16 +49,17 @@ impl ScriptExecutor {
     /// 2. Find the script_executor.py file
     /// 3. Configure environment variables based on config.browser_engine
     pub fn new(config: Arc<Config>) -> Result<Self> {
+        // IMPORTANT: Set environment variables FIRST, before finding script executor
+        // The script executor selection depends on USE_COMPUTER_AGENT env var
+        Self::configure_environment(&config)?;
+
         // Find Python executable
         let python_path = Self::find_python_executable()
             .context("Failed to find Python executable")?;
 
-        // Find script_executor.py
+        // Find script_executor.py (now that env vars are set)
         let script_executor_path = Self::find_script_executor()
             .context("Failed to find script_executor.py")?;
-
-        // Set environment variables based on config
-        Self::configure_environment(&config)?;
 
         log::info!("✓ ScriptExecutor initialized");
         log::debug!("  Python: {}", python_path.display());
@@ -77,9 +78,16 @@ impl ScriptExecutor {
     /// - For "computer_agent": Sets OPENAI_API_KEY, OPENAI_MODEL, etc.
     /// - For "nova_act": Sets NOVA_ACT_API_KEY
     fn configure_environment(config: &Config) -> Result<()> {
+        log::info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        log::info!("Configuring Environment for Script Execution:");
+        log::info!("  Config browser_engine: '{}'", config.browser_engine);
+
         // Determine which browser engine to use
         let use_computer_agent = config.browser_engine == "computer_agent";
+        log::info!("  Computed use_computer_agent: {}", use_computer_agent);
+
         std::env::set_var("USE_COMPUTER_AGENT", use_computer_agent.to_string());
+        log::info!("  Set USE_COMPUTER_AGENT env var to: {}", use_computer_agent);
 
         if use_computer_agent {
             // Set OpenAI Computer Agent configuration
@@ -148,19 +156,108 @@ impl ScriptExecutor {
         // Log execution details
         self.log_execution_details(&exec_config);
 
-        // Execute subprocess
-        log::debug!("Spawning Python subprocess...");
-        let output = cmd
+        // Execute subprocess with real-time output streaming
+        log::info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        log::info!("Spawning Python subprocess...");
+        log::info!("  Python: {}", self.python_path.display());
+        log::info!("  Script: {}", self.script_executor_path.display());
+        log::info!("  Temp file: {}", temp_file.path().display());
+        log::info!("  Command: {} {} --script {} --aws-profile {} --navigation-timeout {}{}{}{}{}",
+            self.python_path.display(),
+            self.script_executor_path.display(),
+            temp_file.path().display(),
+            exec_config.aws_profile,
+            exec_config.navigation_timeout,
+            if exec_config.headless { " --headless" } else { "" },
+            if let Some(ref bucket) = exec_config.s3_bucket { format!(" --s3-bucket {}", bucket) } else { String::new() },
+            if let Some(ref channel) = exec_config.browser_channel { format!(" --browser-channel {}", channel) } else { String::new() },
+            if let Some(ref user_data_dir) = exec_config.user_data_dir { format!(" --user-data-dir {}", user_data_dir.display()) } else { String::new() }
+        );
+        log::info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+        // Spawn process and stream output in real-time
+        log::info!("Attempting to spawn process...");
+        let mut child = match cmd
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .output()
-            .await
-            .context("Failed to execute Python subprocess")?;
+            .spawn()
+        {
+            Ok(child) => {
+                log::info!("✓ Process spawned successfully with PID: {}", child.id().unwrap_or(0));
+                child
+            }
+            Err(e) => {
+                log::error!("✗ Failed to spawn Python subprocess: {}", e);
+                log::error!("  Python path exists: {}", self.python_path.exists());
+                log::error!("  Script path exists: {}", self.script_executor_path.exists());
+                log::error!("  Temp file exists: {}", temp_file.path().exists());
+                return Err(anyhow::anyhow!("Failed to spawn Python subprocess: {}", e));
+            }
+        };
 
-        log::debug!("Python subprocess completed");
+        // Get handles for stdout and stderr
+        let stdout = child.stdout.take().context("Failed to get stdout")?;
+        let stderr = child.stderr.take().context("Failed to get stderr")?;
 
-        // Parse and return results
-        self.parse_output(output)
+        // Stream stdout in real-time
+        let stdout_handle = tokio::spawn(async move {
+            use tokio::io::{AsyncBufReadExt, BufReader};
+            let mut reader = BufReader::new(stdout).lines();
+            let mut output = Vec::new();
+
+            while let Ok(Some(line)) = reader.next_line().await {
+                // Log each line immediately for real-time feedback
+                log::info!("[Python stdout] {}", line);
+                output.push(line);
+            }
+
+            output.join("\n")
+        });
+
+        // Stream stderr in real-time
+        let stderr_handle = tokio::spawn(async move {
+            use tokio::io::{AsyncBufReadExt, BufReader};
+            let mut reader = BufReader::new(stderr).lines();
+            let mut output = Vec::new();
+
+            while let Ok(Some(line)) = reader.next_line().await {
+                // Log each line immediately - this catches early Python errors!
+                log::info!("[Python stderr] {}", line);
+                output.push(line);
+            }
+
+            output.join("\n")
+        });
+
+        // Wait for process to complete
+        let status = child.wait().await
+            .context("Failed to wait for Python subprocess")?;
+
+        // Collect all output
+        let stdout_output = stdout_handle.await
+            .context("Failed to join stdout task")?;
+        let stderr_output = stderr_handle.await
+            .context("Failed to join stderr task")?;
+
+        log::debug!("Python subprocess completed with status: {:?}", status);
+
+        // Return results
+        if status.success() {
+            log::info!("✓ Script execution completed successfully!");
+            Ok(ExecutionResult {
+                success: true,
+                output: Some(stdout_output),
+                error: None,
+            })
+        } else {
+            log::error!("✗ Script execution failed with exit code: {:?}", status.code());
+
+            Ok(ExecutionResult {
+                success: false,
+                output: Some(stdout_output),
+                error: Some(stderr_output),
+            })
+        }
     }
 
     /// Log execution details for debugging
@@ -192,39 +289,6 @@ impl ScriptExecutor {
         log::info!("═════════════════════");
     }
 
-    /// Parse Python subprocess output
-    fn parse_output(&self, output: std::process::Output) -> Result<ExecutionResult> {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-
-        // Always log stdout/stderr at info level for debugging
-        if !stdout.is_empty() {
-            log::info!("Script execution stdout:\n{}", stdout);
-        }
-        if !stderr.is_empty() {
-            log::info!("Script execution stderr:\n{}", stderr);
-        }
-
-        if output.status.success() {
-            log::info!("✓ Script execution completed successfully!");
-            Ok(ExecutionResult {
-                success: true,
-                output: Some(stdout.to_string()),
-                error: None,
-            })
-        } else {
-            log::error!("✗ Script execution failed with exit code: {:?}", output.status.code());
-            log::error!("  stdout: {}", stdout);
-            log::error!("  stderr: {}", stderr);
-
-            Ok(ExecutionResult {
-                success: false,
-                output: Some(stdout.to_string()),
-                error: Some(stderr.to_string()),
-            })
-        }
-    }
-
     /// Find Python executable from venv
     fn find_python_executable() -> Result<PathBuf> {
         let paths = AppPaths::new()?;
@@ -247,10 +311,14 @@ impl ScriptExecutor {
     /// Find script_executor.py or computer_agent_script_executor.py based on config
     fn find_script_executor() -> Result<PathBuf> {
         // Determine which script to use based on USE_COMPUTER_AGENT env var
-        let use_computer_agent = std::env::var("USE_COMPUTER_AGENT")
-            .ok()
-            .and_then(|v| v.parse::<bool>().ok())
-            .unwrap_or(false);
+        let use_computer_agent_str = std::env::var("USE_COMPUTER_AGENT")
+            .unwrap_or_else(|_| "not set".to_string());
+        let use_computer_agent = use_computer_agent_str.parse::<bool>().unwrap_or(false);
+
+        log::info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        log::info!("Script Executor Selection:");
+        log::info!("  USE_COMPUTER_AGENT env var: {}", use_computer_agent_str);
+        log::info!("  Parsed value: {}", use_computer_agent);
 
         // Route to wrapper files which handle format detection and routing
         // - nova_act_wrapper.py: Routes Nova Act format scripts
@@ -261,7 +329,8 @@ impl ScriptExecutor {
             "nova_act_wrapper.py"
         };
 
-        log::debug!("Looking for script wrapper: {}", script_name);
+        log::info!("  Selected wrapper: {}", script_name);
+        log::info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
         // Try to find script in various locations
         if let Ok(exe_path) = std::env::current_exe() {

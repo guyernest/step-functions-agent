@@ -55,12 +55,10 @@ async fn main() -> Result<()> {
 
         let config = Arc::new(cfg);
         let session_manager = Arc::new(RwLock::new(SessionManager::new()));
-        let executor = Arc::new(NovaActExecutor::new(Arc::clone(&config))?);
 
         let poller = Arc::new(
             ActivityPoller::new(
                 Arc::clone(&config),
-                Arc::clone(&executor),
                 Arc::clone(&session_manager),
             )
             .await?

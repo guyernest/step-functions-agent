@@ -4,7 +4,8 @@
   "starting_page": "https://my.btwholesale.com/portalzone/portalzone/spa/#/portalzone/myApps",
   "abort_on_error": true,
   "session": {
-    "profile_name": "Bt_broadband",
+    "required_tags": ["btwholesale.com", "authenticated"],
+    "allow_temp_profile": false,
     "clone_for_parallel": false,
     "requires_human_login": false,
     "session_timeout_hours": 24
@@ -27,39 +28,51 @@
     },
     {
       "action": "act_with_schema",
-      "prompt": "Extract the broadband availability information from the results page: - Exchange name (e.g., \"KINGSLAND GREEN\") - Cabinet number (e.g., \"Cabinet 9\") - VDSL Range A downstream and upstream rates in Mbps - Service type (ADSL, VDSL, FTTC, FTTP) - Availability status",
+      "prompt": "Extract broadband availability information from the results page following these steps:\n\n1. ALWAYS CAPTURE (if visible):\n   - ALK (Access Line Key) - usually displayed near top\n   - Exchange Code - BT exchange identifier\n\n2. CHECK FEATURED PRODUCTS SECTION:\n   Look for a section called 'Featured Products'\n   Search for a row/line containing 'WBC FTTP'\n\n3. IF 'WBC FTTP' IS FOUND:\n   - Set fttp_avail = true\n   - From the WBC FTTP row, capture 'Downstream Line Rate' (this is the SOADSL DSL speed in Mbps)\n   \n   Then navigate to OTHER SECTIONS:\n   \n   a) OTHER OFFERINGS section:\n      - Check if ANY row has 'Service Availability' field = 'Enabled'\n      - If found, set sogea_avail = true, otherwise false\n   \n   b) ONT DETAILS section:\n      - Find the LAST row in this section\n      - Capture: 'Reference' field (this is ont_reference)\n      - Capture: 'ONT Serial Number' field (this is ont_serial_no)\n      - Capture: 'Port Service ID' field (this is port_service_id)\n   \n   c) PREMISE ENVIRONMENT section:\n      - Capture: 'Recommended Minimum SVR NLP' field (this is install_type)\n      - Valid values are typically 'Standard' or 'Premium'\n\n4. IF 'WBC FTTP' IS NOT FOUND:\n   - Set fttp_avail = false\n   - Leave all FTTP-related fields blank (install_type, sogea_avail, soadsl_dsl_speed, ont_reference, ont_serial_no, port_service_id)\n\nIMPORTANT: fttp_avail is REQUIRED and must always be set to true or false based on whether WBC FTTP is present in Featured Products.",
       "schema": {
         "type": "object",
         "properties": {
-          "exchange": {
+          "alk": {
             "type": "string",
-            "description": "BT exchange station name"
+            "description": "Access Line Key identifier (e.g., A00022059784)"
           },
-          "cabinet": {
+          "exchange_code": {
             "type": "string",
-            "description": "Street cabinet number"
+            "description": "BT exchange code (e.g., CAMBRIDGE)"
           },
-          "downstream_mbps": {
-            "type": "number",
-            "description": "Maximum download speed in Mbps"
-          },
-          "upstream_mbps": {
-            "type": "number",
-            "description": "Maximum upload speed in Mbps"
-          },
-          "availability": {
+          "fttp_avail": {
             "type": "boolean",
-            "description": "Whether broadband service is available"
+            "description": "Whether WBC FTTP is found in Featured Products section"
           },
-          "service_type": {
+          "install_type": {
             "type": "string",
-            "enum": ["ADSL", "VDSL", "FTTC", "FTTP", "unknown"],
-            "description": "Type of broadband service"
+            "enum": ["Standard", "Premium", "N/A"],
+            "description": "Value from Premise Environment -> Recommended Minimum SVR NLP (only if WBC FTTP found)"
+          },
+          "sogea_avail": {
+            "type": "boolean",
+            "description": "Whether Other Offerings has Service Availability = Enabled (only if WBC FTTP found)"
+          },
+          "soadsl_dsl_speed": {
+            "type": "number",
+            "description": "Downstream Line Rate from WBC FTTP row in Mbps (only if WBC FTTP found)"
+          },
+          "ont_reference": {
+            "type": "string",
+            "description": "Reference field from last row of ONT Details section (only if WBC FTTP found)"
+          },
+          "ont_serial_no": {
+            "type": "string",
+            "description": "ONT Serial Number from last row of ONT Details section (only if WBC FTTP found)"
+          },
+          "port_service_id": {
+            "type": "string",
+            "description": "Port Service ID from last row of ONT Details section (only if WBC FTTP found)"
           }
         },
-        "required": ["exchange", "downstream_mbps", "upstream_mbps"]
+        "required": ["fttp_avail"]
       },
-      "description": "Extract structured broadband data"
+      "description": "Extract structured broadband availability data with FTTP-specific fields"
     },
     {
       "action": "screenshot",

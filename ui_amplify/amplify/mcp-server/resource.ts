@@ -83,11 +83,12 @@ export function createMcpServerResources(backend: Backend<{ auth: any; data: any
   });
 
   // Create IAM role for Lambda functions
+  // Note: roleName is not specified to allow CloudFormation to auto-generate unique names
+  // This prevents conflicts when stacks are created/destroyed
   const lambdaRole = new iam.Role(
     mcpServerStack,
     `${PROJECT_NAME}-lambda-role`,
     {
-      roleName: `${PROJECT_NAME}-mcp-lambda-role`,
       description: `Lambda execution role for ${PROJECT_NAME} MCP server`,
       assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
       managedPolicies: [

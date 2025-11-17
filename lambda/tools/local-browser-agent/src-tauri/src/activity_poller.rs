@@ -8,7 +8,7 @@ use tokio::time::{interval, Duration};
 use chrono::Utc;
 
 use crate::config::Config;
-use crate::nova_act_executor::NovaActExecutor;
+use crate::script_executor::{ScriptExecutor, ScriptExecutionConfig};
 use crate::session_manager::SessionManager;
 
 /// Status of the activity poller
@@ -25,7 +25,7 @@ pub enum PollerStatus {
 pub struct ActivityPoller {
     config: Arc<Config>,
     sfn_client: SfnClient,
-    executor: Arc<NovaActExecutor>,
+    script_executor: ScriptExecutor,
     session_manager: Arc<RwLock<SessionManager>>,
     status: Arc<RwLock<PollerStatus>>,
     current_task: Arc<RwLock<Option<String>>>,
@@ -35,7 +35,6 @@ impl ActivityPoller {
     /// Create a new activity poller
     pub async fn new(
         config: Arc<Config>,
-        executor: Arc<NovaActExecutor>,
         session_manager: Arc<RwLock<SessionManager>>,
     ) -> Result<Self> {
         // Load AWS config
@@ -46,12 +45,16 @@ impl ActivityPoller {
 
         let sfn_client = SfnClient::new(&aws_config);
 
+        // Create unified script executor (respects browser_engine config)
+        let script_executor = ScriptExecutor::new(Arc::clone(&config))?;
+
         info!("Activity poller initialized for ARN: {}", config.activity_arn);
+        info!("Using browser engine: {}", config.browser_engine);
 
         Ok(Self {
             config,
             sfn_client,
-            executor,
+            script_executor,
             session_manager,
             status: Arc::new(RwLock::new(PollerStatus::Idle)),
             current_task: Arc::new(RwLock::new(None)),
@@ -218,27 +221,45 @@ impl ActivityPoller {
         // Start heartbeat task
         let heartbeat_handle = self.start_heartbeat_task(task_token.clone());
 
-        // Execute Nova Act command
-        let result = self.executor.execute(tool_params).await;
+        // Convert tool_params to script JSON string for unified executor
+        let script_content = serde_json::to_string(&tool_params)
+            .context("Failed to serialize script")?;
+
+        // Execute using unified ScriptExecutor (respects browser_engine config)
+        let exec_config = ScriptExecutionConfig {
+            script_content,
+            aws_profile: self.config.aws_profile.clone(),
+            s3_bucket: Some(self.config.s3_bucket.clone()),
+            headless: self.config.headless, // Respect config setting for headless mode
+            browser_channel: self.config.browser_channel.clone(),
+            navigation_timeout: 60000, // 60 second default for server tasks
+            user_data_dir: None, // Server tasks don't use profiles by default
+        };
+
+        let result = self.script_executor.execute(exec_config).await;
 
         // Cancel heartbeat
         heartbeat_handle.abort();
 
         // Wrap result in the expected format (matching local agent pattern)
         match result {
-            Ok(nova_act_output) => {
-                // Check if Nova Act execution was successful
-                let execution_success = nova_act_output.get("success")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
+            Ok(execution_result) => {
+                if execution_result.success {
+                    // Parse output as JSON if possible
+                    let script_output: Value = if let Some(ref output) = execution_result.output {
+                        serde_json::from_str(output).unwrap_or_else(|_| {
+                            serde_json::json!({"raw_output": output})
+                        })
+                    } else {
+                        serde_json::json!({"success": true})
+                    };
 
-                if execution_success {
                     // Build response in the same format as local agent
                     let wrapped_response = serde_json::json!({
                         "tool_name": original_input.get("tool_name").unwrap_or(&serde_json::json!("browser_remote")),
                         "tool_use_id": original_input.get("tool_use_id").unwrap_or(&serde_json::json!("")),
                         "tool_input": {
-                            "script_output": nova_act_output
+                            "script_output": script_output
                         },
                         "timestamp": original_input.get("timestamp").unwrap_or(&serde_json::json!(Utc::now().to_rfc3339())),
                         "context": original_input.get("context").unwrap_or(&serde_json::json!({})),
@@ -249,12 +270,12 @@ impl ActivityPoller {
 
                     self.send_task_success(&task_token, wrapped_response).await?;
                 } else {
-                    // Nova Act execution failed - extract error message
-                    let error_msg = nova_act_output.get("error")
-                        .and_then(|v| v.as_str())
+                    // Execution failed - extract error message
+                    let error_msg = execution_result.error
+                        .as_deref()
                         .unwrap_or("Unknown browser automation error");
 
-                    error!("Nova Act execution failed: {}", error_msg);
+                    error!("Script execution failed: {}", error_msg);
                     self.send_task_failure(&task_token, error_msg.to_string()).await?;
                 }
             }

@@ -1,0 +1,53 @@
+{
+  "name": "BT Broadband Profile Test",
+  "description": "Test the Bt_broadband profile by navigating to BT Wholesale and clicking My Apps",
+  "starting_page": "https://my.btwholesale.com/portalzone/portalzone/spa/#/portalzone/myApps",
+  "abort_on_error": true,
+
+  "_comment_session": "Use the Bt_broadband profile for authenticated session (cloned for testing)",
+  "session": {
+    "profile_name": "Bt_broadband",
+    "clone_for_parallel": false,
+    "requires_human_login": false,
+    "session_timeout_hours": 24
+  },
+
+  "_comment_steps": "Navigation and interaction steps",
+  "steps": [
+    {
+      "action": "act",
+      "prompt": "If a login page appears, type 'nterizakis' as the username, and in the next screen verify that password was filled in automatically, and click Next button. Otherwise or after a successful login, click on the 'Open App' of the Enhanced Broadband Availability Checker on the bottom right of the screen",
+      "description": "Navigate to Broadband Availability Checker."
+    },
+    {
+      "action": "act",
+      "prompt": "Click on the Address Checker tab and Fill in the address form with these details: - Building Number field: 1 - Street/Road field: 'Church View' - PostCode field: 'DN12 1RH'. Then click the Submit button.",
+      "description": "Search by address"
+    },
+    {
+      "action": "act",
+      "prompt": "If an address list appears, select the closest match to 1 Church View, DN12 1RH and click submit, otherwise continue to next task.",
+      "description": "Select from options"
+    },
+    {
+      "action": "act_with_schema",
+      "prompt": "Extract the broadband availability information from the results page.- Exchange name (e.g., \"KINGSLAND GREEN\") - Cabinet number (e.g., \"Cabinet 9\") - VDSL Range A downstream and upstream rates - Availability status",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "exchange": { "type": "string" },
+          "cabinet": { "type": "string" },
+          "downstream": { "type": "number" },
+          "upstream": { "type": "number" },
+          "availability": { "type": "boolean" }
+        },
+        "required": ["exchange", "cabinet", "downstream", "upstream"]
+      },
+      "description": "Extract broadband information"
+    },
+    {
+      "action": "screenshot",
+      "description": "Capture the details page"
+    }
+  ]
+}

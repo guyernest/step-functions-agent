@@ -415,10 +415,10 @@ pub async fn setup_profile_login(
     log::info!("Setting up login for profile: {}", profile_name);
     log::info!("Starting URL: {}", starting_url);
 
-    // Use NovaActExecutor with the setup_login command type
-    // This is the same mechanism that works for validate_profile
+    // Use NovaActExecutor (which automatically routes to correct wrapper based on browser_engine)
+    // Both nova_act_wrapper.py and computer_agent_wrapper.py support setup_login command
     let executor = NovaActExecutor::new(Arc::clone(&config))
-        .map_err(|e| format!("Failed to init NovaActExecutor: {}", e))?;
+        .map_err(|e| format!("Failed to init executor: {}", e))?;
 
     let payload = serde_json::json!({
         "command_type": "setup_login",

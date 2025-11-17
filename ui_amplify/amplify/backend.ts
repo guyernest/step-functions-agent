@@ -197,6 +197,7 @@ let mcpRegistryTable: aws_dynamodb.ITable;
 let toolSecretsTable: aws_dynamodb.ITable;
 let testEventsTable: aws_dynamodb.ITable;
 let testResultsTable: aws_dynamodb.ITable;
+let templateRegistryTable: aws_dynamodb.ITable;
 
 if (importFromCoreCDK) {
   // Remote Amplify build: Import all tables from matching core environment
@@ -225,6 +226,12 @@ if (importFromCoreCDK) {
     externalDataSourcesStack,
     'ToolSecretsTable',
     Fn.importValue(`ToolSecretsTableName-${coreEnv}`)
+  );
+
+  templateRegistryTable = aws_dynamodb.Table.fromTableArn(
+    externalDataSourcesStack,
+    'TemplateRegistryTable',
+    Fn.importValue(`TemplateRegistryTableArn-${coreEnv}`)
   );
 
   // Import UI tables using CloudFormation exports
@@ -268,6 +275,12 @@ if (importFromCoreCDK) {
     externalDataSourcesStack,
     'ToolSecretsTable',
     `ToolSecrets-${coreEnv}`
+  );
+
+  templateRegistryTable = aws_dynamodb.Table.fromTableName(
+    externalDataSourcesStack,
+    'TemplateRegistryTable',
+    `TemplateRegistry-${coreEnv}`
   );
 
   // Create sandbox-specific UI tables (for isolated test data)
@@ -430,6 +443,11 @@ backend.data.addDynamoDbDataSource(
 backend.data.addDynamoDbDataSource(
   'TestResultsDataSource',
   testResultsTable
+);
+
+backend.data.addDynamoDbDataSource(
+  'TemplateRegistryDataSource',
+  templateRegistryTable
 );
 
 

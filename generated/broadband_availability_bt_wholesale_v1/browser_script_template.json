@@ -1,0 +1,72 @@
+{
+  "session": {
+    "profile_name": "Bt_broadband",
+    "mode": "use_profile",
+    "clone_for_parallel": false
+  },
+  "steps": [
+    {
+      "type": "navigate",
+      "url": "https://www.broadbandchecker.btwholesale.com/#/ADSL/AddressHome",
+      "description": "Navigate to starting URL"
+    },
+    {
+      "type": "act",
+      "goal": "Perform extraction task with the provided input parameters",
+      "description": "Main extraction step - fill in with actual user inputs"
+    },
+    {
+      "type": "act_with_schema",
+      "goal": "Extract all required information from the page",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "availability": {
+            "type": "",
+            "description": "Whether broadband service is available"
+          },
+          "cabinet": {
+            "type": "",
+            "description": "Street cabinet number"
+          },
+          "downstream_mbps": {
+            "type": "",
+            "description": "Maximum download speed in Mbps"
+          },
+          "exchange": {
+            "type": "",
+            "description": "BT exchange station name"
+          },
+          "metadata": {
+            "type": "",
+            "description": "Additional metadata from the extraction"
+          },
+          "screenshot_url": {
+            "type": "",
+            "description": "URL of browser recording or screenshot"
+          },
+          "service_type": {
+            "type": "",
+            "description": "Type of broadband service available"
+          },
+          "success": {
+            "type": "",
+            "description": "Whether the broadband availability check succeeded",
+            "required": true
+          },
+          "upstream_mbps": {
+            "type": "",
+            "description": "Maximum upload speed in Mbps"
+          }
+        }
+      },
+      "description": "Extract structured output matching the schema"
+    }
+  ],
+  "placeholders": {
+    "building_number": " - Building number (e.g., &#x27;1&#x27;, &#x27;23A&#x27;)",
+    "full_address": " - Full address for disambiguation when multiple matches exist",
+    "postcode": " - UK postcode in format like SW1A 1AA",
+    "street": " - Street or road name (e.g., &#x27;High Street&#x27;, &#x27;Park Road&#x27;)"
+  }
+}

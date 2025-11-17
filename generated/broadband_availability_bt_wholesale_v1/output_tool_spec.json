@@ -1,0 +1,38 @@
+{
+  "tool_name": "print_broadband_availability_bt_wholesale_output",
+  "description": "Print the final broadband_availability_bt_wholesale output in the canonical schema format. Call this tool when you have completed the extraction and want to return the structured data.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "availability": {
+        "description": "Whether broadband service is available"
+      },
+      "cabinet": {
+        "description": "Street cabinet number"
+      },
+      "downstream_mbps": {
+        "description": "Maximum download speed in Mbps"
+      },
+      "exchange": {
+        "description": "BT exchange station name"
+      },
+      "metadata": {
+        "description": "Additional metadata from the extraction"
+      },
+      "screenshot_url": {
+        "description": "URL of browser recording or screenshot"
+      },
+      "service_type": {
+        "description": "Type of broadband service available",
+        "enum": ["ADSL", "VDSL", "FTTC", "FTTP", "unknown"]
+      },
+      "success": {
+        "description": "Whether the broadband availability check succeeded"
+      },
+      "upstream_mbps": {
+        "description": "Maximum upload speed in Mbps"
+      }
+    },
+    "required": ["success", ]
+  }
+}

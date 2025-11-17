@@ -1,0 +1,34 @@
+{
+  "name": "BT Broadband Check",
+  "description": "Checking broadband availability in BT portal, without login.",
+  "starting_page": "https://www.broadbandchecker.btwholesale.com/#/ADSL/AddressHome",
+  "abort_on_error": false,
+  "steps": [
+    {
+      "action": "act",
+      "prompt": "Fill in the address form with these details: - Building Number field: 1 - Street/Road field: 'Church View' - PostCode field: 'DN12 1RH'. Then click the Submit button.",
+      "description": "Search by address"
+    },
+    {
+      "action": "act",
+      "prompt": "If an address list appears, select the closest match to 1 Church View, DN12 1RH.",
+      "description": "Select from options"
+    },
+    {
+      "action": "act_with_schema",
+      "prompt": "Extract the broadband availability information from the results page.- Exchange name (e.g., \"KINGSLAND GREEN\") - Cabinet number (e.g., \"Cabinet 9\") - VDSL Range A downstream and upstream rates - Availability status",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "exchange": { "type": "string" },
+          "cabinet": { "type": "string" },
+          "downstream": { "type": "number" },
+          "upstream": { "type": "number" },
+          "availability": { "type": "boolean" }
+        },
+        "required": ["exchange", "cabinet", "downstream", "upstream"]
+      },
+      "description": "Extract broadband information"
+    }
+  ]
+}

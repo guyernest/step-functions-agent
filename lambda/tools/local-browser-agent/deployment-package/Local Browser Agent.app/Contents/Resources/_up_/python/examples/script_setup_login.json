@@ -1,0 +1,44 @@
+{
+  "name": "Setup Login Session",
+  "description": "Create a profile with manual login for future automation",
+  "starting_page": "https://example-service.com/login",
+  "abort_on_error": false,
+
+  "_comment_session": "This script creates a NEW profile and waits for human login",
+  "session": {
+    "mode": "create_profile",
+    "profile_name": "example_service_profile",
+    "profile_description": "Authenticated session for Example Service",
+    "profile_tags": ["production", "authenticated"],
+    "clone_for_parallel": false,
+    "requires_human_login": true,
+    "wait_for_human_login": true,
+    "login_timeout_minutes": 10,
+    "post_login_verification": "Can you see the main dashboard or homepage?",
+    "auto_login_sites": [
+      "https://example-service.com",
+      "https://app.example-service.com"
+    ]
+  },
+
+  "_comment_steps": "Steps after login is complete",
+  "steps": [
+    {
+      "action": "act_with_schema",
+      "prompt": "What is the user's display name or account name?",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "user_name": {"type": "string"},
+          "account_id": {"type": "string"}
+        }
+      },
+      "description": "Verify login by extracting user info"
+    },
+    {
+      "action": "act",
+      "prompt": "Navigate to account settings or profile page",
+      "description": "Test navigation within authenticated session"
+    }
+  ]
+}

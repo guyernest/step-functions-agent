@@ -1,0 +1,46 @@
+{
+  "perplexity": {
+    "PPLX_API_KEY": "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"
+  },
+  "execute-code": {
+    "E2B_API_KEY": "e2b_3170e1d7598e3371ff69746ebf73d5933fc9b24b"
+  },
+  "cohere": { "CO_API_KEY": "2uHCqeFZyxHd5Zkhzog5LV5LyxmDAQt4kdnibbSl" },
+  "google-maps": {
+    "GOOGLE_MAPS_API_KEY": "AIzaSyCEynwzVt0PvGYStGZXf0Am-au7qmZnNdo"
+  },
+  "web-research": {
+    "PPLX_API_KEY": "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"
+  },
+  "execute-code-secrets": {
+    "E2B_API_KEY": "e2b_3170e1d7598e3371ff69746ebf73d5933fc9b24b"
+  },
+  "books-api": { "NYT_API_KEY": "REPLACE_WITH_ACTUAL_API_KEY" },
+  "microsoft-graph": {
+    "CLIENT_SECRET": "J6U8Q~4mp55CTnrOMP4AoPPi1g7bxbWOGXCOybju",
+    "CLIENT_ID": "5364f318-4e36-4630-9a13-640129dc80c6",
+    "TENANT_ID": "64464a45-d1b8-497f-bc09-b45019875618"
+  },
+  "graphql-interface": {
+    "LogisticZ": "{\"endpoint\": \"https://logisticz-api.example.com/graphql\", \"api_key\": \"PLACEHOLDER_LOGISTICZ_API_KEY\"}",
+    "CustomerService": "{\"endpoint\": \"https://customer-api.example.com/graphql\", \"api_key\": \"PLACEHOLDER_CUSTOMER_API_KEY\"}",
+    "LogisticY": "{\"endpoint\": \"https://tnaxz5iagrc2vo7ntroztcvuli.appsync-api.us-west-2.amazonaws.com/graphql\", \"api_key\": \"da2-6wzlud3ojvbjrj5bmpel7acsjy\"}",
+    "RentalX": "{\"endpoint\": \"https://4r5f7jhe6nemnkv43lpznal2mq.appsync-api.us-west-2.amazonaws.com/graphql\", \"api_key\": \"da2-x5ugdx5z4zdd3ia7bstxskru5a\"}",
+    "InternalAPI": "{\"endpoint\": \"https://internal.company.com/graphql\", \"api_key\": \"internal-api-key\", \"headers\": {\"Authorization\": \"Bearer your-token-here\"}}"
+  },
+  "semantic-search": {
+    "COHERE_API_KEY": "REPLACE_WITH_ACTUAL_API_KEY",
+    "QDRANT_API_KEY": "REPLACE_WITH_ACTUAL_API_KEY",
+    "QDRANT_URL": "https://your-cluster.qdrant.tech"
+  },
+  "image-analysis": { "GEMINI_API_KEY": "REPLACE_WITH_ACTUAL_API_KEY" },
+  "browser_broadband": {
+    "NOVA_ACT_API_KEY": "a85b85a4-2a40-43a4-b6c8-b2b99f4ba48b"
+  },
+  "browser_shopping": {
+    "NOVA_ACT_API_KEY": "a85b85a4-2a40-43a4-b6c8-b2b99f4ba48b"
+  },
+  "browser_search": {
+    "NOVA_ACT_API_KEY": "a85b85a4-2a40-43a4-b6c8-b2b99f4ba48b"
+  }
+}

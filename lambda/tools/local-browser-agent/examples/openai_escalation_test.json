@@ -1,0 +1,61 @@
+{
+  "name": "Progressive Escalation Test",
+  "description": "Demonstrates progressive escalation from DOM checks to vision",
+  "llm_provider": "openai",
+  "llm_model": "gpt-4o-mini",
+  "starting_page": "https://www.google.com",
+  "abort_on_error": true,
+  "steps": [
+    {
+      "type": "wait",
+      "description": "Wait for page to load",
+      "duration": 2000
+    },
+    {
+      "type": "click",
+      "description": "Click search button with escalation",
+      "escalation_chain": [
+        {
+          "method": "playwright_dom",
+          "strategy": "check_page_title",
+          "matchers": {
+            "google_search": ["google"]
+          },
+          "confidence_threshold": 0.8,
+          "comment": "Try DOM check first - cheapest and fastest"
+        },
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "selector",
+            "value": "input[name='btnK']"
+          },
+          "confidence_threshold": 0.9,
+          "comment": "Try known selector second - still free and fast"
+        },
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "text",
+            "value": "Google Search"
+          },
+          "confidence_threshold": 0.9,
+          "comment": "Try text match third"
+        },
+        {
+          "method": "vision_find_element",
+          "prompt": "Find the main Google Search button. This is the primary search button in the center of the page.",
+          "prefer": "selector",
+          "fallback": "coordinates",
+          "confidence_threshold": 0.7,
+          "comment": "Only use vision if Playwright methods fail - costs $0.01"
+        }
+      ]
+    },
+    {
+      "type": "screenshot",
+      "description": "Take final screenshot",
+      "save_to": "escalation_test_final.png"
+    }
+  ]
+}

@@ -134,7 +134,7 @@ pub async fn load_config_from_file(path: String) -> Result<ConfigData, String> {
 
 /// Save configuration to file
 #[tauri::command]
-pub async fn save_config_to_file(path: String, config: ConfigData) -> Result<(), String> {
+pub async fn save_config_to_file(path: String, config: ConfigData) -> Result<String, String> {
     let config_path = resolve_config_path(&path)?;
 
     info!("Saving config to: {}", config_path.display());
@@ -147,7 +147,14 @@ pub async fn save_config_to_file(path: String, config: ConfigData) -> Result<(),
 
     info!("Config saved successfully to: {}", config_path.display());
 
-    Ok(())
+    // Return a message prompting user to restart the app or stop/start polling
+    Ok(format!(
+        "Configuration saved to {}. \n\n⚠️ Important: To apply the changes:\n\
+         1. If Activity Poller is running, stop it first\n\
+         2. Restart the application\n\
+         3. Start Activity Poller again with the new settings",
+        config_path.display()
+    ))
 }
 
 /// Test AWS connection

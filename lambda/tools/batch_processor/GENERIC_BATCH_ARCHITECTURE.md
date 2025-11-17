@@ -5,12 +5,184 @@
 2. **Scalable**: Handle unlimited batch sizes using DynamoDB
 3. **Configuration-Driven**: All mappings defined in configuration, not code
 4. **Schema-Aware**: Agents can register their output schemas for automatic mapping
+5. **Template-Driven**: Browser automation uses templates for consistent schema extraction
 
 ## Architecture Overview
 
 ```
-CSV Input → Input Mapper → Agent/Tool → Output Writer (DynamoDB) → Result Aggregator → CSV Output
+CSV Input → Input Mapper → Agent/Tool → Output Mapper → Result Aggregator → CSV Output
 ```
+
+### Current Implementation (In-Memory Processing)
+
+The current batch processor uses Step Functions INLINE Map with structured output:
+
+```
+CSV (S3)
+  ↓
+ValidateInput (Lambda)
+  ↓
+LoadCSVData (Lambda - input_mapper)
+  ↓
+ProcessCSV (Map State - Max Concurrency: 10)
+  ├─ TransformInput (Lambda - input_mapper)
+  ├─ InvokeAgent (Step Functions - synchronous)
+  └─ ExtractStructuredOutput (Lambda - output_mapper)
+  ↓
+AggregateResults (Lambda - result_aggregator)
+  ↓
+CSV Output (S3)
+```
+
+## Schema-Driven Flow for Browser Automation Agents
+
+### Complete Schema Propagation Pipeline
+
+For agents using browser automation with templates (e.g., `broadband-availability-bt-wholesale`):
+
+```
+1. Canonical Schema Definition
+   Location: schemas/broadband_availability_bt_wholesale.json
+   Contains: input_schema, output_schema, browser_config, metadata
+   ↓
+2. Schema Factory (Rust CLI)
+   Tool: lambda/tools/local-browser-agent/schema-factory
+   Generates:
+   - CDK Stack (stacks/agents/{agent_name}_stack.py)
+   - Browser Script Template
+   - Tool Specifications
+   - Batch Mapping Configuration
+   ↓
+3. Template Registry (DynamoDB)
+   Table: TemplateRegistry-{env}
+   Keys: template_id (partition), version (sort)
+   Contains:
+   - template: JSON with steps including act_with_schema
+   - variables: Input parameter definitions
+   - metadata: Profile, starting URL, tags
+   ↓
+4. Agent Registration (DynamoDB)
+   Table: AgentRegistry-{env}
+   Keys: agent_name (partition), version (sort)
+   Contains:
+   - structured_output.enabled: true
+   - structured_output.schemas: {schema definitions}
+   - structured_output.output_fields: [field list]
+   - template_config: {template_id, version, rendering_engine}
+   ↓
+5. Batch Orchestrator Agent
+   Agent: batch-orchestrator-agent
+   Tools:
+   - analyze_csv_structure
+   - validate_agent_compatibility (checks structured_output.enabled)
+   - generate_batch_config
+   - execute_batch_processor
+   - monitor_batch_execution
+   - get_batch_results
+   ↓
+6. Batch Processor State Machine
+   State Machine: batch-processor-{env}
+   Uses JSONata for transformations
+
+   Flow:
+   a. ValidateInput
+      - Validates CSV S3 URI
+      - Checks agent has structured_output enabled
+
+   b. LoadCSVData (input_mapper Lambda)
+      - Reads CSV from S3
+      - Returns rows as array
+
+   c. ProcessCSV (Map State)
+
+      c1. TransformInput (input_mapper Lambda)
+          - Maps CSV columns to agent input fields
+          - Creates prompt and data payload
+          Input: {row: {...}, mapping_config: {...}, target: {...}}
+          Output: {prompt: "...", data: {...}}
+
+      c2. InvokeAgent (Step Functions StartSyncExecution)
+          - Invokes agent state machine synchronously
+          - Agent uses template_id to load template from registry
+          - Template renderer (Mustache) fills variables
+          - Local browser agent executes steps
+          - act_with_schema step extracts structured data
+          Output: {structured_output: {...}, messages: [...]}
+
+      c3. ExtractStructuredOutput (output_mapper Lambda)
+          - Extracts structured_output field from agent response
+          - Maps to CSV column fields
+          Input: {agent_output: {...}, output_mapping: {...}, original_row: {...}}
+          Output: {original_row_fields..., extracted_fields..., _status, _timestamp}
+
+   d. AggregateResults (result_aggregator Lambda)
+      - Combines all processed rows
+      - Writes CSV to S3
+      - Returns statistics
+```
+
+### Schema Consistency Enforcement
+
+The system enforces schema consistency at multiple layers:
+
+1. **Canonical Schema** (Source of Truth)
+   - Defines input and output structure
+   - Validated by schema-factory
+
+2. **Template Schema** (Browser Extraction)
+   - `act_with_schema` step contains schema for browser data extraction
+   - Must match canonical output_schema
+
+3. **Agent Stack Schema** (Agent Definition)
+   - `structured_output_schema` in CDK stack
+   - Used by Unified LLM to validate output
+   - Registered in AgentRegistry
+
+4. **Output Mapper** (Batch Processing)
+   - Reads `structured_output_fields` from configuration
+   - Extracts only specified fields from agent response
+   - Validates REQUIRED fields are present
+
+### Key Files in Schema Flow
+
+| File | Purpose | Schema Elements |
+|------|---------|-----------------|
+| `schemas/{extraction_name}.json` | Canonical schema definition | input_schema, output_schema |
+| `templates/{extraction_name}_v{version}.json` | Template with act_with_schema | steps[].schema (embedded) |
+| `stacks/agents/{agent_name}_stack.py` | CDK agent definition | structured_output_schema, output_fields |
+| `lambda/tools/batch_processor/input_mapper.py` | CSV → Agent input | Validates structured_output.enabled |
+| `lambda/tools/batch_processor/output_mapper.py` | Agent output → CSV | Extracts structured_output fields |
+
+### Output Mapper Implementation Details
+
+The `output_mapper.py` Lambda (`extract_structured_output` function) performs:
+
+1. **Locate structured output** in agent response:
+   ```python
+   # Check multiple possible locations
+   agent_output['structured_output']  # Direct
+   agent_output['Output']['structured_output']  # Step Functions wrapped
+   agent_output['content']['structured_output']  # Tool result format
+   ```
+
+2. **Extract specified fields**:
+   ```python
+   fields_to_extract = output_mapping['structured_output_fields']
+   for field_name in fields_to_extract:
+       if field_name in structured_data:
+           result_row[field_name] = structured_data[field_name]
+   ```
+
+3. **Add metadata**:
+   ```python
+   result_row['_status'] = 'SUCCESS'
+   result_row['_timestamp'] = datetime.utcnow().isoformat()
+   ```
+
+4. **Handle errors**:
+   - Missing structured_output → Return error with _status: 'FAILED'
+   - Missing fields → Return empty string for field
+   - Complex types (dict, list) → JSON stringify for CSV
 
 ## DynamoDB Schema
 

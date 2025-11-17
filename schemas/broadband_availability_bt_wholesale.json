@@ -1,0 +1,104 @@
+{
+  "extraction_name": "broadband_availability_bt_wholesale",
+  "version": "1.0.0",
+  "description": "Check broadband availability for UK addresses using BT Wholesale Broadband Checker portal",
+
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "building_number": {
+        "type": "string",
+        "description": "Building number (e.g., '1', '23A')",
+        "required": true
+      },
+      "street": {
+        "type": "string",
+        "description": "Street or road name (e.g., 'High Street', 'Park Road')",
+        "required": true
+      },
+      "postcode": {
+        "type": "string",
+        "pattern": "^[A-Z]{1,2}[0-9][A-Z0-9]? [0-9][A-Z]{2}$",
+        "description": "UK postcode in format like SW1A 1AA",
+        "required": true
+      },
+      "full_address": {
+        "type": "string",
+        "description": "Full address for disambiguation when multiple matches exist",
+        "required": false
+      }
+    }
+  },
+
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "success": {
+        "type": "boolean",
+        "description": "Whether the broadband availability check succeeded",
+        "required": true
+      },
+      "alk": {
+        "type": "string",
+        "description": "Access Line Key identifier (e.g., A00022059784)"
+      },
+      "exchange_code": {
+        "type": "string",
+        "description": "BT exchange code (e.g., CAMBRIDGE)"
+      },
+      "fttp_avail": {
+        "type": "boolean",
+        "description": "Whether FTTP (Fibre to the Premises) is available",
+        "required": true
+      },
+      "install_type": {
+        "type": "string",
+        "enum": ["Standard", "Premium", "N/A"],
+        "description": "Installation type for FTTP service"
+      },
+      "sogea_avail": {
+        "type": "boolean",
+        "description": "Whether SoGEA (Single Order Generic Ethernet Access) is available"
+      },
+      "soadsl_dsl_speed": {
+        "type": "number",
+        "description": "SOADSL DSL speed in Mbps"
+      },
+      "ont_reference": {
+        "type": "string",
+        "description": "ONT (Optical Network Terminal) reference number from ONT section"
+      },
+      "ont_serial_no": {
+        "type": "string",
+        "description": "ONT serial number from ONT section"
+      },
+      "port_service_id": {
+        "type": "string",
+        "description": "Port Service ID from the last line of ONT section"
+      },
+      "screenshot_url": {
+        "type": "string",
+        "description": "URL of browser recording or screenshot"
+      },
+      "metadata": {
+        "type": "object",
+        "description": "Additional metadata from the extraction"
+      }
+    }
+  },
+
+  "browser_config": {
+    "profile_name": "Bt_broadband",
+    "starting_url": "https://www.broadbandchecker.btwholesale.com/#/ADSL/AddressHome",
+    "timeout": 300,
+    "requires_login": false,
+    "clone_for_parallel": false
+  },
+
+  "metadata": {
+    "author": "system",
+    "created_at": "2025-10-17",
+    "tags": ["broadband", "availability", "uk", "bt-wholesale", "infrastructure", "vdsl", "fttc"],
+    "use_cases": ["batch-processing", "api-integration", "address-validation", "infrastructure-planning"]
+  }
+}

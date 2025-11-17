@@ -167,6 +167,18 @@ const schema = a.schema({
     executionArn: a.string(),
     message: a.string(),
   }),
+
+  Template: a.customType({
+    template_id: a.string().required(),
+    version: a.string().required(),
+    extraction_name: a.string(),
+    status: a.string().required(),
+    template: a.json().required(),
+    variables: a.json(),
+    metadata: a.json(),
+    created_at: a.string(),
+    updated_at: a.string(),
+  }),
   
   listAgentsFromRegistry: a
     .query()
@@ -610,6 +622,35 @@ const schema = a.schema({
     })
     .returns(a.json())
     .handler(a.handler.function(getStateMachineInfo))
+    .authorization((allow) => [allow.authenticated()]),
+
+  getAgentTemplate: a
+    .query()
+    .arguments({
+      template_id: a.string().required(),
+      version: a.string(),
+    })
+    .returns(a.ref('Template'))
+    .handler(
+      a.handler.custom({
+        dataSource: 'TemplateRegistryDataSource',
+        entry: './getAgentTemplate.js',
+      })
+    )
+    .authorization((allow) => [allow.authenticated()]),
+
+  listTemplatesByAgent: a
+    .query()
+    .arguments({
+      agent_name: a.string().required(),
+    })
+    .returns(a.ref('Template').array())
+    .handler(
+      a.handler.custom({
+        dataSource: 'TemplateRegistryDataSource',
+        entry: './listTemplatesByAgent.js',
+      })
+    )
     .authorization((allow) => [allow.authenticated()]),
 
   // API Key Management Operations - commented out until functions are implemented

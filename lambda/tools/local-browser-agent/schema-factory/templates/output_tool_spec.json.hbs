@@ -1,18 +1,26 @@
 {
-  "tool_name": "print_output",
-  "description": "Output structured {{extraction_name}} results",
+  "tool_name": "print_{{extraction_name}}_output",
+  "description": "Print the final {{extraction_name}} output in the canonical schema format. Call this tool when you have completed the extraction and want to return the structured data.",
   "input_schema": {
-    "type": "object",
+    "type": "{{output_schema.type}}",
     "properties": {
       {{#each output_schema.properties}}
       "{{@key}}": {
-        "type": "{{this.property_type}}"{{#if this.description}},
-        "description": "{{this.description}}"{{/if}}{{#if this.pattern}},
-        "pattern": "{{this.pattern}}"{{/if}}{{#if this.enum_values}},
-        "enum": [{{#each this.enum_values}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}]{{/if}}
+        {{#if this.property_type}}
+        "type": "{{this.property_type}}"{{#if this.description}},{{/if}}
+        {{/if}}
+        {{#if this.description}}
+        "description": "{{this.description}}"{{#if this.pattern}},{{else}}{{#if this.enum}},{{/if}}{{/if}}
+        {{/if}}
+        {{#if this.pattern}}
+        "pattern": "{{this.pattern}}"{{#if this.enum}},{{/if}}
+        {{/if}}
+        {{#if this.enum}}
+        "enum": [{{#each this.enum}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}]
+        {{/if}}
       }{{#unless @last}},{{/unless}}
       {{/each}}
     },
-    "required": [{{#each required_output_fields}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}]
+    "required": [{{#each output_schema.properties}}{{#if this.required}}"{{@key}}"{{#unless @last}}, {{/unless}}{{/if}}{{/each}}]
   }
 }

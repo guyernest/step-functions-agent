@@ -91,11 +91,22 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
   const [stateMachineInfo, setStateMachineInfo] = useState<any>(null)
   const [loadingStateMachine, setLoadingStateMachine] = useState(false)
   const [stateMachineError, setStateMachineError] = useState<string | null>(null)
+  const [templateData, setTemplateData] = useState<any>(null)
+  const [loadingTemplate, setLoadingTemplate] = useState(false)
+  const [templateError, setTemplateError] = useState<string | null>(null)
   
   // Check if this agent supports provider switching (Rust LLM agents)
   const isUnifiedRustAgent = () => {
     const metadata = parseJSON(agent?.metadata || '{}')
     return metadata.llm_type === 'unified-rust'
+  }
+
+  // Check if this agent uses templates
+  const hasTemplateSupport = () => {
+    const metadata = parseJSON(agent?.metadata || '{}')
+    const templateConfig = metadata.template_config
+    const usesBrowserRemote = agent?.tools?.includes('browser_remote')
+    return templateConfig?.enabled || usesBrowserRemote
   }
 
   useEffect(() => {
@@ -115,16 +126,17 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
       setOriginalProvider(mappedProvider)
     }
     
-    // Fetch tool details, models and state machine info when agent changes
+    // Fetch tool details, models, state machine info and template when agent changes
     if (agent && isOpen) {
       fetchToolDetails()
       fetchStateMachineInfo()
-      
+      fetchTemplateInfo()
+
       // Fetch available providers for Rust LLM agents
       if (isUnifiedRustAgent()) {
         fetchAvailableProviders()
       }
-      
+
       if (agent.llmProvider) {
         // Map the agent's provider name to the LLMModels provider name
         const mappedProvider = PROVIDER_MAPPING[agent.llmProvider] || agent.llmProvider
@@ -202,9 +214,72 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
     }
   }
 
+  const fetchTemplateInfo = async () => {
+    if (!agent?.name) return
+
+    // Check if agent has template configuration or uses browser_remote tool
+    const metadata = parseJSON(agent?.metadata || '{}')
+    const templateConfig = metadata.template_config
+    const usesBrowserRemote = agent?.tools?.includes('browser_remote')
+
+    if (!templateConfig?.enabled && !usesBrowserRemote) {
+      return // Agent doesn't use templates
+    }
+
+    setLoadingTemplate(true)
+    setTemplateError(null)
+    try {
+      // Try to fetch template based on template_config first
+      if (templateConfig?.template_id) {
+        const response = await client.queries.getAgentTemplate({
+          template_id: templateConfig.template_id,
+          version: templateConfig.template_version || '1.0.0'
+        })
+
+        if (response.data) {
+          setTemplateData(parseTemplateData(response.data))
+        }
+      } else if (usesBrowserRemote) {
+        // Try to find template by agent name
+        // Normalize agent name: convert hyphens to underscores to match template naming convention
+        const normalizedAgentName = agent.name.replace(/-/g, '_')
+
+        // Try direct fetch with normalized name first (more efficient)
+        try {
+          const directResponse = await client.queries.getAgentTemplate({
+            template_id: normalizedAgentName,
+            version: '1.0.0'
+          })
+
+          if (directResponse.data) {
+            setTemplateData(parseTemplateData(directResponse.data))
+            return
+          }
+        } catch (directError) {
+          console.log('Direct template fetch failed, trying search:', directError)
+        }
+
+        // Fall back to search by agent name
+        const response = await client.queries.listTemplatesByAgent({
+          agent_name: normalizedAgentName
+        })
+
+        if (response.data && response.data.length > 0) {
+          // Use the first active template found
+          setTemplateData(parseTemplateData(response.data[0]))
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching template:', error)
+      setTemplateError('Failed to fetch template information')
+    } finally {
+      setLoadingTemplate(false)
+    }
+  }
+
   const fetchToolDetails = async () => {
     if (!agent?.tools || agent.tools.length === 0) return
-    
+
     setLoadingTools(true)
     try {
       const response = await client.queries.listToolsFromRegistry({})
@@ -356,6 +431,25 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
     }
   }
 
+  // Helper function to parse template data from GraphQL response
+  // GraphQL a.json() type returns JSON fields as strings, so we need to parse them
+  const parseTemplateData = (templateResponse: any) => {
+    if (!templateResponse) return null
+
+    return {
+      ...templateResponse,
+      template: typeof templateResponse.template === 'string'
+        ? JSON.parse(templateResponse.template)
+        : templateResponse.template,
+      variables: typeof templateResponse.variables === 'string'
+        ? JSON.parse(templateResponse.variables)
+        : templateResponse.variables || {},
+      metadata: typeof templateResponse.metadata === 'string'
+        ? JSON.parse(templateResponse.metadata)
+        : templateResponse.metadata || {}
+    }
+  }
+
   // Helper function to get language badge color
   const getLanguageColor = (language?: string): string => {
     const lang = language?.toLowerCase() || 'python'
@@ -434,6 +528,139 @@ const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
             <Tabs
               defaultValue="system-prompt"
               items={[
+                ...(hasTemplateSupport() ? [{
+                  label: 'Template',
+                  value: 'template',
+                  content: (
+                    <View marginTop="20px">
+                      {loadingTemplate ? (
+                        <Flex justifyContent="center" alignItems="center" minHeight="200px">
+                          <Loader size="large" />
+                        </Flex>
+                      ) : templateError ? (
+                        <Alert variation="error">
+                          {templateError}
+                        </Alert>
+                      ) : templateData ? (
+                        <Flex direction="column" gap="20px">
+                          <Card variation="outlined">
+                            <Flex direction="column" gap="10px">
+                              <Heading level={5}>Template Information</Heading>
+
+                              <View backgroundColor="gray.10" padding="10px" borderRadius="4px">
+                                <Flex direction="column" gap="8px">
+                                  <Text fontSize="small">
+                                    <strong>Template ID:</strong> {templateData.template_id}
+                                  </Text>
+                                  <Text fontSize="small">
+                                    <strong>Version:</strong>{' '}
+                                    <Badge variation="info" size="small">
+                                      {templateData.version}
+                                    </Badge>
+                                  </Text>
+                                  <Text fontSize="small">
+                                    <strong>Status:</strong>{' '}
+                                    <Badge
+                                      variation={templateData.status === 'active' ? 'success' : 'warning'}
+                                      size="small"
+                                    >
+                                      {templateData.status}
+                                    </Badge>
+                                  </Text>
+                                  {templateData.extraction_name && (
+                                    <Text fontSize="small">
+                                      <strong>Extraction Name:</strong> {templateData.extraction_name}
+                                    </Text>
+                                  )}
+                                  {templateData.created_at && (
+                                    <Text fontSize="small">
+                                      <strong>Created:</strong>{' '}
+                                      {new Date(templateData.created_at).toLocaleString()}
+                                    </Text>
+                                  )}
+                                </Flex>
+                              </View>
+                            </Flex>
+                          </Card>
+
+                          {templateData.variables && Object.keys(templateData.variables).length > 0 && (
+                            <Card variation="outlined">
+                              <Flex direction="column" gap="10px">
+                                <Heading level={5}>Template Variables</Heading>
+                                <Text fontSize="small" color="gray">
+                                  Variables required by this template
+                                </Text>
+
+                                <View backgroundColor="gray.10" padding="10px" borderRadius="4px">
+                                  <Flex direction="column" gap="5px">
+                                    {Object.entries(templateData.variables).map(([key, value]: [string, any]) => (
+                                      <Text key={key} fontSize="small" fontFamily="monospace">
+                                        <strong>{key}:</strong> {value.description || value.type || 'string'}
+                                        {value.required && <Badge marginLeft="5px" variation="warning" size="small">Required</Badge>}
+                                      </Text>
+                                    ))}
+                                  </Flex>
+                                </View>
+                              </Flex>
+                            </Card>
+                          )}
+
+                          <Card variation="outlined">
+                            <Flex direction="column" gap="10px">
+                              <Heading level={5}>Template Definition</Heading>
+                              <Text fontSize="small" color="gray" marginBottom="10px">
+                                View the full template JSON structure
+                              </Text>
+                              <details>
+                                <summary style={{ cursor: 'pointer', padding: '10px 0' }}>
+                                  <Text fontWeight="bold">View Template JSON</Text>
+                                </summary>
+                                <View
+                                  backgroundColor="gray.10"
+                                  padding="15px"
+                                  borderRadius="4px"
+                                  style={{ maxHeight: '400px', overflow: 'auto' }}
+                                >
+                                  <pre style={{ fontSize: '12px', fontFamily: 'monospace', margin: 0 }}>
+                                    {JSON.stringify(templateData.template, null, 2)}
+                                  </pre>
+                                </View>
+                              </details>
+                            </Flex>
+                          </Card>
+
+                          {templateData.metadata && Object.keys(templateData.metadata).length > 0 && (
+                            <Card variation="outlined">
+                              <Flex direction="column" gap="10px">
+                                <Heading level={5}>Metadata</Heading>
+
+                                <View backgroundColor="gray.10" padding="10px" borderRadius="4px">
+                                  <Flex direction="column" gap="5px">
+                                    {Object.entries(templateData.metadata).map(([key, value]) => (
+                                      <Text key={key} fontSize="small" fontFamily="monospace">
+                                        <strong>{key}:</strong> {JSON.stringify(value)}
+                                      </Text>
+                                    ))}
+                                  </Flex>
+                                </View>
+                              </Flex>
+                            </Card>
+                          )}
+                        </Flex>
+                      ) : (
+                        <Alert variation="info">
+                          <Flex direction="column" gap="10px">
+                            <Text>No template configured for this agent.</Text>
+                            <Text fontSize="small">
+                              This agent uses the <strong>browser_remote</strong> tool but doesn't have a specific template registered.
+                              Templates can be registered to provide structured browser automation workflows.
+                            </Text>
+                          </Flex>
+                        </Alert>
+                      )}
+                    </View>
+                  )
+                }] : []),
                 {
                   label: 'System Prompt',
                   value: 'system-prompt',

@@ -626,6 +626,37 @@ populate-mcp-registry:
 	@$(PYTHON) scripts/populate_mcp_registry.py
 
 # ============================================
+# Template Registry Commands
+# ============================================
+TEMPLATE_FILE ?= templates/broadband_availability_bt_wholesale_v1.0.0.json
+
+.PHONY: register-template
+register-template:
+	@if [ -z "$(TEMPLATE)" ]; then \
+		echo "❌ Please specify TEMPLATE=<template-file>"; \
+		echo "Example: make register-template TEMPLATE=templates/broadband_availability_bt_wholesale_v1.0.0.json"; \
+		exit 1; \
+	fi
+	@echo "📝 Registering template: $(TEMPLATE)"
+	@$(PYTHON) scripts/register_template.py $(TEMPLATE) --env $(ENV_NAME) --profile $(AWS_PROFILE)
+
+.PHONY: update-broadband-template
+update-broadband-template:
+	@echo "📝 Updating BT Wholesale broadband availability template..."
+	@$(PYTHON) scripts/register_template.py \
+		templates/broadband_availability_bt_wholesale_v1.0.0.json \
+		--env $(ENV_NAME) \
+		--profile $(AWS_PROFILE)
+
+.PHONY: deploy-broadband-agent
+deploy-broadband-agent: update-broadband-template
+	@echo "🚀 Deploying broadband availability agent stack..."
+	@$(CDK) deploy BroadbandAvailabilityBtWholesaleStack-$(ENV_NAME) \
+		--require-approval never \
+		--profile $(AWS_PROFILE)
+	@echo "✅ Broadband agent deployed with updated schema!"
+
+# ============================================
 # UI Commands
 # ============================================
 .PHONY: ui-build

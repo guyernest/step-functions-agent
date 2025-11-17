@@ -1,0 +1,43 @@
+#!/bin/bash
+set -e
+
+echo "=================================="
+echo "Local Browser Agent - Setup"
+echo "=================================="
+echo ""
+
+# Check dependencies
+echo "Checking dependencies..."
+command -v uv >/dev/null 2>&1 || { echo "❌ uv not found. Installing..."; curl -LsSf https://astral.sh/uv/install.sh | sh; }
+
+# Find the installed app
+APP_PATH="/Applications/Local Browser Agent.app"
+if [ ! -d "$APP_PATH" ]; then
+    echo "❌ App not found at $APP_PATH"
+    echo "Please install the .dmg first: open *.dmg"
+    exit 1
+fi
+
+# Create Python virtual environment inside the app bundle
+echo ""
+echo "📦 Setting up Python environment inside app bundle..."
+PYTHON_DIR="$APP_PATH/Contents/Resources/_up_/python"
+cd "$PYTHON_DIR"
+uv venv --python 3.11 .venv
+uv pip install --python .venv/bin/python -r requirements.txt
+
+# Install Playwright Chrome
+echo ""
+echo "🌐 Installing Chromium browser..."
+.venv/bin/python -m playwright install chrome
+
+echo ""
+echo "=================================="
+echo "✅ Setup Complete!"
+echo "=================================="
+echo ""
+echo "Next steps:"
+echo "1. Edit config.yaml with your AWS settings (optional - can also use UI)"
+echo "2. Set environment variable: export NOVA_ACT_API_KEY=your-key"
+echo "3. Run: open '/Applications/Local Browser Agent.app'"
+echo ""
