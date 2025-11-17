@@ -252,13 +252,16 @@ impl ScriptExecutor {
             .and_then(|v| v.parse::<bool>().ok())
             .unwrap_or(false);
 
+        // Route to wrapper files which handle format detection and routing
+        // - nova_act_wrapper.py: Routes Nova Act format scripts
+        // - computer_agent_wrapper.py: Routes both legacy Computer Agent and new OpenAI Playwright formats
         let script_name = if use_computer_agent {
-            "computer_agent_script_executor.py"
+            "computer_agent_wrapper.py"
         } else {
-            "script_executor.py"
+            "nova_act_wrapper.py"
         };
 
-        log::debug!("Looking for script executor: {}", script_name);
+        log::debug!("Looking for script wrapper: {}", script_name);
 
         // Try to find script in various locations
         if let Ok(exe_path) = std::env::current_exe() {

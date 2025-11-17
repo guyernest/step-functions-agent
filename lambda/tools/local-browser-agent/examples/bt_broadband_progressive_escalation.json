@@ -1,0 +1,560 @@
+{
+  "name": "BT Broadband Availability Checker (Progressive Escalation)",
+  "description": "Check broadband availability using progressive escalation from DOM → Playwright → Vision",
+  "llm_provider": "openai",
+  "llm_model": "gpt-4o-mini",
+  "starting_page": "https://bbactotl.btwholesale.com/bbac-ui/totl/totlSearch/#/ADSL/AddressHome",
+  "abort_on_error": false,
+  "session": {
+    "profile_name": "Bt_broadband",
+    "clone_for_parallel": false
+  },
+  "steps": [
+    {
+      "type": "wait_for_load_state",
+      "description": "Wait for initial page to fully load",
+      "state": "networkidle"
+    },
+    {
+      "type": "screenshot",
+      "description": "Screenshot of initial page",
+      "save_to": "01_initial_page.png"
+    },
+    {
+      "type": "execute_js",
+      "description": "Check page state - DOM method (fastest)",
+      "script": "(function() { var title = document.title.toLowerCase(); return { title: document.title, url: window.location.href, isLoginPage: title.includes('secure authentication') || title.includes('login') || title.includes('sign in'), hasLoginForm: !!document.querySelector('input[type=\"password\"]'), hasSearchForm: !!document.querySelector('input[name=\"postcode\"], input[id*=\"postcode\"], input[placeholder*=\"postcode\"]') }; })()"
+    },
+    {
+      "type": "extract",
+      "description": "Identify page type using vision (if DOM unclear)",
+      "method": "vision",
+      "prompt": "Analyze this BT Wholesale webpage and determine: 1) Is this a login/authentication page (might show 'Secure Authentication'), a search/checker page, or results page? 2) What is the main call-to-action? 3) Are there any error messages or notices visible?",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "page_type": {
+            "type": "string",
+            "enum": ["login", "search", "results", "error", "other"],
+            "description": "Type of page currently displayed"
+          },
+          "main_cta": {
+            "type": "string",
+            "description": "Main call-to-action or heading"
+          },
+          "has_errors": {
+            "type": "boolean",
+            "description": "Whether error messages are visible"
+          },
+          "error_message": {
+            "type": "string",
+            "description": "Error message text if visible, empty string otherwise"
+          },
+          "confidence": {
+            "type": "number",
+            "description": "Confidence in page type identification (0.0-1.0)"
+          }
+        },
+        "required": ["page_type", "main_cta", "has_errors", "confidence"]
+      }
+    },
+    {
+      "type": "fill",
+      "description": "Enter username (if on login page)",
+      "escalation_chain": [
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "selector",
+            "value": "input[type='text'][name*='user'], input[type='text'][name*='username'], input[type='email']"
+          },
+          "confidence_threshold": 0.9
+        },
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "selector",
+            "value": "input[type='text']:first-of-type"
+          },
+          "confidence_threshold": 0.8
+        },
+        {
+          "method": "vision_find_element",
+          "prompt": "Find the username or email input field on this login page. This is typically the first text input field.",
+          "prefer": "selector",
+          "fallback": "text",
+          "confidence_threshold": 0.7
+        }
+      ],
+      "value": "nterizakis"
+    },
+    {
+      "type": "click",
+      "description": "Click Next/Continue button after username",
+      "escalation_chain": [
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "selector",
+            "value": "button[type='submit']"
+          },
+          "confidence_threshold": 0.9
+        },
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "text",
+            "value": "Next"
+          },
+          "confidence_threshold": 0.9
+        },
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "text",
+            "value": "Continue"
+          },
+          "confidence_threshold": 0.9
+        },
+        {
+          "method": "vision_find_element",
+          "prompt": "Find the Next or Continue button after entering username. This is typically a submit button or primary action button.",
+          "prefer": "selector",
+          "fallback": "coordinates",
+          "confidence_threshold": 0.7
+        }
+      ]
+    },
+    {
+      "type": "wait",
+      "description": "Wait for password field to appear",
+      "locator": {
+        "strategy": "selector",
+        "value": "input[type='password']"
+      },
+      "timeout": 30000
+    },
+    {
+      "type": "wait",
+      "description": "Wait for Next button to appear",
+      "locator": {
+        "strategy": "selector",
+        "value": "button#next, button[type='submit']"
+      },
+      "timeout": 30000
+    },
+    {
+      "type": "wait_for_load_state",
+      "description": "Wait for page to stabilize",
+      "state": "networkidle"
+    },
+    {
+      "type": "screenshot",
+      "description": "Screenshot of password page",
+      "save_to": "01b_after_username.png"
+    },
+    {
+      "type": "execute_js",
+      "description": "Verify password page and check autofill status",
+      "script": "(function() { var pwdField = document.querySelector('input[type=\"password\"]'); var nextBtn = document.querySelector('button#next'); var submitBtn = document.querySelector('button[type=\"submit\"]'); return { hasPasswordField: !!pwdField, passwordFilled: pwdField ? pwdField.value.length > 0 : false, hasNextButton: !!nextBtn, hasSubmitButton: !!submitBtn, nextButtonVisible: nextBtn ? window.getComputedStyle(nextBtn).display !== 'none' : false, pageTitle: document.title, url: window.location.href }; })()"
+    },
+    {
+      "type": "wait",
+      "description": "Wait for browser autofill to complete",
+      "duration": 1500
+    },
+    {
+      "type": "click",
+      "description": "Click Next button on password page (password should be saved)",
+      "escalation_chain": [
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "selector",
+            "value": "button#next"
+          },
+          "confidence_threshold": 0.9
+        },
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "text",
+            "value": "Next"
+          },
+          "confidence_threshold": 0.9
+        },
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "selector",
+            "value": "button[type='submit']"
+          },
+          "confidence_threshold": 0.9
+        }
+      ]
+    },
+    {
+      "type": "wait_for_load_state",
+      "description": "Wait for initial redirect after login",
+      "state": "networkidle"
+    },
+    {
+      "type": "wait",
+      "description": "Wait for SSO redirect to complete (BT portal)",
+      "duration": 3000
+    },
+    {
+      "type": "wait_for_load_state",
+      "description": "Wait for BT wholesale portal to fully load",
+      "state": "networkidle"
+    },
+    {
+      "type": "screenshot",
+      "description": "Screenshot after login and SSO redirect",
+      "save_to": "02_after_login.png"
+    },
+    {
+      "type": "execute_js",
+      "description": "Verify we're on BT wholesale portal",
+      "script": "(function() { var url = window.location.href; var hash = window.location.hash; return { url: url, hash: hash, onBTWholesale: url.includes('bbactotl.btwholesale.com') || url.includes('btwholesale'), currentPage: hash }; })()"
+    },
+    {
+      "type": "navigate",
+      "description": "Navigate to Address Checker page",
+      "url": "https://bbactotl.btwholesale.com/bbac-ui/totl/totlSearch/#/ADSL/AddressHome"
+    },
+    {
+      "type": "wait_for_load_state",
+      "description": "Wait for Address Checker page to load",
+      "state": "networkidle"
+    },
+    {
+      "type": "screenshot",
+      "description": "Screenshot of Address Checker page",
+      "save_to": "02b_address_checker.png"
+    },
+    {
+      "type": "execute_js",
+      "description": "Verify Address Checker page loaded",
+      "script": "(function() { var url = window.location.href; var hash = window.location.hash; var postcodeInput = document.querySelector('input[name*=\"postcode\"], input[id*=\"postcode\"], input[placeholder*=\"postcode\" i]'); return { url: url, hash: hash, hasPostcodeField: !!postcodeInput, postcodeFieldVisible: postcodeInput ? window.getComputedStyle(postcodeInput).display !== 'none' : false, pageTitle: document.title }; })()"
+    },
+    {
+      "type": "wait",
+      "description": "Wait for Address Checker form to be ready",
+      "duration": 2000
+    },
+    {
+      "type": "fill",
+      "description": "Enter postcode in search field",
+      "escalation_chain": [
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "selector",
+            "value": "input[name='PostCode']"
+          },
+          "confidence_threshold": 0.9
+        },
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "selector",
+            "value": "input[name='postcode']"
+          },
+          "confidence_threshold": 0.9
+        },
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "selector",
+            "value": "input[id*='ostcode' i]"
+          },
+          "confidence_threshold": 0.9
+        },
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "selector",
+            "value": "input[placeholder*='ostcode' i]"
+          },
+          "confidence_threshold": 0.9
+        }
+      ],
+      "value": "CH421NY"
+    },
+    {
+      "type": "click",
+      "description": "Click search/check availability button",
+      "escalation_chain": [
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "selector",
+            "value": "button[type='submit']"
+          },
+          "confidence_threshold": 0.9
+        },
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "text",
+            "value": "Check availability"
+          },
+          "confidence_threshold": 0.9
+        },
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "text",
+            "value": "Search"
+          },
+          "confidence_threshold": 0.9
+        },
+        {
+          "method": "vision_find_element",
+          "prompt": "Find the main search or 'Check availability' button. This should be near the postcode input field. Return the best locator.",
+          "prefer": "selector",
+          "fallback": "coordinates",
+          "confidence_threshold": 0.7
+        }
+      ]
+    },
+    {
+      "type": "wait_for_load_state",
+      "description": "Wait for search results to load",
+      "state": "networkidle"
+    },
+    {
+      "type": "screenshot",
+      "description": "Screenshot after search",
+      "save_to": "02_after_search.png"
+    },
+    {
+      "type": "extract",
+      "description": "Check if address selection is needed",
+      "method": "vision",
+      "prompt": "Look at this page after postcode search. Answer: 1) Does it show a list of addresses to select from? 2) Does it show broadband packages directly? 3) Is there an error or 'no results' message?",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "shows_address_list": {
+            "type": "boolean",
+            "description": "True if multiple addresses are shown for selection"
+          },
+          "shows_packages": {
+            "type": "boolean",
+            "description": "True if broadband packages are already visible"
+          },
+          "has_error": {
+            "type": "boolean",
+            "description": "True if error or no results message shown"
+          },
+          "address_count": {
+            "type": "integer",
+            "description": "Number of addresses visible (0 if none)"
+          },
+          "needs_scroll": {
+            "type": "boolean",
+            "description": "True if address list appears scrollable/truncated"
+          }
+        },
+        "required": [
+          "shows_address_list",
+          "shows_packages",
+          "has_error",
+          "address_count"
+        ]
+      }
+    },
+    {
+      "type": "click",
+      "description": "Select matching address from list",
+      "escalation_chain": [
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "text",
+            "value": "12 CHATSWORTH ROAD"
+          },
+          "confidence_threshold": 0.9
+        },
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "text",
+            "value": "CHATSWORTH ROAD"
+          },
+          "confidence_threshold": 0.85
+        },
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "text",
+            "value": "BIRKENHEAD"
+          },
+          "confidence_threshold": 0.8
+        },
+        {
+          "method": "vision_find_element",
+          "prompt": "Find and click the address list item that matches: 12 CHATSWORTH ROAD, BIRKENHEAD. Look for the closest match in the visible address list. Return the best locator (prefer selector or text over coordinates).",
+          "prefer": "text",
+          "fallback": "coordinates",
+          "confidence_threshold": 0.7
+        }
+      ]
+    },
+    {
+      "type": "click",
+      "description": "Click submit/continue button after selecting address",
+      "escalation_chain": [
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "selector",
+            "value": "button[type='submit']"
+          },
+          "confidence_threshold": 0.9
+        },
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "text",
+            "value": "Continue"
+          },
+          "confidence_threshold": 0.9
+        },
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "text",
+            "value": "Submit"
+          },
+          "confidence_threshold": 0.9
+        },
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "text",
+            "value": "Next"
+          },
+          "confidence_threshold": 0.9
+        },
+        {
+          "method": "vision_find_element",
+          "prompt": "Find the submit, continue, or next button that confirms the address selection. This is typically near the bottom of the address selection form.",
+          "prefer": "selector",
+          "fallback": "coordinates",
+          "confidence_threshold": 0.7
+        }
+      ]
+    },
+    {
+      "type": "wait_for_load_state",
+      "description": "Wait for initial response after submitting address",
+      "state": "networkidle"
+    },
+    {
+      "type": "wait",
+      "description": "Wait for JavaScript redirect to complete (address details page)",
+      "duration": 3000
+    },
+    {
+      "type": "wait_for_load_state",
+      "description": "Wait for address details/packages page to fully load",
+      "state": "networkidle"
+    },
+    {
+      "type": "screenshot",
+      "description": "Screenshot of packages page",
+      "save_to": "03_packages.png"
+    },
+    {
+      "type": "extract",
+      "description": "Extract all broadband packages with conditional logic",
+      "method": "vision",
+      "prompt": "Extract ALL visible broadband packages from this BT page. Apply these CONDITIONAL RULES:\n\n1. AVAILABILITY:\n   - If package shows 'Available', 'In stock', green checkmark → available=true\n   - If shows 'Not available', 'Unavailable', greyed out, red X → available=false\n   - If unclear or shows 'Check availability' → available=null\n\n2. PRICING:\n   - If shows 'from £X' or '£X/month' → extract X as monthly_price\n   - If shows multiple prices (e.g., intro vs regular) → extract both\n   - If 'Free' or '£0' → set to 0\n   - If price not visible → null\n\n3. SPEEDS:\n   - If 'up to X Mbps' → extract X as download_speed_mbps\n   - If range 'X-Y Mbps' → extract Y (maximum)\n   - If shows Gbps → convert to Mbps (1 Gbps = 1000 Mbps)\n   - If upload speed shown separately → extract it, else null\n\n4. CONTRACT:\n   - Look for '12 months', '18 months', '24 months' → extract number\n   - If 'No contract' or 'Rolling' → set to 0\n   - If not specified → null\n\n5. PACKAGE DETAILS:\n   - Extract package name/title\n   - Note any special features (e.g., 'Fibre', 'Full Fibre', 'Ultrafast')\n   - Capture setup/installation cost if shown\n\nReturn ALL packages you can see, even if some information is missing.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "packages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Package name/title"
+                },
+                "available": {
+                  "type": ["boolean", "null"],
+                  "description": "Availability status (true/false/null)"
+                },
+                "download_speed_mbps": {
+                  "type": ["number", "null"],
+                  "description": "Download speed in Mbps"
+                },
+                "upload_speed_mbps": {
+                  "type": ["number", "null"],
+                  "description": "Upload speed in Mbps (null if not shown)"
+                },
+                "monthly_price": {
+                  "type": ["number", "null"],
+                  "description": "Monthly price in GBP"
+                },
+                "intro_price": {
+                  "type": ["number", "null"],
+                  "description": "Introductory/promotional price if different"
+                },
+                "contract_months": {
+                  "type": ["integer", "null"],
+                  "description": "Contract length in months (0=rolling)"
+                },
+                "setup_cost": {
+                  "type": ["number", "null"],
+                  "description": "One-time setup/installation cost"
+                },
+                "package_type": {
+                  "type": "string",
+                  "description": "Type: Fibre, Full Fibre, ADSL, etc."
+                },
+                "special_features": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "List of special features or benefits"
+                }
+              },
+              "required": [
+                "name",
+                "available",
+                "download_speed_mbps",
+                "monthly_price"
+              ]
+            }
+          },
+          "total_packages_found": {
+            "type": "integer",
+            "description": "Total number of packages extracted"
+          },
+          "page_has_more": {
+            "type": "boolean",
+            "description": "Whether there appear to be more packages below (scrollable)"
+          },
+          "extraction_confidence": {
+            "type": "number",
+            "description": "Overall confidence in extraction (0.0-1.0)"
+          }
+        },
+        "required": [
+          "packages",
+          "total_packages_found",
+          "extraction_confidence"
+        ]
+      }
+    },
+    {
+      "type": "screenshot",
+      "description": "Final screenshot for verification",
+      "save_to": "04_final.png"
+    }
+  ]
+}

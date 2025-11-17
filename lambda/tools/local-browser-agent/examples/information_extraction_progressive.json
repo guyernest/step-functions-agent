@@ -1,0 +1,207 @@
+{
+  "name": "Information Extraction with Progressive Escalation",
+  "description": "Extract structured information from web pages - demonstrates books, news, products with cost-optimized progressive escalation",
+  "llm_provider": "openai",
+  "llm_model": "gpt-4o-mini",
+  "starting_url": "https://books.toscrape.com/",
+  "steps": [
+    {
+      "type": "navigate",
+      "url": "https://books.toscrape.com/",
+      "description": "Navigate to Books to Scrape homepage"
+    },
+    {
+      "type": "wait_for_load_state",
+      "description": "Wait for page to load",
+      "state": "networkidle"
+    },
+    {
+      "type": "screenshot",
+      "description": "Screenshot of homepage",
+      "save_to": "01_homepage.png"
+    },
+    {
+      "type": "click",
+      "description": "Click on Travel category",
+      "escalation_chain": [
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "text",
+            "value": "Travel"
+          },
+          "confidence_threshold": 0.9
+        },
+        {
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "selector",
+            "value": "a:has-text('Travel')"
+          },
+          "confidence_threshold": 0.85
+        },
+        {
+          "method": "vision_find_element",
+          "prompt": "Find and click the 'Travel' category link in the sidebar navigation menu",
+          "prefer": "text",
+          "fallback": "selector",
+          "confidence_threshold": 0.7
+        }
+      ]
+    },
+    {
+      "type": "wait_for_load_state",
+      "description": "Wait for Travel category page to load",
+      "state": "networkidle"
+    },
+    {
+      "type": "screenshot",
+      "description": "Screenshot of Travel category",
+      "save_to": "02_travel_category.png"
+    },
+    {
+      "type": "extract",
+      "description": "Extract first 5 books from Travel category",
+      "method": "vision",
+      "prompt": "Extract information about the first 5 books shown on this page. For each book, extract:\n- Title: Full book title\n- Price: Price shown (with currency symbol)\n- Rating: Star rating if visible (e.g., '5 stars', '4 stars')\n- Availability: In stock or not\n\nReturn exactly 5 books in order from top to bottom.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "books": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "description": "Full book title"
+                },
+                "price": {
+                  "type": "string",
+                  "description": "Price with currency symbol"
+                },
+                "rating": {
+                  "type": "string",
+                  "description": "Star rating (e.g., 'Five stars', 'Four stars')"
+                },
+                "availability": {
+                  "type": "string",
+                  "description": "Stock status (e.g., 'In stock', 'Out of stock')"
+                }
+              },
+              "required": ["title", "price"]
+            }
+          }
+        },
+        "required": ["books"]
+      }
+    },
+    {
+      "type": "navigate",
+      "url": "https://news.ycombinator.com/",
+      "description": "Navigate to Hacker News"
+    },
+    {
+      "type": "wait_for_load_state",
+      "description": "Wait for Hacker News to load",
+      "state": "networkidle"
+    },
+    {
+      "type": "screenshot",
+      "description": "Screenshot of Hacker News",
+      "save_to": "03_hackernews.png"
+    },
+    {
+      "type": "extract",
+      "description": "Extract top 5 news headlines",
+      "method": "vision",
+      "prompt": "Extract the top 5 news articles from this Hacker News page. For each article, extract:\n- Headline: Full article title\n- Points: Number of points/upvotes if visible\n- Author: Username who posted it\n- Comments: Number of comments if visible\n\nReturn exactly 5 articles in order from top to bottom.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "articles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "headline": {
+                  "type": "string",
+                  "description": "Article title"
+                },
+                "points": {
+                  "type": ["string", "null"],
+                  "description": "Number of points (e.g., '142 points')"
+                },
+                "author": {
+                  "type": ["string", "null"],
+                  "description": "Username of poster"
+                },
+                "comments": {
+                  "type": ["string", "null"],
+                  "description": "Number of comments (e.g., '67 comments')"
+                }
+              },
+              "required": ["headline"]
+            }
+          }
+        },
+        "required": ["articles"]
+      }
+    },
+    {
+      "type": "navigate",
+      "url": "https://example.com",
+      "description": "Navigate to example.com for boolean checks"
+    },
+    {
+      "type": "wait_for_load_state",
+      "description": "Wait for example.com to load",
+      "state": "networkidle"
+    },
+    {
+      "type": "screenshot",
+      "description": "Screenshot of example.com",
+      "save_to": "04_example_com.png"
+    },
+    {
+      "type": "extract",
+      "description": "Boolean check: Does page have a heading?",
+      "method": "vision",
+      "prompt": "Look at this page and answer: Is there an H1 heading element visible on this page?",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "has_heading": {
+            "type": "boolean",
+            "description": "True if an H1 heading is visible"
+          },
+          "heading_text": {
+            "type": ["string", "null"],
+            "description": "Text content of the heading if found"
+          }
+        },
+        "required": ["has_heading"]
+      }
+    },
+    {
+      "type": "extract",
+      "description": "Boolean check: Does heading contain 'Example'?",
+      "method": "vision",
+      "prompt": "Look at the main heading on this page. Does it contain the word 'Example'?",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "contains_example": {
+            "type": "boolean",
+            "description": "True if heading contains the word 'Example'"
+          },
+          "exact_heading": {
+            "type": ["string", "null"],
+            "description": "The exact heading text"
+          }
+        },
+        "required": ["contains_example"]
+      }
+    }
+  ]
+}

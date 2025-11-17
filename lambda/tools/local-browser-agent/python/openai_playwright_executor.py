@@ -87,6 +87,9 @@ import boto3
 from playwright.async_api import async_playwright, Page, Browser, BrowserContext
 from openai import OpenAI
 
+# Import progressive escalation engine
+from progressive_escalation_engine import ProgressiveEscalationEngine, EscalationExhaustedError
+
 # Flag for optional LLM providers (imported on-demand)
 ANTHROPIC_AVAILABLE = False
 GEMINI_AVAILABLE = False
@@ -118,6 +121,7 @@ class OpenAIPlaywrightExecutor:
     ):
         self.llm_provider = llm_provider.lower()
         self.llm_model = llm_model
+        self.llm_api_key = llm_api_key
         self.s3_bucket = s3_bucket
         self.aws_profile = aws_profile
         self.headless = headless
@@ -125,8 +129,8 @@ class OpenAIPlaywrightExecutor:
         self.user_data_dir = user_data_dir
         self.navigation_timeout = navigation_timeout
 
-        # Initialize LLM client
-        self.llm_client = self._init_llm_client(llm_api_key)
+        # LLM client (lazy-initialized when needed)
+        self.llm_client = None
 
         # Initialize AWS session if S3 bucket provided
         if s3_bucket:
@@ -141,22 +145,33 @@ class OpenAIPlaywrightExecutor:
         # Execution state
         self.variables = {}  # For template variable substitution
         self.screenshots = []
+        self.escalation_engine: Optional[ProgressiveEscalationEngine] = None
+
+    def _ensure_llm_client(self):
+        """Ensure LLM client is initialized (lazy initialization)"""
+        if self.llm_client is not None:
+            return self.llm_client
+
+        return self._init_llm_client(self.llm_api_key)
 
     def _init_llm_client(self, api_key: Optional[str]):
         """Initialize LLM client based on provider"""
         if self.llm_provider == "openai":
-            return OpenAI(api_key=api_key or os.environ.get("OPENAI_API_KEY"))
+            self.llm_client = OpenAI(api_key=api_key or os.environ.get("OPENAI_API_KEY"))
+            return self.llm_client
         elif self.llm_provider == "claude":
             try:
                 from anthropic import Anthropic
-                return Anthropic(api_key=api_key or os.environ.get("ANTHROPIC_API_KEY"))
+                self.llm_client = Anthropic(api_key=api_key or os.environ.get("ANTHROPIC_API_KEY"))
+                return self.llm_client
             except ImportError:
                 raise ValueError("Anthropic library not installed. Install with: pip install anthropic")
         elif self.llm_provider == "gemini":
             try:
                 import google.generativeai as genai
                 genai.configure(api_key=api_key or os.environ.get("GEMINI_API_KEY"))
-                return genai
+                self.llm_client = genai
+                return self.llm_client
             except ImportError:
                 raise ValueError("Google Generative AI library not installed. Install with: pip install google-generativeai")
         else:
@@ -306,6 +321,24 @@ class OpenAIPlaywrightExecutor:
         # Set default navigation timeout
         self.page.set_default_navigation_timeout(self.navigation_timeout)
 
+        # Progressive escalation engine will be initialized lazily when needed
+        # (to avoid requiring LLM client for non-vision workflows)
+
+    def _ensure_escalation_engine(self):
+        """Ensure escalation engine is initialized (lazy initialization)"""
+        if self.escalation_engine is not None:
+            return self.escalation_engine
+
+        # Ensure LLM client is initialized first
+        llm_client = self._ensure_llm_client()
+
+        self.escalation_engine = ProgressiveEscalationEngine(
+            self.page,
+            llm_client,
+            self.llm_model
+        )
+        return self.escalation_engine
+
     async def _cleanup_browser(self):
         """Clean up Playwright resources"""
         if self.page:
@@ -326,6 +359,7 @@ class OpenAIPlaywrightExecutor:
             "click": self._step_click,
             "fill": self._step_fill,
             "wait": self._step_wait,
+            "wait_for_load_state": self._step_wait_for_load_state,
             "screenshot": self._step_screenshot,
             "extract": self._step_extract,
             "execute_js": self._step_execute_js,
@@ -353,32 +387,138 @@ class OpenAIPlaywrightExecutor:
         }
 
     async def _step_click(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
-        """Click element"""
-        locator_config = step.get("locator", {})
-        locator = self._get_locator(locator_config)
+        """Click element (with optional escalation)"""
+        # Check if escalation chain is provided
+        if "escalation_chain" in step:
+            # Use progressive escalation to find and click element
+            try:
+                engine = self._ensure_escalation_engine()
+                result = await engine.execute_with_escalation(
+                    escalation_chain=step["escalation_chain"],
+                    context=self.variables
+                )
 
-        await locator.click(timeout=10000)
+                # Result contains the locator found by escalation
+                # Now click using that locator
+                if result.get("method") == "coordinates":
+                    # Click by coordinates
+                    coords = result.get("value", {})
+                    await self.page.mouse.click(coords["x"], coords["y"])
+                    click_method = "coordinates"
+                elif result.get("locator"):
+                    # Click using Playwright locator object (from playwright_locator method)
+                    # Use force=True if modal overlays are blocking, and increase timeout
+                    try:
+                        await result["locator"].click(timeout=30000)
+                        click_method = "locator"
+                    except Exception as e:
+                        # If click fails due to overlays, try force click
+                        if "intercepts pointer events" in str(e):
+                            print(f"⚠ Modal overlay detected, trying force click", file=sys.stderr)
+                            await result["locator"].click(timeout=30000, force=True)
+                            click_method = "locator (forced)"
+                        else:
+                            raise
+                elif result.get("method") in ["selector", "text"]:
+                    # Click using selector/text from vision_find_element
+                    value = result.get("value")
+                    if result.get("method") == "selector":
+                        locator = self.page.locator(value)
+                    else:  # text
+                        locator = self.page.get_by_text(value, exact=False)
+                    try:
+                        await locator.click(timeout=30000)
+                        click_method = result.get("method")
+                    except Exception as e:
+                        if "intercepts pointer events" in str(e):
+                            print(f"⚠ Modal overlay detected, trying force click", file=sys.stderr)
+                            await locator.click(timeout=30000, force=True)
+                            click_method = f"{result.get('method')} (forced)"
+                        else:
+                            raise
+                else:
+                    raise ValueError("Escalation did not return valid click target")
 
-        return {
-            "success": True,
-            "action": "click",
-            "locator": locator_config,
-        }
+                return {
+                    "success": True,
+                    "action": "click",
+                    "click_method": click_method,
+                    "escalation_metadata": result.get("escalation_metadata", {}),
+                }
+
+            except EscalationExhaustedError as e:
+                return {
+                    "success": False,
+                    "action": "click",
+                    "error": str(e),
+                }
+        else:
+            # Traditional direct locator approach
+            locator_config = step.get("locator", {})
+            locator = self._get_locator(locator_config)
+
+            await locator.click(timeout=10000)
+
+            return {
+                "success": True,
+                "action": "click",
+                "locator": locator_config,
+            }
 
     async def _step_fill(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
-        """Fill input field"""
-        locator_config = step.get("locator", {})
+        """Fill input field (with optional escalation)"""
         value = self._substitute_variables(step.get("value", ""))
 
-        locator = self._get_locator(locator_config)
-        await locator.fill(value, timeout=10000)
+        # Check if escalation chain is provided
+        if "escalation_chain" in step:
+            # Use progressive escalation to find element
+            try:
+                engine = self._ensure_escalation_engine()
+                result = await engine.execute_with_escalation(
+                    escalation_chain=step["escalation_chain"],
+                    context=self.variables
+                )
 
-        return {
-            "success": True,
-            "action": "fill",
-            "locator": locator_config,
-            "value": value,
-        }
+                # Get the locator found by escalation and fill it
+                if result.get("locator"):
+                    # Playwright locator object
+                    await result["locator"].fill(value, timeout=10000)
+                elif result.get("method") in ["selector", "text"]:
+                    # Vision result - convert to Playwright locator
+                    result_value = result.get("value")
+                    if result.get("method") == "selector":
+                        locator = self.page.locator(result_value)
+                    else:  # text
+                        locator = self.page.get_by_text(result_value, exact=False)
+                    await locator.fill(value, timeout=10000)
+                else:
+                    raise ValueError("Escalation did not return valid locator for fill")
+
+                return {
+                    "success": True,
+                    "action": "fill",
+                    "value": value,
+                    "escalation_metadata": result.get("escalation_metadata", {}),
+                }
+
+            except EscalationExhaustedError as e:
+                return {
+                    "success": False,
+                    "action": "fill",
+                    "error": str(e),
+                }
+        else:
+            # Traditional direct locator approach
+            locator_config = step.get("locator", {})
+            locator = self._get_locator(locator_config)
+            await locator.fill(value, timeout=10000)
+
+            return {
+                "success": True,
+                "action": "fill",
+                "locator": locator_config,
+                "value": value,
+            }
 
     async def _step_wait(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
         """Wait for element or timeout"""
@@ -405,6 +545,52 @@ class OpenAIPlaywrightExecutor:
                 "duration": duration,
             }
 
+    async def _step_wait_for_load_state(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
+        """
+        Wait for page load state using Playwright's built-in mechanisms
+
+        Supported states:
+        - "load": Page has fired the load event (default)
+        - "domcontentloaded": Page has fired DOMContentLoaded event
+        - "networkidle": No network activity for at least 500ms (recommended for SPAs)
+
+        Usage in script:
+        {
+          "type": "wait_for_load_state",
+          "description": "Wait for page to fully load",
+          "state": "networkidle",  // optional, defaults to "load"
+          "timeout": 30000  // optional, defaults to navigation_timeout
+        }
+        """
+        state = step.get("state", "load")
+        timeout = step.get("timeout", self.navigation_timeout)
+
+        valid_states = ["load", "domcontentloaded", "networkidle"]
+        if state not in valid_states:
+            return {
+                "success": False,
+                "error": f"Invalid load state '{state}'. Must be one of: {valid_states}"
+            }
+
+        print(f"⏳ Waiting for load state: {state} (timeout: {timeout}ms)", file=sys.stderr)
+
+        try:
+            await self.page.wait_for_load_state(state, timeout=timeout)
+            print(f"✓ Page reached load state: {state}", file=sys.stderr)
+
+            return {
+                "success": True,
+                "action": "wait_for_load_state",
+                "state": state,
+                "timeout": timeout,
+            }
+        except Exception as e:
+            print(f"✗ Timeout waiting for load state '{state}': {e}", file=sys.stderr)
+            return {
+                "success": False,
+                "error": f"Timeout waiting for load state '{state}': {str(e)}"
+            }
+
     async def _step_screenshot(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
         """Take screenshot"""
         screenshot_bytes = await self.page.screenshot(full_page=True)
@@ -423,18 +609,38 @@ class OpenAIPlaywrightExecutor:
         }
 
     async def _step_extract(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
-        """Extract data using LLM vision"""
+        """Extract data using LLM vision and optionally execute action"""
         method = step.get("method", "vision")
         prompt = step.get("prompt", "")
         schema = step.get("schema", {})
+        execute_action = step.get("execute_action", False)
+
+        print(f"[EXTRACT] Starting extraction with method: {method}", file=sys.stderr)
+        print(f"[EXTRACT] Prompt: {prompt[:100]}...", file=sys.stderr)
 
         if method == "vision":
             # Take screenshot for vision analysis
+            print(f"[EXTRACT] Taking screenshot for vision analysis...", file=sys.stderr)
             screenshot_bytes = await self.page.screenshot(full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode('utf-8')
+            print(f"[EXTRACT] Screenshot captured ({len(screenshot_bytes)} bytes)", file=sys.stderr)
 
             # Call LLM with vision
+            print(f"[EXTRACT] Calling LLM vision API...", file=sys.stderr)
             extracted_data = await self._call_llm_vision(prompt, screenshot_b64, schema)
+            print(f"[EXTRACT] Vision API response: {json.dumps(extracted_data, indent=2)}", file=sys.stderr)
+
+            # Execute action if requested and data indicates we should
+            if execute_action and extracted_data.get("match_found"):
+                print(f"[EXTRACT] Executing action based on extracted data...", file=sys.stderr)
+                action_result = await self._execute_extracted_action(extracted_data)
+                return {
+                    "success": True,
+                    "action": "extract_and_execute",
+                    "method": "vision",
+                    "data": extracted_data,
+                    "action_result": action_result,
+                }
 
             return {
                 "success": True,
@@ -453,6 +659,79 @@ class OpenAIPlaywrightExecutor:
             return {
                 "success": False,
                 "error": f"Unknown extraction method: {method}"
+            }
+
+    async def _execute_extracted_action(self, extracted_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute action based on extracted data
+
+        Supports:
+        - Click based on match_method (selector, text, index, coordinates)
+        - Scroll based on should_scroll
+        """
+        match_method = extracted_data.get("match_method", "none")
+        match_value = extracted_data.get("match_value", "")
+        match_coordinates = extracted_data.get("match_coordinates", {})
+        should_scroll = extracted_data.get("should_scroll", False)
+
+        print(f"[EXTRACT_ACTION] Method: {match_method}, Value: {match_value}", file=sys.stderr)
+
+        # Handle scrolling first if needed
+        if should_scroll:
+            scroll_direction = extracted_data.get("scroll_direction", "down")
+            print(f"[EXTRACT_ACTION] Scrolling {scroll_direction}...", file=sys.stderr)
+
+            if scroll_direction == "down":
+                await self.page.evaluate("window.scrollBy(0, 500)")
+            elif scroll_direction == "up":
+                await self.page.evaluate("window.scrollBy(0, -500)")
+
+            await self.page.wait_for_load_state("networkidle", timeout=5000)
+
+            return {
+                "success": True,
+                "action": "scroll",
+                "direction": scroll_direction
+            }
+
+        # Execute click based on match method
+        if match_method == "selector":
+            print(f"[EXTRACT_ACTION] Clicking element with selector: {match_value}", file=sys.stderr)
+            locator = self.page.locator(match_value)
+            await locator.click(timeout=10000)
+            return {"success": True, "action": "click", "method": "selector", "value": match_value}
+
+        elif match_method == "text":
+            print(f"[EXTRACT_ACTION] Clicking element with text: {match_value}", file=sys.stderr)
+            locator = self.page.get_by_text(match_value, exact=False)
+            await locator.click(timeout=10000)
+            return {"success": True, "action": "click", "method": "text", "value": match_value}
+
+        elif match_method == "index":
+            # Assume list items with a common selector
+            index = int(match_value)
+            print(f"[EXTRACT_ACTION] Clicking list item at index: {index}", file=sys.stderr)
+            # Try common list item selectors
+            for selector in ["li", "div.list-item", "tr", "div[role='listitem']"]:
+                locator = self.page.locator(selector).nth(index)
+                count = await locator.count()
+                if count > 0:
+                    await locator.click(timeout=10000)
+                    return {"success": True, "action": "click", "method": "index", "value": index}
+
+            raise Exception(f"Could not find list item at index {index}")
+
+        elif match_method == "coordinates":
+            x = match_coordinates.get("x", 0)
+            y = match_coordinates.get("y", 0)
+            print(f"[EXTRACT_ACTION] Clicking at coordinates: ({x}, {y})", file=sys.stderr)
+            await self.page.mouse.click(x, y)
+            return {"success": True, "action": "click", "method": "coordinates", "x": x, "y": y}
+
+        else:
+            return {
+                "success": False,
+                "error": f"Unknown or unsupported match_method: {match_method}"
             }
 
     async def _step_execute_js(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
@@ -514,6 +793,9 @@ class OpenAIPlaywrightExecutor:
         schema: Optional[Dict[str, Any]] = None
     ) -> Any:
         """Call LLM with vision capabilities"""
+        # Ensure LLM client is initialized
+        self._ensure_llm_client()
+
         if self.llm_provider == "openai":
             return await self._call_openai_vision(prompt, screenshot_b64, schema)
         elif self.llm_provider == "claude":

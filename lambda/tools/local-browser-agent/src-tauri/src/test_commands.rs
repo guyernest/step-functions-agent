@@ -212,7 +212,74 @@ pub fn validate_browser_script(script: String) -> Result<ValidationResult, Strin
     let mut errors = Vec::new();
     let mut warnings = Vec::new();
 
-    // Try to parse as JSON
+    // First parse as generic JSON to detect format
+    let json_value: serde_json::Value = match serde_json::from_str(&script) {
+        Ok(v) => v,
+        Err(e) => {
+            errors.push(format!("Invalid JSON: {}", e));
+            return Ok(ValidationResult {
+                valid: false,
+                errors: Some(errors),
+                warnings: None,
+            });
+        }
+    };
+
+    // Detect format by checking first step
+    let is_new_format = if let Some(steps) = json_value.get("steps").and_then(|s| s.as_array()) {
+        if let Some(first_step) = steps.first() {
+            first_step.get("type").is_some() // New format uses "type"
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    if is_new_format {
+        // New OpenAI Playwright format - do basic validation without strict typing
+        warnings.push("Using new OpenAI Playwright format (validation is basic)".to_string());
+
+        // Validate basic structure
+        if let Some(name) = json_value.get("name").and_then(|n| n.as_str()) {
+            if name.is_empty() {
+                errors.push("Script must have a name".to_string());
+            }
+        } else {
+            errors.push("Script missing 'name' field".to_string());
+        }
+
+        // Accept both starting_page (Nova Act) and starting_url (Progressive Escalation)
+        let starting_url = json_value.get("starting_url")
+            .or_else(|| json_value.get("starting_page"))
+            .and_then(|s| s.as_str());
+
+        if let Some(url) = starting_url {
+            if url.is_empty() {
+                errors.push("Script must have a starting URL".to_string());
+            } else if let Err(e) = Url::parse(url) {
+                errors.push(format!("Starting URL is not valid: {}", e));
+            }
+        } else {
+            errors.push("Script missing 'starting_url' or 'starting_page' field".to_string());
+        }
+
+        if let Some(steps) = json_value.get("steps").and_then(|s| s.as_array()) {
+            if steps.is_empty() {
+                errors.push("Script must have at least one step".to_string());
+            }
+        } else {
+            errors.push("Script missing 'steps' field".to_string());
+        }
+
+        return Ok(ValidationResult {
+            valid: errors.is_empty(),
+            errors: if errors.is_empty() { None } else { Some(errors) },
+            warnings: if warnings.is_empty() { None } else { Some(warnings) },
+        });
+    }
+
+    // Old Nova Act format - use strict validation
     let parsed: Result<BrowserScript, _> = serde_json::from_str(&script);
 
     match parsed {
@@ -228,21 +295,21 @@ pub fn validate_browser_script(script: String) -> Result<ValidationResult, Strin
                 warnings.push("Script should have a description".to_string());
             }
 
-            // Validate starting_page with proper URL parsing
+            // Validate starting URL with proper URL parsing
             if browser_script.starting_page.is_empty() {
-                errors.push("Script must have a starting_page URL".to_string());
+                errors.push("Script must have a starting URL".to_string());
             } else {
                 match Url::parse(&browser_script.starting_page) {
                     Ok(url) => {
                         if url.scheme() != "http" && url.scheme() != "https" {
-                            errors.push(format!("starting_page must use HTTP or HTTPS protocol, got: {}", url.scheme()));
+                            errors.push(format!("Starting URL must use HTTP or HTTPS protocol, got: {}", url.scheme()));
                         }
                         if url.host_str().is_none() {
-                            errors.push("starting_page must have a valid host".to_string());
+                            errors.push("Starting URL must have a valid host".to_string());
                         }
                     }
                     Err(e) => {
-                        errors.push(format!("starting_page is not a valid URL: {}", e));
+                        errors.push(format!("Starting URL is not valid: {}", e));
                     }
                 }
             }
@@ -321,9 +388,12 @@ pub async fn execute_browser_script(
     dry_run: bool,
     config: State<'_, Arc<Config>>
 ) -> Result<ExecutionResult, String> {
-    // Parse the script
-    let parsed: BrowserScript = serde_json::from_str(&script)
-        .map_err(|e| format!("Failed to parse script: {}", e))?;
+    // Validate the script is valid JSON first
+    let _: serde_json::Value = serde_json::from_str(&script)
+        .map_err(|e| format!("Failed to parse script as JSON: {}", e))?;
+
+    // We don't need to parse into BrowserScript anymore - just pass raw JSON to Python
+    // The Python executor will handle format detection
 
     // Try to reload config from file to get latest values
     // (in case user saved config without restarting app)
@@ -350,39 +420,23 @@ pub async fn execute_browser_script(
     };
 
     if dry_run {
-        // Dry run: just validate and return what would be executed
-        let mut output = format!("[DRY RUN] Nova Act Script: {}\n", parsed.name);
-        output.push_str(&format!("Description: {}\n", parsed.description));
-        output.push_str(&format!("Starting Page: {}\n", parsed.starting_page));
-        output.push_str(&format!("Steps to execute: {}\n\n", parsed.steps.len()));
+        // Dry run: just validate and return basic info
+        let json_value: serde_json::Value = serde_json::from_str(&script)
+            .map_err(|e| format!("Failed to parse script: {}", e))?;
 
-        for (idx, step) in parsed.steps.iter().enumerate() {
-            match step {
-                BrowserStep::Act { prompt, description } => {
-                    output.push_str(&format!("  {}. ACT: {}\n", idx + 1, prompt));
-                    if let Some(desc) = description {
-                        output.push_str(&format!("     ({})\n", desc));
-                    }
-                }
-                BrowserStep::ActWithSchema { prompt, schema, description } => {
-                    output.push_str(&format!("  {}. ACT_WITH_SCHEMA: {}\n", idx + 1, prompt));
-                    output.push_str(&format!("     Schema: {}\n", serde_json::to_string_pretty(schema).unwrap_or_else(|_| "Invalid".to_string())));
-                    if let Some(desc) = description {
-                        output.push_str(&format!("     ({})\n", desc));
-                    }
-                }
-                BrowserStep::Screenshot { description } => {
-                    output.push_str(&format!("  {}. SCREENSHOT\n", idx + 1));
-                    if let Some(desc) = description {
-                        output.push_str(&format!("     ({})\n", desc));
-                    }
-                }
-            }
-            output.push_str("\n");
-        }
+        let name = json_value.get("name").and_then(|n| n.as_str()).unwrap_or("Unnamed");
+        let description = json_value.get("description").and_then(|d| d.as_str()).unwrap_or("");
+        let starting_url = json_value.get("starting_url")
+            .or_else(|| json_value.get("starting_page"))
+            .and_then(|s| s.as_str())
+            .unwrap_or("");
+        let steps_count = json_value.get("steps").and_then(|s| s.as_array()).map(|a| a.len()).unwrap_or(0);
 
-        output.push_str("\n[DRY RUN] This script uses Nova Act for safe, high-level browser automation.\n");
-        output.push_str("No Python code execution - only declarative prompts and JSON schemas.\n");
+        let mut output = format!("[DRY RUN] Browser Script: {}\n", name);
+        output.push_str(&format!("Description: {}\n", description));
+        output.push_str(&format!("Starting URL: {}\n", starting_url));
+        output.push_str(&format!("Steps to execute: {}\n\n", steps_count));
+        output.push_str("[DRY RUN] Script validated successfully. Ready for execution.\n");
 
         Ok(ExecutionResult {
             success: true,
@@ -393,7 +447,12 @@ pub async fn execute_browser_script(
         // Actual execution: use unified ScriptExecutor
         use crate::script_executor::{ScriptExecutor, ScriptExecutionConfig};
 
-        log::info!("Executing browser script: {}", parsed.name);
+        // Extract script name for logging
+        let json_value: serde_json::Value = serde_json::from_str(&script)
+            .map_err(|e| format!("Failed to parse script: {}", e))?;
+        let script_name = json_value.get("name").and_then(|n| n.as_str()).unwrap_or("Unnamed");
+
+        log::info!("Executing browser script: {}", script_name);
 
         // Create unified script executor (handles engine selection automatically)
         let executor = ScriptExecutor::new(Arc::clone(&current_config))

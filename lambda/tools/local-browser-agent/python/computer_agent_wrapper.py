@@ -29,8 +29,8 @@ from pathlib import Path
 from datetime import datetime
 import boto3
 
-# Import OpenAI Computer Agent
-from computer_agent import ComputerAgent, Workflow, Task
+# Note: ComputerAgent, Workflow, Task are imported on-demand in functions that use them
+# to avoid import errors when only using OpenAI Playwright executor
 
 
 def execute_browser_command(command: Dict[str, Any]) -> Dict[str, Any]:
@@ -201,6 +201,9 @@ def execute_act(command: Dict[str, Any]) -> Dict[str, Any]:
     print(f"  - Session ID: {session_id}", file=sys.stderr)
 
     try:
+        # Import ComputerAgent on-demand (only needed for legacy 'act' command)
+        from computer_agent import ComputerAgent
+
         # Initialize ComputerAgent
         agent = ComputerAgent(
             environment="browser",
@@ -296,30 +299,74 @@ def execute_script(command: Dict[str, Any]) -> Dict[str, Any]:
     """
     Execute a browser automation script with structured steps
 
-    Converts Nova Act script format to OpenAI Computer Agent Workflow format
+    Routes to appropriate executor based on script format:
+    - If script has 'llm_provider' field → OpenAIPlaywrightExecutor (progressive escalation)
+    - Otherwise → ComputerAgentScriptExecutor (legacy Computer Agent)
     """
     try:
-        from computer_agent_script_executor import ComputerAgentScriptExecutor
+        # Check if this is a new OpenAI Playwright format script (has llm_provider)
+        if 'llm_provider' in command:
+            print(f"[INFO] Using OpenAIPlaywrightExecutor (progressive escalation format)", file=sys.stderr)
+            import asyncio
+            from openai_playwright_executor import OpenAIPlaywrightExecutor
+            from profile_manager import ProfileManager
 
-        # Browser channel: default to msedge on Windows, chrome elsewhere
-        browser_channel = command.get('browser_channel')
-        if not browser_channel:
-            browser_channel = 'msedge' if platform.system() == 'Windows' else 'chrome'
-            print(f"[INFO] Script execution - defaulting to '{browser_channel}' for {platform.system()}", file=sys.stderr)
+            # Browser channel: default to msedge on Windows, chrome elsewhere
+            browser_channel = command.get('browser_channel')
+            if not browser_channel:
+                browser_channel = 'msedge' if platform.system() == 'Windows' else 'chrome'
 
-        # Create executor
-        executor = ComputerAgentScriptExecutor(
-            s3_bucket=command.get('s3_bucket'),
-            aws_profile=command.get('aws_profile', 'browser-agent'),
-            openai_model=os.environ.get('OPENAI_MODEL', 'gpt-4o-mini'),
-            headless=command.get('headless', False),
-            max_iterations=command.get('max_steps', 30),
-            timeout=command.get('timeout', 300),
-            enable_replanning=True,
-            browser_channel=browser_channel,
-        )
+            # Resolve profile if specified
+            user_data_dir = None
+            session_config = command.get('session', {})
+            if session_config and isinstance(session_config, dict):
+                profile_name = session_config.get('profile_name')
+                if profile_name:
+                    profile_manager = ProfileManager()
+                    clone_for_parallel = session_config.get('clone_for_parallel', False)
+                    profile_config = profile_manager.get_nova_act_config(profile_name, clone_for_parallel=clone_for_parallel)
+                    user_data_dir = profile_config["user_data_dir"]
+                    print(f"[INFO] Using profile '{profile_name}' with user_data_dir: {user_data_dir}", file=sys.stderr)
 
-        return executor.execute_script(command)
+            # Create executor
+            executor = OpenAIPlaywrightExecutor(
+                llm_provider=command.get('llm_provider', 'openai'),
+                llm_model=command.get('llm_model', 'gpt-4o-mini'),
+                llm_api_key=os.environ.get('OPENAI_API_KEY'),
+                s3_bucket=command.get('s3_bucket'),
+                aws_profile=command.get('aws_profile', 'browser-agent'),
+                headless=command.get('headless', False),
+                browser_channel=browser_channel,
+                user_data_dir=user_data_dir,
+            )
+
+            # Execute script asynchronously
+            return asyncio.run(executor.execute_script(command))
+
+        else:
+            # Legacy Computer Agent format
+            print(f"[INFO] Using ComputerAgentScriptExecutor (legacy format)", file=sys.stderr)
+            from computer_agent_script_executor import ComputerAgentScriptExecutor
+
+            # Browser channel: default to msedge on Windows, chrome elsewhere
+            browser_channel = command.get('browser_channel')
+            if not browser_channel:
+                browser_channel = 'msedge' if platform.system() == 'Windows' else 'chrome'
+                print(f"[INFO] Script execution - defaulting to '{browser_channel}' for {platform.system()}", file=sys.stderr)
+
+            # Create executor
+            executor = ComputerAgentScriptExecutor(
+                s3_bucket=command.get('s3_bucket'),
+                aws_profile=command.get('aws_profile', 'browser-agent'),
+                openai_model=os.environ.get('OPENAI_MODEL', 'gpt-4o-mini'),
+                headless=command.get('headless', False),
+                max_iterations=command.get('max_steps', 30),
+                timeout=command.get('timeout', 300),
+                enable_replanning=True,
+                browser_channel=browser_channel,
+            )
+
+            return executor.execute_script(command)
 
     except Exception as e:
         return {
@@ -440,37 +487,58 @@ def setup_login(command: Dict[str, Any]) -> Dict[str, Any]:
         print(f"╚═══════════════════════════════════════════════════════════╝", file=sys.stderr)
         print(f"", file=sys.stderr)
 
-        # Open browser for manual login
+        # Open browser for manual login using Playwright directly
+        # We don't need LLM for manual login, so no API key required
         import time
+        from playwright.sync_api import sync_playwright
 
-        agent = ComputerAgent(
-            environment="browser",
-            openai_model=os.environ.get('OPENAI_MODEL', 'gpt-4o-mini'),
-            openai_api_key=os.environ.get('OPENAI_API_KEY'),
-            user_data_dir=user_data_dir,
-            clone_user_data_dir=False,  # Don't clone - we want to save session
-            browser_channel=browser_channel,
-            headless=False,  # Must be visible for manual login
-            starting_page=starting_url,
-        )
+        print(f"Opening browser for manual login (no API key required)...", file=sys.stderr)
 
-        agent.start()
+        with sync_playwright() as p:
+            # Launch browser with user_data_dir for session persistence
+            # Note: user_data_dir must be passed to launch_persistent_context, not to launch + new_context
+            if browser_channel == 'msedge':
+                context = p.chromium.launch_persistent_context(
+                    user_data_dir,
+                    channel='msedge',
+                    headless=False,
+                    ignore_https_errors=True,
+                )
+            elif browser_channel == 'chrome':
+                context = p.chromium.launch_persistent_context(
+                    user_data_dir,
+                    channel='chrome',
+                    headless=False,
+                    ignore_https_errors=True,
+                )
+            else:
+                context = p.chromium.launch_persistent_context(
+                    user_data_dir,
+                    headless=False,
+                    ignore_https_errors=True,
+                )
 
-        try:
-            # Just wait for the timeout - user can log in during this time
-            print(f"Browser opened. Waiting {timeout} seconds for you to complete login...", file=sys.stderr)
+            # Create page and navigate
+            page = context.new_page()
+            page.goto(starting_url)
 
-            # Wait in smaller increments to detect early termination
-            elapsed = 0
-            check_interval = 5  # Check every 5 seconds
-            while elapsed < timeout:
-                time.sleep(check_interval)
-                elapsed += check_interval
+            try:
+                # Just wait for the timeout - user can log in during this time
+                print(f"Browser opened. Waiting {timeout} seconds for you to complete login...", file=sys.stderr)
 
-            print(f"Timeout reached. Closing browser and saving session...", file=sys.stderr)
+                # Wait in smaller increments to detect early termination
+                elapsed = 0
+                check_interval = 5  # Check every 5 seconds
+                while elapsed < timeout:
+                    time.sleep(check_interval)
+                    elapsed += check_interval
 
-        finally:
-            agent.stop()
+                print(f"Timeout reached. Closing browser and saving session...", file=sys.stderr)
+
+            finally:
+                # Close page and context (browser is closed with context in persistent mode)
+                page.close()
+                context.close()
 
         print(f"", file=sys.stderr)
         print(f"✓ Profile '{profile_name}' login setup completed!", file=sys.stderr)
@@ -522,29 +590,79 @@ def upload_screenshot_to_s3(
 
 def main():
     """
-    Main entry point
+    Main entry point - supports both command-line args and stdin
 
-    Reads command from stdin, executes, writes result to stdout
+    Mode 1: Command-line arguments (--script file) - for ScriptExecutor
+    Mode 2: JSON from stdin - for NovaActExecutor
     """
-    try:
-        # Read command from stdin
-        command_json = sys.stdin.read()
+    import argparse
 
-        if not command_json.strip():
-            result = {
-                "success": False,
-                "error": "No input received on stdin"
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Execute browser automation with Computer Agent")
+    parser.add_argument("--script", help="Path to script JSON file")
+    parser.add_argument("--aws-profile", default="browser-agent", help="AWS profile name")
+    parser.add_argument("--s3-bucket", help="S3 bucket for screenshots")
+    parser.add_argument("--headless", action="store_true", help="Run browser in headless mode")
+    parser.add_argument("--browser-channel", help="Browser channel (chrome, msedge, chromium)")
+    parser.add_argument("--navigation-timeout", type=int, default=60000, help="Navigation timeout in ms")
+    parser.add_argument("--user-data-dir", help="User data directory for browser profile")
+
+    args = parser.parse_args()
+
+    try:
+        # Determine input mode
+        if args.script:
+            # Mode 1: Read script from file (ScriptExecutor mode)
+            from pathlib import Path
+            script_path = Path(args.script)
+            if not script_path.exists():
+                result = {
+                    "success": False,
+                    "error": f"Script file not found: {args.script}"
+                }
+                print(json.dumps(result), flush=True)
+                sys.exit(1)
+
+            with open(script_path, 'r') as f:
+                script = json.load(f)
+
+            # Build command from script + args
+            command = {
+                "command_type": "script",
+                "steps": script.get("steps", []),
+                "name": script.get("name", "Unnamed Script"),
+                "starting_page": script.get("starting_page"),
+                "llm_provider": script.get("llm_provider"),
+                "llm_model": script.get("llm_model"),
+                "abort_on_error": script.get("abort_on_error", False),
+                "session": script.get("session", {}),
+                "aws_profile": args.aws_profile,
+                "s3_bucket": args.s3_bucket,
+                "headless": args.headless,
+                "browser_channel": args.browser_channel,
             }
+
         else:
+            # Mode 2: Read command from stdin (NovaActExecutor mode)
+            command_json = sys.stdin.read()
+
+            if not command_json.strip():
+                result = {
+                    "success": False,
+                    "error": "No input on stdin and no --script argument"
+                }
+                print(json.dumps(result), flush=True)
+                sys.exit(1)
+
             # Parse command
             command = json.loads(command_json)
 
-            # Execute command
-            result = execute_browser_command(command)
+        # Execute command
+        result = execute_browser_command(command)
 
         # Write result to stdout
         print(json.dumps(result), flush=True)
-        sys.exit(0)
+        sys.exit(0 if result.get("success") else 1)
 
     except json.JSONDecodeError as e:
         error_result = {

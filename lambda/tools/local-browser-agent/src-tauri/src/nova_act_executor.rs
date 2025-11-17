@@ -358,10 +358,6 @@ impl NovaActExecutor {
 
         debug!("Spawning Python subprocess with command: {}", command_json);
 
-        // Set NOVA_ACT_API_KEY environment variable
-        let nova_act_api_key = self.config.get_nova_act_api_key()
-            .context("Failed to get Nova Act API key")?;
-
         // Find Python executable (prefer uvx for automatic dependency management)
         let python_executable = Self::find_python_executable()?;
         let use_uvx = python_executable.file_name().and_then(|s| s.to_str()) == Some("uvx");
@@ -378,13 +374,33 @@ impl NovaActExecutor {
             cmd.arg(&self.python_wrapper_path);
         }
 
+        // Set environment variables based on browser_engine config
+        // The environment variables were already set in set_environment_variables()
+        // but subprocess doesn't inherit them automatically, so we need to set them explicitly
+
+        // Always set AWS profile
+        cmd.env("AWS_PROFILE", &self.config.aws_profile);
+
+        // Set Nova Act API key if using nova_act engine (optional for computer_agent)
+        if self.config.browser_engine == "nova_act" {
+            let nova_act_api_key = self.config.get_nova_act_api_key()
+                .context("Failed to get Nova Act API key")?;
+            cmd.env("NOVA_ACT_API_KEY", nova_act_api_key);
+        }
+
+        // Set OpenAI configuration if using computer_agent engine
+        if self.config.browser_engine == "computer_agent" {
+            if let Some(ref api_key) = self.config.openai_api_key {
+                cmd.env("OPENAI_API_KEY", api_key);
+            }
+            cmd.env("OPENAI_MODEL", &self.config.openai_model);
+        }
+
         // Spawn Python process
         let mut child = cmd
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .env("NOVA_ACT_API_KEY", nova_act_api_key)
-            .env("AWS_PROFILE", &self.config.aws_profile)
             .spawn()
             .context("Failed to spawn Python subprocess")?;
 
