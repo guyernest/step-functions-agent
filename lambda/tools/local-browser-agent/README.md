@@ -607,6 +607,28 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for AWS infrastructure setup and deployment
 | IP Address | Cloud datacenter | User's ISP |
 | Cost | Per execution | One-time setup |
 
+## Documentation
+
+### Guides
+
+- [Getting Started](GETTING_STARTED.md) - Quick setup guide
+- [Session Management](SESSION_MANAGEMENT_GUIDE.md) - Browser profiles and authentication
+- [Password Manager Support](docs/PASSWORD_MANAGER_SUPPORT.md) - Automated password filling
+- [Build Guide](BUILD_GUIDE.md) - Building from source
+- [Windows Installation](WINDOWS_INSTALLATION_IMPLEMENTATION_PLAN.md) - Windows-specific setup
+
+### Examples
+
+- [Basic Examples](examples/README.md) - Simple test scripts
+- [BT Broadband with Password Manager](examples/bt_broadband_password_manager.json) - Real-world authentication example
+- [Progressive Escalation Examples](examples/README_PROGRESSIVE_EXAMPLES.md) - Advanced DOM → Vision workflows
+
+### Architecture
+
+- [Architecture Overview](ARCHITECTURE.md) - System design
+- [Schema Factory](SCHEMA_FACTORY_DESIGN.md) - Template system design
+- [Profile Resolution](PROFILE_RESOLUTION_DESIGN.md) - Profile matching logic
+
 ## License
 
 Same as parent project.
