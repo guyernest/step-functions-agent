@@ -755,10 +755,12 @@ class OpenAIPlaywrightExecutor:
         }
 
     async def _step_press(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
-        """Press keyboard key(s)"""
+        """Press keyboard key(s) with configurable delay"""
         # Support either single key or array of keys
         key = step.get("key")
         keys = step.get("keys", [])
+        # Configurable delay in milliseconds (default 100ms)
+        delay_ms = step.get("delay", 100)
 
         # Convert single key to array
         if key and not keys:
@@ -770,16 +772,18 @@ class OpenAIPlaywrightExecutor:
                 "error": "No key(s) specified for press action"
             }
 
-        # Press each key in sequence
-        for k in keys:
+        # Press each key in sequence with configurable delay
+        for i, k in enumerate(keys):
             await self.page.keyboard.press(k)
-            # Small delay between keys for reliability
-            await asyncio.sleep(0.1)
+            # Apply delay after each key (including the last one)
+            # This gives UI time to respond to the key press
+            await asyncio.sleep(delay_ms / 1000.0)
 
         return {
             "success": True,
             "action": "press",
             "keys": keys,
+            "delay_ms": delay_ms,
         }
 
     def _get_locator(self, locator_config: Dict[str, Any]):

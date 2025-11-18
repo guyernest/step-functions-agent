@@ -37,28 +37,45 @@ New `press` step type for programmatic keyboard input:
 {
     "type": "press",
     "description": "Select password from manager (Arrow Down + Enter)",
-    "keys": ["ArrowDown", "Enter"]
+    "keys": ["ArrowDown", "Enter"],
+    "delay": 500
 }
 ```
 
 **Supports:**
 - Single key: `{"type": "press", "key": "Enter"}`
 - Multiple keys: `{"type": "press", "keys": ["ArrowDown", "Enter"]}`
+- Configurable delay: `{"type": "press", "keys": ["ArrowDown", "Enter"], "delay": 500}`
 - Any Playwright keyboard key (Tab, ArrowUp, ArrowDown, Enter, Escape, etc.)
+
+**Parameters:**
+- `key` (string): Single key to press
+- `keys` (array): Multiple keys to press in sequence
+- `delay` (number, optional): Delay in milliseconds between key presses (default: 100ms)
 
 **Implementation:**
 ```python
-# In openai_playwright_executor.py:757-783
+# In openai_playwright_executor.py:757-787
 async def _step_press(self, step: Dict[str, Any], step_num: int):
-    """Press keyboard key(s)"""
+    """Press keyboard key(s) with configurable delay"""
     keys = step.get("keys", [])
+    delay_ms = step.get("delay", 100)  # Default 100ms
 
-    for k in keys:
+    for i, k in enumerate(keys):
         await self.page.keyboard.press(k)
-        await asyncio.sleep(0.1)  // Small delay for reliability
+        # Apply delay after each key (including the last one)
+        # This gives UI time to respond to the key press
+        await asyncio.sleep(delay_ms / 1000.0)
 
-    return {"success": True, "action": "press", "keys": keys}
+    return {"success": True, "action": "press", "keys": keys, "delay_ms": delay_ms}
 ```
+
+**Why Configurable Delay?**
+- Password managers on different platforms respond at different speeds
+- Windows may require longer delays (500ms recommended) for dropdown to appear
+- macOS and Linux may work fine with default 100ms
+- Prevents commands from executing too fast for UI to respond
+- Delay applied AFTER each key, including the last one, to ensure password fills before next step
 
 ### Layer 3: Progressive Fallback (Template Level)
 
@@ -72,11 +89,6 @@ Script templates use a progressive approach:
         "duration": 2000
     },
     {
-        "type": "execute_js",
-        "description": "Check if password was autofilled",
-        "script": "(function() { var pwdField = document.querySelector('input[type=\"password\"]'); return { passwordFilled: pwdField ? pwdField.value.length > 0 : false }; })()"
-    },
-    {
         "type": "click",
         "description": "Click password field to activate password manager",
         "escalation_chain": [...]
@@ -84,17 +96,23 @@ Script templates use a progressive approach:
     {
         "type": "wait",
         "description": "Wait for password manager dropdown",
-        "duration": 800
+        "duration": 1000
     },
     {
         "type": "press",
         "description": "Select password from manager (Arrow Down + Enter)",
-        "keys": ["ArrowDown", "Enter"]
+        "keys": ["ArrowDown", "Enter"],
+        "delay": 500
     },
     {
         "type": "wait",
         "description": "Wait for password to fill from manager",
-        "duration": 500
+        "duration": 1500
+    },
+    {
+        "type": "execute_js",
+        "description": "Verify password was filled by password manager",
+        "script": "(function() { var pwdField = document.querySelector('input[type=\"password\"]'); return { passwordFilled: pwdField ? pwdField.value.length > 0 : false }; })()"
     }
 ]
 ```
@@ -106,23 +124,26 @@ Script templates use a progressive approach:
 1. **Wait for autofill** (2000ms)
    - Give browser time to naturally fill password
 
-2. **Verify autofill** (JavaScript check)
-   - Check if password field has value
-   - Log the result for debugging
-
-3. **Click password field**
+2. **Click password field**
    - Focuses the field
    - Triggers password manager dropdown
 
-4. **Wait for dropdown** (800ms)
+3. **Wait for dropdown** (1000ms)
    - Password manager UI appears
 
-5. **Trigger selection** (ArrowDown + Enter)
-   - ArrowDown selects first saved password
-   - Enter confirms selection
+4. **Trigger selection** (ArrowDown + Enter with 500ms delay)
+   - ArrowDown selects first saved password (wait 500ms)
+   - Enter confirms selection (wait 500ms after)
+   - Total time: 1000ms for keyboard interaction
 
-6. **Wait for fill** (500ms)
+5. **Wait for fill** (1500ms)
    - Password manager fills the field
+   - Ensures password is fully populated
+
+6. **Verify fill** (JavaScript check)
+   - Check if password field has value
+   - Log the result for debugging
+   - Ensures password is ready before clicking Next
 
 ### Why This Approach Works
 
@@ -284,10 +305,35 @@ python python/openai_playwright_executor.py \
 - If you have multiple passwords, ArrowDown selects the first one
 - You can press ArrowDown multiple times: `"keys": ["ArrowDown", "ArrowDown", "Enter"]`
 
+**Keyboard commands too fast (Windows issue):**
+- **Symptom**: Password manager dropdown appears but password not selected
+- **Root cause**: Commands execute faster than UI can respond (especially on remote/slower machines)
+- **Solution**: Add `delay` parameter to slow down key presses:
+  ```json
+  {
+      "type": "press",
+      "keys": ["ArrowDown", "Enter"],
+      "delay": 500  // 500ms delay between keys (recommended for Windows)
+  }
+  ```
+- **Recommended delays**:
+  - Windows: 500ms (slower password manager UI)
+  - macOS: 100ms (default, faster response)
+  - Linux: 100-300ms (varies by desktop environment)
+- **Alternative**: Break into separate steps with wait times:
+  ```json
+  [
+      {"type": "press", "key": "ArrowDown"},
+      {"type": "wait", "duration": 500},
+      {"type": "press", "key": "Enter"}
+  ]
+  ```
+
 **Still fails on Windows:**
 - Verify browser channel is set (chrome, msedge, etc.)
 - Check that Windows password manager has credentials
 - Try running in non-headless mode for debugging
+- Increase the delay parameter (try 700ms or 1000ms)
 
 ## Migrating Existing Templates
 
@@ -335,7 +381,8 @@ To add password manager support to existing templates:
 {
     "type": "press",
     "description": "Select password from manager",
-    "keys": ["ArrowDown", "Enter"]
+    "keys": ["ArrowDown", "Enter"],
+    "delay": 500
 },
 {
     "type": "wait",
@@ -359,6 +406,12 @@ To add password manager support to existing templates:
 - Review recordings to ensure no password exposure
 
 ## Version History
+
+- **v0.4.2** (2025-01-17)
+  - Added configurable `delay` parameter to `press` step type
+  - Fixes timing issues on Windows where keyboard commands were too fast
+  - Updated documentation with troubleshooting for timing issues
+  - Updated example template with recommended 500ms delay for Windows
 
 - **v0.4.1** (2024-11-17)
   - Added `--disable-blink-features=AutomationControlled` browser argument
