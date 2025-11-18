@@ -1,3 +1,4 @@
+// AppSync resolver for getting a single agent template by ID
 export function request(ctx) {
   var template_id = ctx.args.template_id;
   var version = ctx.args.version || '1.0.0';

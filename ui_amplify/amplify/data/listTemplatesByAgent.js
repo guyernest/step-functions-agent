@@ -1,3 +1,4 @@
+// AppSync resolver for listing templates by agent name
 export function request(ctx) {
   var agent_name = ctx.args.agent_name;
   // Convert hyphens to underscores for extraction_name matching
