@@ -243,6 +243,40 @@ class OpenAIPlaywrightExecutor:
                     result["step_results"].append(step_result)
                     result["steps_executed"] += 1
 
+                    # Log step completion with status and key details
+                    if step_result["success"]:
+                        status_icon = "✓"
+                        status_text = "SUCCESS"
+
+                        # Add step-specific details to logging
+                        details = []
+                        if step_type == "click" and step_result.get("method"):
+                            details.append(f"method={step_result['method']}")
+                        if step_type == "fill" and step_result.get("value"):
+                            details.append(f"filled={len(step_result['value'])} chars")
+                        if step_type == "press" and step_result.get("keys"):
+                            details.append(f"keys={step_result['keys']}")
+                            if step_result.get("delay_ms"):
+                                details.append(f"delay={step_result['delay_ms']}ms")
+                        if step_type == "wait" and step_result.get("duration"):
+                            details.append(f"duration={step_result['duration']}ms")
+                        if step_type == "execute_js" and step_result.get("result"):
+                            js_result = step_result['result']
+                            if isinstance(js_result, dict):
+                                details.append(f"result={list(js_result.keys())}")
+                            else:
+                                details.append(f"result={type(js_result).__name__}")
+                        if step_type == "extract" and step_result.get("data"):
+                            details.append(f"extracted={len(step_result['data'])} fields")
+
+                        detail_str = f" ({', '.join(details)})" if details else ""
+                        print(f"  {status_icon} {status_text}{detail_str}", file=sys.stderr)
+                    else:
+                        status_icon = "✗"
+                        status_text = "FAILED"
+                        error_msg = step_result.get("error", "Unknown error")
+                        print(f"  {status_icon} {status_text}: {error_msg}", file=sys.stderr)
+
                     # Store extracted data as variables
                     if step_result.get("data"):
                         self.variables[f"step_{step_num}_data"] = step_result["data"]
@@ -254,7 +288,7 @@ class OpenAIPlaywrightExecutor:
 
                 except Exception as e:
                     error_msg = f"Step {step_num} exception: {str(e)}"
-                    print(f"✗ {error_msg}", file=sys.stderr)
+                    print(f"  ✗ EXCEPTION: {error_msg}", file=sys.stderr)
 
                     result["step_results"].append({
                         "step_number": step_num,
