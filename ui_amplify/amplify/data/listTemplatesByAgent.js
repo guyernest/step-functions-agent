@@ -6,14 +6,14 @@ export function request(ctx) {
   return {
     operation: 'Scan',
     filter: {
-      expression: 'contains(#metadata, :agent_name) OR #extraction_name = :agent_name OR #extraction_name = :extraction_name',
+      expression: 'contains(#metadata, :agent_name) OR #extraction_name = :agent_name OR #extraction_name = :extraction_name_value',
       expressionNames: {
         '#metadata': 'metadata',
         '#extraction_name': 'extraction_name'
       },
       expressionValues: {
         ':agent_name': { S: agent_name },
-        ':extraction_name': { S: extraction_name }
+        ':extraction_name_value': { S: extraction_name }
       }
     }
   };
