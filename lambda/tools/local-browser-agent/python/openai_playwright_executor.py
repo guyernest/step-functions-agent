@@ -466,25 +466,44 @@ class OpenAIPlaywrightExecutor:
                     # Click using Playwright locator object (from playwright_locator method)
                     locator = result["locator"]
 
-                    # If trigger_autofill, hover first to simulate mouse movement
+                    # If trigger_autofill, use real mouse click instead of programmatic click
                     if trigger_autofill:
-                        print(f"🖱️  Hovering over element first (trigger_autofill=true)", file=sys.stderr)
+                        print(f"🖱️  Using real mouse click for autofill (trigger_autofill=true)", file=sys.stderr)
                         await locator.scroll_into_view_if_needed()
-                        await locator.hover()
-                        await asyncio.sleep(0.2)  # Brief pause for browser to register hover
 
-                    # Use force=True if modal overlays are blocking, and increase timeout
-                    try:
-                        await locator.click(timeout=30000)
-                        click_method = "locator"
-                    except Exception as e:
-                        # If click fails due to overlays, try force click
-                        if "intercepts pointer events" in str(e):
-                            print(f"⚠ Modal overlay detected, trying force click", file=sys.stderr)
-                            await locator.click(timeout=30000, force=True)
-                            click_method = "locator (forced)"
+                        # Get element position
+                        box = await locator.bounding_box()
+                        if box:
+                            # Calculate center of element
+                            center_x = box["x"] + box["width"] / 2
+                            center_y = box["y"] + box["height"] / 2
+
+                            print(f"🖱️  Moving mouse to ({center_x:.1f}, {center_y:.1f})", file=sys.stderr)
+                            # Move mouse to element (this triggers hover events)
+                            await self.page.mouse.move(center_x, center_y)
+                            await asyncio.sleep(0.3)  # Wait for hover to register
+
+                            # Perform real mouse click
+                            print(f"🖱️  Clicking with real mouse", file=sys.stderr)
+                            await self.page.mouse.click(center_x, center_y)
+                            click_method = "mouse_click (autofill)"
                         else:
-                            raise
+                            print(f"⚠ Could not get bounding box, falling back to locator.click()", file=sys.stderr)
+                            await locator.click(timeout=30000)
+                            click_method = "locator (fallback)"
+                    else:
+                        # Use force=True if modal overlays are blocking, and increase timeout
+                        try:
+                            await locator.click(timeout=30000)
+                            click_method = "locator"
+                        except Exception as e:
+                            # If click fails due to overlays, try force click
+                            if "intercepts pointer events" in str(e):
+                                print(f"⚠ Modal overlay detected, trying force click", file=sys.stderr)
+                                await locator.click(timeout=30000, force=True)
+                                click_method = "locator (forced)"
+                            else:
+                                raise
                 elif result.get("method") in ["selector", "text"]:
                     # Click using selector/text from vision_find_element
                     value = result.get("value")
@@ -493,23 +512,42 @@ class OpenAIPlaywrightExecutor:
                     else:  # text
                         locator = self.page.get_by_text(value, exact=False)
 
-                    # If trigger_autofill, hover first
+                    # If trigger_autofill, use real mouse click
                     if trigger_autofill:
-                        print(f"🖱️  Hovering over element first (trigger_autofill=true)", file=sys.stderr)
+                        print(f"🖱️  Using real mouse click for autofill (trigger_autofill=true)", file=sys.stderr)
                         await locator.scroll_into_view_if_needed()
-                        await locator.hover()
-                        await asyncio.sleep(0.2)
 
-                    try:
-                        await locator.click(timeout=30000)
-                        click_method = result.get("method")
-                    except Exception as e:
-                        if "intercepts pointer events" in str(e):
-                            print(f"⚠ Modal overlay detected, trying force click", file=sys.stderr)
-                            await locator.click(timeout=30000, force=True)
-                            click_method = f"{result.get('method')} (forced)"
+                        # Get element position
+                        box = await locator.bounding_box()
+                        if box:
+                            # Calculate center of element
+                            center_x = box["x"] + box["width"] / 2
+                            center_y = box["y"] + box["height"] / 2
+
+                            print(f"🖱️  Moving mouse to ({center_x:.1f}, {center_y:.1f})", file=sys.stderr)
+                            # Move mouse to element
+                            await self.page.mouse.move(center_x, center_y)
+                            await asyncio.sleep(0.3)
+
+                            # Perform real mouse click
+                            print(f"🖱️  Clicking with real mouse", file=sys.stderr)
+                            await self.page.mouse.click(center_x, center_y)
+                            click_method = f"{result.get('method')}_mouse (autofill)"
                         else:
-                            raise
+                            print(f"⚠ Could not get bounding box, falling back to locator.click()", file=sys.stderr)
+                            await locator.click(timeout=30000)
+                            click_method = f"{result.get('method')} (fallback)"
+                    else:
+                        try:
+                            await locator.click(timeout=30000)
+                            click_method = result.get("method")
+                        except Exception as e:
+                            if "intercepts pointer events" in str(e):
+                                print(f"⚠ Modal overlay detected, trying force click", file=sys.stderr)
+                                await locator.click(timeout=30000, force=True)
+                                click_method = f"{result.get('method')} (forced)"
+                            else:
+                                raise
                 else:
                     raise ValueError("Escalation did not return valid click target")
 
