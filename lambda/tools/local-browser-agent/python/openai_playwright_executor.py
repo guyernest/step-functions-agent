@@ -263,6 +263,17 @@ class OpenAIPlaywrightExecutor:
                         if step_type == "execute_js" and step_result.get("result"):
                             js_result = step_result['result']
                             if isinstance(js_result, dict):
+                                # Show boolean values for important checks
+                                bool_values = {k: v for k, v in js_result.items() if isinstance(v, bool)}
+                                if bool_values:
+                                    bool_str = ", ".join([f"{k}={v}" for k, v in bool_values.items()])
+                                    details.append(bool_str)
+                                # Show numeric values
+                                num_values = {k: v for k, v in js_result.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
+                                if num_values:
+                                    num_str = ", ".join([f"{k}={v}" for k, v in num_values.items()])
+                                    details.append(num_str)
+                                # Always show keys for reference
                                 details.append(f"result={list(js_result.keys())}")
                             else:
                                 details.append(f"result={type(js_result).__name__}")
@@ -431,6 +442,9 @@ class OpenAIPlaywrightExecutor:
 
     async def _step_click(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
         """Click element (with optional escalation)"""
+        # Check if this click should trigger autofill (e.g., password managers)
+        trigger_autofill = step.get("trigger_autofill", False)
+
         # Check if escalation chain is provided
         if "escalation_chain" in step:
             # Use progressive escalation to find and click element
@@ -450,15 +464,24 @@ class OpenAIPlaywrightExecutor:
                     click_method = "coordinates"
                 elif result.get("locator"):
                     # Click using Playwright locator object (from playwright_locator method)
+                    locator = result["locator"]
+
+                    # If trigger_autofill, hover first to simulate mouse movement
+                    if trigger_autofill:
+                        print(f"🖱️  Hovering over element first (trigger_autofill=true)", file=sys.stderr)
+                        await locator.scroll_into_view_if_needed()
+                        await locator.hover()
+                        await asyncio.sleep(0.2)  # Brief pause for browser to register hover
+
                     # Use force=True if modal overlays are blocking, and increase timeout
                     try:
-                        await result["locator"].click(timeout=30000)
+                        await locator.click(timeout=30000)
                         click_method = "locator"
                     except Exception as e:
                         # If click fails due to overlays, try force click
                         if "intercepts pointer events" in str(e):
                             print(f"⚠ Modal overlay detected, trying force click", file=sys.stderr)
-                            await result["locator"].click(timeout=30000, force=True)
+                            await locator.click(timeout=30000, force=True)
                             click_method = "locator (forced)"
                         else:
                             raise
@@ -469,6 +492,14 @@ class OpenAIPlaywrightExecutor:
                         locator = self.page.locator(value)
                     else:  # text
                         locator = self.page.get_by_text(value, exact=False)
+
+                    # If trigger_autofill, hover first
+                    if trigger_autofill:
+                        print(f"🖱️  Hovering over element first (trigger_autofill=true)", file=sys.stderr)
+                        await locator.scroll_into_view_if_needed()
+                        await locator.hover()
+                        await asyncio.sleep(0.2)
+
                     try:
                         await locator.click(timeout=30000)
                         click_method = result.get("method")
@@ -486,6 +517,7 @@ class OpenAIPlaywrightExecutor:
                     "success": True,
                     "action": "click",
                     "click_method": click_method,
+                    "trigger_autofill": trigger_autofill,
                     "escalation_metadata": result.get("escalation_metadata", {}),
                 }
 
