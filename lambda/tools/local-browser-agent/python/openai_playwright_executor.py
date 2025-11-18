@@ -300,9 +300,17 @@ class OpenAIPlaywrightExecutor:
         elif self.browser_channel == "firefox":
             browser_type = self.playwright.firefox
 
+        # Disable automation detection to allow password manager autofill
+        args = [
+            '--disable-blink-features=AutomationControlled',  # Remove "controlled by automation" banner
+            '--disable-dev-shm-usage',  # Overcome limited resource problems
+            '--no-sandbox',  # Disable sandbox for compatibility
+        ]
+
         launch_options = {
             "headless": self.headless,
             "channel": self.browser_channel if self.browser_channel != "chromium" else None,
+            "args": args,
         }
 
         if self.user_data_dir:
@@ -363,6 +371,7 @@ class OpenAIPlaywrightExecutor:
             "screenshot": self._step_screenshot,
             "extract": self._step_extract,
             "execute_js": self._step_execute_js,
+            "press": self._step_press,
         }
 
         handler = handlers.get(step_type)
@@ -743,6 +752,34 @@ class OpenAIPlaywrightExecutor:
             "success": True,
             "action": "execute_js",
             "result": result,
+        }
+
+    async def _step_press(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
+        """Press keyboard key(s)"""
+        # Support either single key or array of keys
+        key = step.get("key")
+        keys = step.get("keys", [])
+
+        # Convert single key to array
+        if key and not keys:
+            keys = [key]
+
+        if not keys:
+            return {
+                "success": False,
+                "error": "No key(s) specified for press action"
+            }
+
+        # Press each key in sequence
+        for k in keys:
+            await self.page.keyboard.press(k)
+            # Small delay between keys for reliability
+            await asyncio.sleep(0.1)
+
+        return {
+            "success": True,
+            "action": "press",
+            "keys": keys,
         }
 
     def _get_locator(self, locator_config: Dict[str, Any]):
