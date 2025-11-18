@@ -1,0 +1,20 @@
+{
+  "arguments": {
+    "agent_name": "test-agent"
+  },
+  "result": {
+    "items": [
+      {
+        "template_id": "test-template-1",
+        "version": "1.0.0",
+        "extraction_name": "test_agent",
+        "status": "active",
+        "template": "{\"name\":\"test1\",\"steps\":[]}",
+        "variables": "{\"var1\":\"value1\"}",
+        "metadata": "{\"agent\":\"test-agent\"}",
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+      }
+    ]
+  }
+}

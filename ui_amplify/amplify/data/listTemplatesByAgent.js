@@ -2,7 +2,8 @@
 export function request(ctx) {
   var agent_name = ctx.args.agent_name;
   // Convert hyphens to underscores for extraction_name matching
-  var extraction_name = agent_name.replace(/-/g, '_');
+  // Note: Cannot use regex in AppSync JS, so use split/join
+  var extraction_name = agent_name.split('-').join('_');
 
   return {
     operation: 'Scan',
