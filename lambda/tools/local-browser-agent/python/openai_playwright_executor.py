@@ -481,11 +481,22 @@ class OpenAIPlaywrightExecutor:
                             print(f"🖱️  Moving mouse to ({center_x:.1f}, {center_y:.1f})", file=sys.stderr)
                             # Move mouse to element (this triggers hover events)
                             await self.page.mouse.move(center_x, center_y)
-                            await asyncio.sleep(0.3)  # Wait for hover to register
 
-                            # Perform real mouse click
-                            print(f"🖱️  Clicking with real mouse", file=sys.stderr)
-                            await self.page.mouse.click(center_x, center_y)
+                            # Wait for hover to register (critical for password managers)
+                            print(f"🖱️  Waiting 500ms for hover to register", file=sys.stderr)
+                            await asyncio.sleep(0.5)
+
+                            # Perform real mouse click with proper press duration
+                            # Real clicks have: down -> delay -> up (not instant)
+                            print(f"🖱️  Pressing mouse button down", file=sys.stderr)
+                            await self.page.mouse.down()
+
+                            # Button press duration - real clicks aren't instant
+                            await asyncio.sleep(0.1)
+
+                            print(f"🖱️  Releasing mouse button", file=sys.stderr)
+                            await self.page.mouse.up()
+
                             click_method = "mouse_click (autofill)"
                         else:
                             print(f"⚠ Could not get bounding box, falling back to locator.click()", file=sys.stderr)
@@ -527,11 +538,18 @@ class OpenAIPlaywrightExecutor:
                             print(f"🖱️  Moving mouse to ({center_x:.1f}, {center_y:.1f})", file=sys.stderr)
                             # Move mouse to element
                             await self.page.mouse.move(center_x, center_y)
-                            await asyncio.sleep(0.3)
 
-                            # Perform real mouse click
-                            print(f"🖱️  Clicking with real mouse", file=sys.stderr)
-                            await self.page.mouse.click(center_x, center_y)
+                            # Wait for hover to register
+                            print(f"🖱️  Waiting 500ms for hover to register", file=sys.stderr)
+                            await asyncio.sleep(0.5)
+
+                            # Perform real mouse click with proper press duration
+                            print(f"🖱️  Pressing mouse button down", file=sys.stderr)
+                            await self.page.mouse.down()
+                            await asyncio.sleep(0.1)  # Button press duration
+                            print(f"🖱️  Releasing mouse button", file=sys.stderr)
+                            await self.page.mouse.up()
+
                             click_method = f"{result.get('method')}_mouse (autofill)"
                         else:
                             print(f"⚠ Could not get bounding box, falling back to locator.click()", file=sys.stderr)
