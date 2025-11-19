@@ -478,24 +478,34 @@ class OpenAIPlaywrightExecutor:
                             center_x = box["x"] + box["width"] / 2
                             center_y = box["y"] + box["height"] / 2
 
-                            print(f"🖱️  Moving mouse to ({center_x:.1f}, {center_y:.1f})", file=sys.stderr)
+                            import time
+                            t1 = time.time()
+                            print(f"🖱️  Moving mouse to ({center_x:.1f}, {center_y:.1f})", file=sys.stderr, flush=True)
                             # Move mouse to element (this triggers hover events)
                             await self.page.mouse.move(center_x, center_y)
+                            t2 = time.time()
+                            print(f"🖱️  Mouse moved (took {(t2-t1)*1000:.1f}ms)", file=sys.stderr, flush=True)
 
                             # Wait for hover to register (critical for password managers)
-                            print(f"🖱️  Waiting 500ms for hover to register", file=sys.stderr)
+                            print(f"🖱️  Waiting 500ms for hover to register", file=sys.stderr, flush=True)
                             await asyncio.sleep(0.5)
+                            t3 = time.time()
+                            print(f"🖱️  Hover wait complete (took {(t3-t2)*1000:.1f}ms)", file=sys.stderr, flush=True)
 
                             # Perform real mouse click with proper press duration
                             # Real clicks have: down -> delay -> up (not instant)
-                            print(f"🖱️  Pressing mouse button down", file=sys.stderr)
+                            print(f"🖱️  Pressing mouse button down", file=sys.stderr, flush=True)
                             await self.page.mouse.down()
 
                             # Button press duration - real clicks aren't instant
                             await asyncio.sleep(0.1)
+                            t4 = time.time()
+                            print(f"🖱️  Button held (took {(t4-t3)*1000:.1f}ms)", file=sys.stderr, flush=True)
 
-                            print(f"🖱️  Releasing mouse button", file=sys.stderr)
+                            print(f"🖱️  Releasing mouse button", file=sys.stderr, flush=True)
                             await self.page.mouse.up()
+                            t5 = time.time()
+                            print(f"🖱️  Click complete - total time: {(t5-t1)*1000:.1f}ms", file=sys.stderr, flush=True)
 
                             click_method = "mouse_click (autofill)"
                         else:
@@ -535,20 +545,30 @@ class OpenAIPlaywrightExecutor:
                             center_x = box["x"] + box["width"] / 2
                             center_y = box["y"] + box["height"] / 2
 
-                            print(f"🖱️  Moving mouse to ({center_x:.1f}, {center_y:.1f})", file=sys.stderr)
+                            import time
+                            t1 = time.time()
+                            print(f"🖱️  Moving mouse to ({center_x:.1f}, {center_y:.1f})", file=sys.stderr, flush=True)
                             # Move mouse to element
                             await self.page.mouse.move(center_x, center_y)
+                            t2 = time.time()
+                            print(f"🖱️  Mouse moved (took {(t2-t1)*1000:.1f}ms)", file=sys.stderr, flush=True)
 
                             # Wait for hover to register
-                            print(f"🖱️  Waiting 500ms for hover to register", file=sys.stderr)
+                            print(f"🖱️  Waiting 500ms for hover to register", file=sys.stderr, flush=True)
                             await asyncio.sleep(0.5)
+                            t3 = time.time()
+                            print(f"🖱️  Hover wait complete (took {(t3-t2)*1000:.1f}ms)", file=sys.stderr, flush=True)
 
                             # Perform real mouse click with proper press duration
-                            print(f"🖱️  Pressing mouse button down", file=sys.stderr)
+                            print(f"🖱️  Pressing mouse button down", file=sys.stderr, flush=True)
                             await self.page.mouse.down()
                             await asyncio.sleep(0.1)  # Button press duration
-                            print(f"🖱️  Releasing mouse button", file=sys.stderr)
+                            t4 = time.time()
+                            print(f"🖱️  Button held (took {(t4-t3)*1000:.1f}ms)", file=sys.stderr, flush=True)
+                            print(f"🖱️  Releasing mouse button", file=sys.stderr, flush=True)
                             await self.page.mouse.up()
+                            t5 = time.time()
+                            print(f"🖱️  Click complete - total time: {(t5-t1)*1000:.1f}ms", file=sys.stderr, flush=True)
 
                             click_method = f"{result.get('method')}_mouse (autofill)"
                         else:
