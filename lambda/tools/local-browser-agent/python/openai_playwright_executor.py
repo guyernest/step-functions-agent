@@ -90,6 +90,9 @@ from openai import OpenAI
 # Import progressive escalation engine
 from progressive_escalation_engine import ProgressiveEscalationEngine, EscalationExhaustedError
 
+# Import workflow executor
+from workflow_executor import WorkflowExecutor
+
 # Flag for optional LLM providers (imported on-demand)
 ANTHROPIC_AVAILABLE = False
 GEMINI_AVAILABLE = False
@@ -228,8 +231,37 @@ class OpenAIPlaywrightExecutor:
                 print(f"→ Navigating to {starting_page}", file=sys.stderr)
                 await self.page.goto(starting_page, wait_until="networkidle", timeout=self.navigation_timeout)
 
-            # Execute each step
-            for idx, step in enumerate(steps):
+            # Check if this is a workflow script (contains control flow steps)
+            workflow_step_types = {"if", "try", "sequence", "goto", "switch"}
+            has_workflow = any(step.get("type") in workflow_step_types for step in steps)
+
+            if has_workflow:
+                # Use WorkflowExecutor for scripts with control flow
+                print(f"→ Detected workflow script - using WorkflowExecutor", file=sys.stderr)
+                workflow_executor = WorkflowExecutor(script, self)
+                await workflow_executor.run()
+
+                # Update result with workflow execution stats
+                result["steps_executed"] = workflow_executor.total_steps_executed
+                result["execution_mode"] = "workflow"
+            else:
+                # Use traditional linear execution for backward compatibility
+                await self._execute_linear_steps(steps, result)
+
+        except Exception as e:
+            print(f"\n✗ Script Execution Failed: {e}", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
+            result["success"] = False
+            result["error"] = str(e)
+        finally:
+            # Cleanup
+            await self._cleanup_browser()
+
+        return result
+
+    async def _execute_linear_steps(self, steps: List[Dict[str, Any]], result: Dict[str, Any]):
+        """Execute steps linearly without workflow control flow (backward compatible)."""
+        for idx, step in enumerate(steps):
                 step_num = idx + 1
                 step_type = step.get("type")
                 step_desc = step.get("description", f"Step {step_num}")
@@ -314,19 +346,9 @@ class OpenAIPlaywrightExecutor:
                         result["error"] = error_msg
                         break
 
-            # Upload screenshots to S3 if configured
-            if self.s3_bucket and self.screenshots:
-                result["screenshots"] = await self._upload_screenshots(name)
-
-        except Exception as e:
-            result["success"] = False
-            result["error"] = f"Script execution failed: {str(e)}"
-            result["traceback"] = traceback.format_exc()
-            print(f"\n✗ Script failed: {e}", file=sys.stderr)
-
-        finally:
-            # Clean up browser
-            await self._cleanup_browser()
+                # Upload screenshots to S3 if configured
+                if self.s3_bucket and self.screenshots:
+                    result["screenshots"] = await self._upload_screenshots(name)
 
         print(f"\n{'='*60}", file=sys.stderr)
         print(f"Execution {'✓ Complete' if result['success'] else '✗ Failed'}", file=sys.stderr)
@@ -345,23 +367,30 @@ class OpenAIPlaywrightExecutor:
         elif self.browser_channel == "firefox":
             browser_type = self.playwright.firefox
 
-        # Configure browser arguments based on whether we're using a profile
-        # When using a persistent profile, we DON'T want --disable-blink-features=AutomationControlled
-        # because it ironically PREVENTS password managers from working (Edge detects automation and blocks PM)
+        # Configure browser arguments and default-arg overrides to allow password manager UI
+        # Key points:
+        # - Remove --enable-automation so Chromium doesn't suppress sensitive UX (password manager bubbles)
+        # - Remove --disable-component-extensions-with-background-pages (password manager UI uses a component extension)
+        # - Keep headful mode for password manager prompts
         args = [
-            '--disable-dev-shm-usage',  # Overcome limited resource problems
-            '--no-sandbox',  # Disable sandbox for compatibility
+            "--disable-dev-shm-usage",
+            "--no-sandbox",
         ]
 
-        # Only add automation flag if NOT using persistent profile
-        # (password managers work better without this flag when using profiles)
+        # Some sites check AutomationControlled; keep this flag only in ephemeral sessions
         if not self.user_data_dir:
-            args.append('--disable-blink-features=AutomationControlled')
+            args.append("--disable-blink-features=AutomationControlled")
+
+        ignore_default_args = [
+            "--enable-automation",
+            "--disable-component-extensions-with-background-pages",
+        ]
 
         launch_options = {
             "headless": self.headless,
             "channel": self.browser_channel if self.browser_channel != "chromium" else None,
             "args": args,
+            "ignore_default_args": ignore_default_args,
         }
 
         if self.user_data_dir:
@@ -409,8 +438,26 @@ class OpenAIPlaywrightExecutor:
         if self.playwright:
             await self.playwright.stop()
 
+    async def execute_step(self, step: Dict[str, Any]) -> None:
+        """
+        Public interface for WorkflowExecutor to execute individual steps.
+
+        Note: This doesn't return a result dict like _execute_step, as the WorkflowExecutor
+        handles its own execution tracking. This method just executes the action.
+        """
+        # WorkflowExecutor doesn't need step numbers or result tracking
+        # It just needs the action to be performed
+        step_type = step.get("type", "action")
+
+        # Delegate to the internal execute method
+        result = await self._execute_step(step, step_num=0)
+
+        # Raise exception if step failed (WorkflowExecutor handles failures)
+        if not result.get("success"):
+            raise Exception(result.get("error", "Step execution failed"))
+
     async def _execute_step(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
-        """Execute a single step"""
+        """Execute a single step (internal method)"""
         step_type = step.get("type")
 
         handlers = {
@@ -471,6 +518,12 @@ class OpenAIPlaywrightExecutor:
                 elif result.get("locator"):
                     # Click using Playwright locator object (from playwright_locator method)
                     locator = result["locator"]
+
+                    # Heuristic: auto-trigger trusted click for inputs likely to open password manager
+                    try:
+                        trigger_autofill = trigger_autofill or await self._should_trigger_autofill(locator)
+                    except Exception:
+                        pass
 
                     # If trigger_autofill, use real mouse click instead of programmatic click
                     if trigger_autofill:
@@ -538,6 +591,12 @@ class OpenAIPlaywrightExecutor:
                         locator = self.page.locator(value)
                     else:  # text
                         locator = self.page.get_by_text(value, exact=False)
+
+                    # Heuristic: auto-trigger trusted click for inputs likely to open password manager
+                    try:
+                        trigger_autofill = trigger_autofill or await self._should_trigger_autofill(locator)
+                    except Exception:
+                        pass
 
                     # If trigger_autofill, use real mouse click
                     if trigger_autofill:
@@ -614,13 +673,74 @@ class OpenAIPlaywrightExecutor:
             locator_config = step.get("locator", {})
             locator = self._get_locator(locator_config)
 
-            await locator.click(timeout=10000)
+            # Heuristic: auto-trigger trusted click for inputs likely to open password manager
+            try:
+                trigger_autofill = trigger_autofill or await self._should_trigger_autofill(locator)
+            except Exception:
+                pass
+
+            if trigger_autofill:
+                await locator.scroll_into_view_if_needed()
+                box = await locator.bounding_box()
+                if box:
+                    center_x = box["x"] + box["width"] / 2
+                    center_y = box["y"] + box["height"] / 2
+                    await self.page.mouse.move(center_x, center_y)
+                    await asyncio.sleep(0.5)
+                    await self.page.mouse.down()
+                    await asyncio.sleep(0.1)
+                    await self.page.mouse.up()
+                    click_method = "mouse_click (autofill)"
+                else:
+                    await locator.click(timeout=30000)
+                    click_method = "locator (fallback)"
+            else:
+                try:
+                    await locator.click(timeout=10000)
+                    click_method = "locator"
+                except Exception as e:
+                    if "intercepts pointer events" in str(e):
+                        await locator.click(timeout=10000, force=True)
+                        click_method = "locator (forced)"
+                    else:
+                        raise
 
             return {
                 "success": True,
                 "action": "click",
                 "locator": locator_config,
             }
+
+    async def _should_trigger_autofill(self, locator) -> bool:
+        """Determine if clicking this element should be a trusted mouse click.
+
+        Heuristics:
+        - input[type=password]
+        - input with autocomplete indicating username/email/password
+        - input[type=text|email] with name/id hints (user, email, login)
+        """
+        try:
+            element_info = await locator.evaluate("(el) => ({\n                tag: el.tagName.toLowerCase(),\n                type: (el.getAttribute('type') || '').toLowerCase(),\n                autocomplete: (el.getAttribute('autocomplete') || '').toLowerCase(),\n                name: (el.getAttribute('name') || '').toLowerCase(),\n                id: (el.getAttribute('id') || '').toLowerCase(),\n                role: (el.getAttribute('role') || '').toLowerCase()\n            })")
+        except Exception:
+            return False
+
+        tag = element_info.get("tag")
+        if tag != "input":
+            return False
+
+        el_type = element_info.get("type", "")
+        if el_type == "password":
+            return True
+
+        ac = element_info.get("autocomplete", "")
+        if any(k in ac for k in ["username", "email", "current-password", "new-password", "one-time-code"]):
+            return True
+
+        name_id = (element_info.get("name", "") + " " + element_info.get("id", "")).strip()
+        if any(hint in name_id for hint in ["user", "email", "login", "identifier"]):
+            return True
+
+        return False
 
     async def _step_fill(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
         """Fill input field (with optional escalation)"""
