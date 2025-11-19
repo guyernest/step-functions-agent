@@ -345,12 +345,18 @@ class OpenAIPlaywrightExecutor:
         elif self.browser_channel == "firefox":
             browser_type = self.playwright.firefox
 
-        # Disable automation detection to allow password manager autofill
+        # Configure browser arguments based on whether we're using a profile
+        # When using a persistent profile, we DON'T want --disable-blink-features=AutomationControlled
+        # because it ironically PREVENTS password managers from working (Edge detects automation and blocks PM)
         args = [
-            '--disable-blink-features=AutomationControlled',  # Remove "controlled by automation" banner
             '--disable-dev-shm-usage',  # Overcome limited resource problems
             '--no-sandbox',  # Disable sandbox for compatibility
         ]
+
+        # Only add automation flag if NOT using persistent profile
+        # (password managers work better without this flag when using profiles)
+        if not self.user_data_dir:
+            args.append('--disable-blink-features=AutomationControlled')
 
         launch_options = {
             "headless": self.headless,
