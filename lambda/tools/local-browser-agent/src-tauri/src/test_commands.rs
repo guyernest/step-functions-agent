@@ -454,6 +454,33 @@ pub async fn execute_browser_script(
 
         log::info!("Executing browser script: {}", script_name);
 
+        // Check if script specifies a profile in session.profile_name
+        // If so, resolve it and override config.user_data_dir
+        let resolved_user_data_dir = if let Some(session) = json_value.get("session") {
+            if let Some(profile_name) = session.get("profile_name").and_then(|p| p.as_str()) {
+                log::info!("Script specifies profile: {}", profile_name);
+
+                // Resolve profile name to directory path
+                if let Ok(app_paths) = AppPaths::new() {
+                    let profile_path = app_paths.browser_profiles_dir().join(profile_name);
+                    if profile_path.exists() {
+                        log::info!("✓ Resolved profile to: {}", profile_path.display());
+                        Some(profile_path)
+                    } else {
+                        log::warn!("⚠ Profile directory not found: {}. Browser will start without profile.", profile_path.display());
+                        current_config.user_data_dir.clone()
+                    }
+                } else {
+                    log::warn!("⚠ Failed to resolve profile path. Browser will start without profile.");
+                    current_config.user_data_dir.clone()
+                }
+            } else {
+                current_config.user_data_dir.clone()
+            }
+        } else {
+            current_config.user_data_dir.clone()
+        };
+
         // Create unified script executor (handles engine selection automatically)
         let executor = ScriptExecutor::new(Arc::clone(&current_config))
             .map_err(|e| format!("Failed to initialize script executor: {}", e))?;
@@ -470,7 +497,7 @@ pub async fn execute_browser_script(
             headless: current_config.headless,
             browser_channel: current_config.browser_channel.clone(),
             navigation_timeout: 60000, // 60 seconds
-            user_data_dir: current_config.user_data_dir.clone(),
+            user_data_dir: resolved_user_data_dir, // Use resolved profile path
         };
 
         // Execute the script (ScriptExecutor will select the right engine)
