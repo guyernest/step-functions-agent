@@ -1,0 +1,99 @@
+{
+  "name": "Simple Workflow Test",
+  "description": "Basic test to verify workflow engine is working correctly. Uses httpbin.org for reliable testing.",
+  "starting_page": "https://httpbin.org/forms/post",
+  "llm_provider": "openai",
+  "llm_model": "gpt-4o-mini",
+  "abort_on_error": false,
+  "steps": [
+    {
+      "type": "if",
+      "name": "Check page loaded",
+      "description": "Verify we're on the correct page",
+      "condition": {
+        "type": "element_visible",
+        "selector": "form",
+        "timeout": 5000
+      },
+      "then": {
+        "action": "screenshot",
+        "description": "Page loaded successfully"
+      },
+      "else": {
+        "action": "error",
+        "message": "Form not found on page"
+      }
+    },
+    {
+      "type": "try",
+      "name": "Fill customer name",
+      "description": "Test multiple strategies for filling a field",
+      "strategies": [
+        {
+          "name": "Strategy 1: By name attribute",
+          "steps": [
+            {
+              "action": "fill",
+              "locator": {"strategy": "selector", "value": "input[name='custname']"},
+              "value": "Test User"
+            }
+          ],
+          "verify": {
+            "type": "js_eval",
+            "expression": "document.querySelector('input[name=\"custname\"]')?.value === 'Test User'"
+          }
+        },
+        {
+          "name": "Strategy 2: By ID (fallback)",
+          "steps": [
+            {
+              "action": "fill",
+              "locator": {"strategy": "selector", "value": "#custname"},
+              "value": "Test User"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "action": "fill",
+      "description": "Fill email field",
+      "locator": {"strategy": "selector", "value": "input[name='custemail']"},
+      "value": "test@example.com"
+    },
+    {
+      "type": "switch",
+      "name": "Check form variant",
+      "description": "Test switch/case logic",
+      "cases": [
+        {
+          "condition": {
+            "type": "element_exists",
+            "selector": "textarea[name='comments']",
+            "timeout": 2000
+          },
+          "steps": [
+            {
+              "action": "fill",
+              "description": "Fill comments field",
+              "locator": {"strategy": "selector", "value": "textarea[name='comments']"},
+              "value": "This is a test comment from workflow engine"
+            }
+          ]
+        }
+      ],
+      "default": {
+        "steps": [
+          {
+            "action": "screenshot",
+            "description": "Comments field not found"
+          }
+        ]
+      }
+    },
+    {
+      "action": "screenshot",
+      "description": "Final form state before submission"
+    }
+  ]
+}

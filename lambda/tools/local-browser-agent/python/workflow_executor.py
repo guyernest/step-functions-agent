@@ -225,37 +225,47 @@ class WorkflowExecutor:
         escalate_type = escalate_config.get("type")
 
         if escalate_type == "vision_llm":
-            # Use vision LLM to solve the problem
+            # Use vision to find target and click it via executor's escalation chain
             prompt = escalate_config.get("prompt")
             if not prompt:
                 raise ValueError("vision_llm escalation missing 'prompt'")
 
-            print(f"    Escalating to Vision LLM...", file=sys.stderr)
+            print(f"    Escalating to Vision LLM (find element + click)...", file=sys.stderr)
             print(f"    Prompt: {prompt[:100]}...", file=sys.stderr)
 
-            # Create an 'act' step and execute it
-            # The OpenAI Computer Agent will use vision to solve this
-            act_step = {
-                "action": "act",
-                "prompt": prompt,
-                "timeout": escalate_config.get("timeout", 60000),
-                "max_actions": escalate_config.get("max_actions", 10)
+            chain = []
+            # Optional cheap pre-check via locator if provided
+            if "locator" in escalate_config:
+                chain.append({
+                    "method": "playwright_locator",
+                    "locator": escalate_config["locator"]
+                })
+
+            # Vision fallback to find element
+            chain.append({
+                "method": "vision_find_element",
+                "prompt": prompt
+            })
+
+            click_step = {
+                "type": "click",
+                "escalation_chain": chain,
+                "trigger_autofill": escalate_config.get("trigger_autofill", False)
             }
-            await self.executor.execute_step(act_step)
+            await self.executor.execute_step(click_step)
 
         elif escalate_type == "progressive_escalation":
-            # Use existing progressive escalation engine
-            target = escalate_config.get("target")
-            if not target:
-                raise ValueError("progressive_escalation missing 'target'")
+            # Use existing progressive escalation engine via executor 'escalation_chain'
+            chain = escalate_config.get("chain")
+            if not chain:
+                raise ValueError("progressive_escalation missing 'chain'")
 
-            print(f"    Escalating with progressive escalation: {target}", file=sys.stderr)
+            print(f"    Escalating with progressive escalation chain ({len(chain)} steps)", file=sys.stderr)
 
-            # Execute as a click with progressive escalation
             click_step = {
-                "action": "click",
-                "target": target,
-                "use_progressive_escalation": True
+                "type": "click",
+                "escalation_chain": chain,
+                "trigger_autofill": escalate_config.get("trigger_autofill", False)
             }
             await self.executor.execute_step(click_step)
 

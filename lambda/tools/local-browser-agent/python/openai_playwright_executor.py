@@ -89,6 +89,7 @@ from openai import OpenAI
 
 # Import progressive escalation engine
 from progressive_escalation_engine import ProgressiveEscalationEngine, EscalationExhaustedError
+from workflow_executor import WorkflowExecutor, WorkflowError
 
 # Import workflow executor
 from workflow_executor import WorkflowExecutor
@@ -149,6 +150,38 @@ class OpenAIPlaywrightExecutor:
         self.variables = {}  # For template variable substitution
         self.screenshots = []
         self.escalation_engine: Optional[ProgressiveEscalationEngine] = None
+        # Internal counter for externally-driven workflow steps
+        self._workflow_step_counter = 0
+
+    async def execute_step(self, step: Dict[str, Any]) -> Dict[str, Any]:
+        """Public step executor used by WorkflowExecutor.
+
+        Maintains an internal step counter for logging and result consistency.
+        """
+        self._workflow_step_counter += 1
+        # Support per-step retry here too, so workflow mode benefits
+        retry_cfg = step.get("retry", {}) or {}
+        attempts = int(retry_cfg.get("attempts", 1))
+        delay_ms = int(retry_cfg.get("delay_ms", 500))
+
+        last_exc = None
+        for attempt in range(1, attempts + 1):
+            try:
+                res = await self._execute_step(step, self._workflow_step_counter)
+            except Exception as e:
+                last_exc = e
+                res = {"success": False, "error": str(e), "exception": True}
+
+            if res.get("success"):
+                return res
+
+            if attempt < attempts:
+                print(f"  ↻ Step failed (attempt {attempt}/{attempts}). Retrying after {delay_ms}ms...", file=sys.stderr)
+                await asyncio.sleep(delay_ms / 1000.0)
+
+        if last_exc:
+            res["traceback"] = traceback.format_exc()
+        return res
 
     def _ensure_llm_client(self):
         """Ensure LLM client is initialized (lazy initialization)"""
@@ -244,9 +277,19 @@ class OpenAIPlaywrightExecutor:
                 # Update result with workflow execution stats
                 result["steps_executed"] = workflow_executor.total_steps_executed
                 result["execution_mode"] = "workflow"
+                if self.escalation_engine is not None:
+                    try:
+                        result["escalation_stats"] = self.escalation_engine.get_stats()
+                    except Exception:
+                        pass
             else:
                 # Use traditional linear execution for backward compatibility
-                await self._execute_linear_steps(steps, result)
+                await self._execute_linear_steps(steps, result, abort_on_error)
+                if self.escalation_engine is not None:
+                    try:
+                        result["escalation_stats"] = self.escalation_engine.get_stats()
+                    except Exception:
+                        pass
 
         except Exception as e:
             print(f"\n✗ Script Execution Failed: {e}", file=sys.stderr)
@@ -259,7 +302,7 @@ class OpenAIPlaywrightExecutor:
 
         return result
 
-    async def _execute_linear_steps(self, steps: List[Dict[str, Any]], result: Dict[str, Any]):
+    async def _execute_linear_steps(self, steps: List[Dict[str, Any]], result: Dict[str, Any], abort_on_error: bool):
         """Execute steps linearly without workflow control flow (backward compatible)."""
         for idx, step in enumerate(steps):
                 step_num = idx + 1
@@ -269,7 +312,29 @@ class OpenAIPlaywrightExecutor:
                 print(f"\n[Step {step_num}/{len(steps)}] {step_type}: {step_desc}", file=sys.stderr)
 
                 try:
-                    step_result = await self._execute_step(step, step_num)
+                    # Optional per-step retry policy
+                    retry_cfg = step.get("retry", {}) or {}
+                    attempts = int(retry_cfg.get("attempts", 1))
+                    delay_ms = int(retry_cfg.get("delay_ms", 500))
+
+                    last_exc = None
+                    for attempt in range(1, attempts + 1):
+                        try:
+                            step_result = await self._execute_step(step, step_num)
+                        except Exception as e:
+                            last_exc = e
+                            step_result = {"success": False, "error": str(e), "exception": True}
+
+                        if step_result.get("success"):
+                            break
+
+                        if attempt < attempts:
+                            print(f"  ↻ Step failed (attempt {attempt}/{attempts}). Retrying after {delay_ms}ms...", file=sys.stderr)
+                            await asyncio.sleep(delay_ms / 1000.0)
+                            continue
+
+                    if not step_result.get("success") and last_exc:
+                        step_result["traceback"] = traceback.format_exc()
                     step_result["step_number"] = step_num
                     step_result["description"] = step_desc
                     result["step_results"].append(step_result)
@@ -458,7 +523,8 @@ class OpenAIPlaywrightExecutor:
 
     async def _execute_step(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
         """Execute a single step (internal method)"""
-        step_type = step.get("type")
+        # Action steps use "action" field, workflow steps use "type" field
+        step_type = step.get("action") or step.get("type")
 
         handlers = {
             "navigate": self._step_navigate,
@@ -529,6 +595,14 @@ class OpenAIPlaywrightExecutor:
                     if trigger_autofill:
                         print(f"🖱️  Using real mouse click for autofill (trigger_autofill=true)", file=sys.stderr)
                         await locator.scroll_into_view_if_needed()
+                        try:
+                            await self.page.bring_to_front()
+                        except Exception:
+                            pass
+                        try:
+                            await locator.focus()
+                        except Exception:
+                            pass
 
                         # Get element position
                         box = await locator.bounding_box()
@@ -602,6 +676,14 @@ class OpenAIPlaywrightExecutor:
                     if trigger_autofill:
                         print(f"🖱️  Using real mouse click for autofill (trigger_autofill=true)", file=sys.stderr)
                         await locator.scroll_into_view_if_needed()
+                        try:
+                            await self.page.bring_to_front()
+                        except Exception:
+                            pass
+                        try:
+                            await locator.focus()
+                        except Exception:
+                            pass
 
                         # Get element position
                         box = await locator.bounding_box()
@@ -681,6 +763,14 @@ class OpenAIPlaywrightExecutor:
 
             if trigger_autofill:
                 await locator.scroll_into_view_if_needed()
+                try:
+                    await self.page.bring_to_front()
+                except Exception:
+                    pass
+                try:
+                    await locator.focus()
+                except Exception:
+                    pass
                 box = await locator.bounding_box()
                 if box:
                     center_x = box["x"] + box["width"] / 2

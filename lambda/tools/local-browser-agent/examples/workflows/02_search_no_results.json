@@ -1,0 +1,143 @@
+{
+  "name": "Search with No Results - Graceful Handling",
+  "description": "Demonstrates handling search queries that return no results. Uses conditional logic to detect and handle empty results gracefully.",
+  "starting_page": "https://example.com/products",
+  "llm_provider": "openai",
+  "llm_model": "gpt-4o-mini",
+  "abort_on_error": false,
+  "steps": [
+    {
+      "action": "fill",
+      "description": "Enter search query",
+      "locator": {"strategy": "selector", "value": "#search-input"},
+      "value": "XYZ-NonExistent-Product-12345"
+    },
+    {
+      "action": "click",
+      "description": "Submit search",
+      "locator": {"strategy": "role", "value": "button[name='Search']"}
+    },
+    {
+      "action": "wait",
+      "description": "Wait for results to load",
+      "duration": 2000
+    },
+    {
+      "type": "if",
+      "name": "Check if results found",
+      "description": "Detect if search returned results or not",
+      "condition": {
+        "type": "or",
+        "conditions": [
+          {
+            "type": "element_visible",
+            "selector": ".no-results-message",
+            "timeout": 3000
+          },
+          {
+            "type": "element_text",
+            "selector": ".results-container",
+            "contains": "No results found",
+            "timeout": 3000
+          },
+          {
+            "type": "element_count",
+            "selector": ".product-item",
+            "exact": 0
+          }
+        ]
+      },
+      "then": {
+        "type": "sequence",
+        "name": "Handle No Results",
+        "description": "Execute fallback strategy when no results",
+        "steps": [
+          {
+            "action": "screenshot",
+            "description": "Capture no-results state"
+          },
+          {
+            "type": "try",
+            "name": "Try Broader Search",
+            "description": "Try a broader search term",
+            "strategies": [
+              {
+                "name": "Strategy 1: Remove numbers",
+                "description": "Search without the numeric part",
+                "steps": [
+                  {
+                    "action": "fill",
+                    "locator": {"strategy": "selector", "value": "#search-input"},
+                    "value": "XYZ Product"
+                  },
+                  {
+                    "action": "click",
+                    "locator": {"strategy": "role", "value": "button[name='Search']"}
+                  },
+                  {
+                    "action": "wait",
+                    "duration": 2000
+                  }
+                ],
+                "verify": {
+                  "type": "element_count",
+                  "selector": ".product-item",
+                  "min": 1
+                }
+              },
+              {
+                "name": "Strategy 2: Single keyword",
+                "description": "Search with just one keyword",
+                "steps": [
+                  {
+                    "action": "fill",
+                    "locator": {"strategy": "selector", "value": "#search-input"},
+                    "value": "Product"
+                  },
+                  {
+                    "action": "click",
+                    "locator": {"strategy": "role", "value": "button[name='Search']"}
+                  },
+                  {
+                    "action": "wait",
+                    "duration": 2000
+                  }
+                ],
+                "verify": {
+                  "type": "element_count",
+                  "selector": ".product-item",
+                  "min": 1
+                }
+              }
+            ],
+            "on_all_strategies_failed": {
+              "action": "extract",
+              "description": "Extract available categories for alternative search",
+              "prompt": "Extract all available product categories from this page",
+              "then": {
+                "action": "screenshot",
+                "description": "Capture available categories"
+              }
+            }
+          }
+        ]
+      },
+      "else": {
+        "type": "sequence",
+        "name": "Process Results",
+        "description": "Extract and process found results",
+        "steps": [
+          {
+            "action": "extract",
+            "description": "Extract product information",
+            "prompt": "Extract all product names, prices, and availability from the search results"
+          },
+          {
+            "action": "screenshot",
+            "description": "Capture successful results"
+          }
+        ]
+      }
+    }
+  ]
+}

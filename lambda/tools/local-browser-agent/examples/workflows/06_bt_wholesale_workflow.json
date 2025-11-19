@@ -1,0 +1,336 @@
+{
+  "name": "BT Wholesale Broadband Availability - Production Workflow",
+  "description": "Production-ready workflow for BT Wholesale with auth check, intelligent retry, and progressive escalation. Handles login issues, form changes, and no-results scenarios.",
+  "starting_page": "https://www.btwholesale.com",
+  "llm_provider": "openai",
+  "llm_model": "gpt-4o-mini",
+  "abort_on_error": false,
+  "session": {
+    "profile_name": "Bt_broadband",
+    "clone_for_parallel": false
+  },
+  "steps": [
+    {
+      "action": "navigate",
+      "description": "Navigate to availability checker",
+      "url": "https://www.btwholesale.com/apps/broadband-availability-checker/#/"
+    },
+    {
+      "action": "wait",
+      "description": "Wait for page to load",
+      "duration": 3000
+    },
+    {
+      "type": "if",
+      "name": "Check Authentication Status",
+      "description": "Skip login if already authenticated",
+      "condition": {
+        "type": "or",
+        "conditions": [
+          {
+            "type": "element_visible",
+            "selector": "button:has-text('Logout'), a:has-text('Logout')",
+            "timeout": 3000
+          },
+          {
+            "type": "not",
+            "condition": {
+              "type": "element_visible",
+              "selector": "input#username, input[name='username']",
+              "timeout": 3000
+            }
+          }
+        ]
+      },
+      "then": {
+        "action": "screenshot",
+        "description": "Already authenticated - skip to search",
+        "then": {
+          "goto": "PerformSearch"
+        }
+      },
+      "else": {
+        "continue": true
+      }
+    },
+    {
+      "type": "try",
+      "name": "Login to BT Wholesale",
+      "description": "Intelligent login with multiple fallback strategies",
+      "strategies": [
+        {
+          "name": "Strategy 1: Password Manager (Real Mouse Click)",
+          "description": "Use saved credentials with real mouse interaction",
+          "steps": [
+            {
+              "action": "click",
+              "description": "Click username field with real mouse for autofill",
+              "locator": {"strategy": "selector", "value": "input#username, input[name='username']"},
+              "trigger_autofill": true
+            },
+            {
+              "action": "wait",
+              "description": "Wait for password manager to appear",
+              "duration": 1500
+            },
+            {
+              "action": "press",
+              "description": "Navigate to saved credential",
+              "keys": "ArrowDown",
+              "delay_ms": 100
+            },
+            {
+              "action": "press",
+              "description": "Select credential",
+              "keys": "Enter",
+              "delay_ms": 100
+            },
+            {
+              "action": "wait",
+              "description": "Wait for autofill to complete",
+              "duration": 1000
+            },
+            {
+              "action": "execute_js",
+              "description": "Verify credentials filled",
+              "script": "return {usernameFilled: document.querySelector('input#username, input[name=\"username\"]')?.value?.length > 0, passwordFilled: document.querySelector('input#password, input[type=\"password\"]')?.value?.length > 0};"
+            }
+          ],
+          "verify": {
+            "type": "js_eval",
+            "expression": "document.querySelector('input#password, input[type=\"password\"]')?.value?.length > 0",
+            "expected": true
+          }
+        },
+        {
+          "name": "Strategy 2: Click password field directly",
+          "description": "Sometimes password field click works better",
+          "steps": [
+            {
+              "action": "click",
+              "description": "Click password field to trigger autofill",
+              "locator": {"strategy": "selector", "value": "input#password, input[type='password']"},
+              "trigger_autofill": true
+            },
+            {
+              "action": "wait",
+              "duration": 1500
+            },
+            {
+              "action": "press",
+              "keys": "ArrowDown",
+              "delay_ms": 100
+            },
+            {
+              "action": "press",
+              "keys": "Enter",
+              "delay_ms": 100
+            },
+            {
+              "action": "wait",
+              "duration": 1000
+            }
+          ],
+          "verify": {
+            "type": "and",
+            "conditions": [
+              {
+                "type": "js_eval",
+                "expression": "document.querySelector('input#username, input[name=\"username\"]')?.value?.length > 0"
+              },
+              {
+                "type": "js_eval",
+                "expression": "document.querySelector('input#password, input[type=\"password\"]')?.value?.length > 0"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Strategy 3: Progressive Escalation",
+          "description": "Use progressive escalation for login click",
+          "escalate": {
+            "type": "progressive_escalation",
+            "target": "input#username, input[name='username']"
+          }
+        },
+        {
+          "name": "Strategy 4: Vision LLM Login",
+          "description": "Let AI handle the complex login UI",
+          "escalate": {
+            "type": "vision_llm",
+            "prompt": "Log in to BT Wholesale. Look for saved credentials in the password manager dropdown. The username and password fields should have saved credentials. Click the username field, wait for the dropdown, then select the saved credential.",
+            "timeout": 45000,
+            "max_actions": 10
+          }
+        }
+      ],
+      "on_all_strategies_failed": {
+        "type": "sequence",
+        "steps": [
+          {
+            "action": "screenshot",
+            "description": "Login failed - capture state"
+          },
+          {
+            "action": "execute_js",
+            "description": "Debug login form state",
+            "script": "return {usernameExists: !!document.querySelector('input#username, input[name=\"username\"]'), passwordExists: !!document.querySelector('input#password, input[type=\"password\"]'), usernameValue: document.querySelector('input#username, input[name=\"username\"]')?.value || '', passwordFilled: document.querySelector('input#password, input[type=\"password\"]')?.value?.length > 0};"
+          }
+        ],
+        "then": {
+          "action": "error",
+          "message": "Failed to log in after trying all strategies (password manager, progressive escalation, vision LLM)"
+        }
+      }
+    },
+    {
+      "action": "click",
+      "description": "Submit login",
+      "locator": {"strategy": "role", "value": "button[name='Login']"}
+    },
+    {
+      "action": "wait",
+      "description": "Wait for login redirect",
+      "duration": 3000
+    },
+    {
+      "type": "if",
+      "name": "Verify Login Success",
+      "condition": {
+        "type": "not",
+        "condition": {
+          "type": "element_visible",
+          "selector": ".error, .alert-danger, [class*='error']",
+          "timeout": 2000
+        }
+      },
+      "then": {
+        "continue": true
+      },
+      "else": {
+        "type": "sequence",
+        "steps": [
+          {
+            "action": "screenshot",
+            "description": "Login error detected"
+          },
+          {
+            "action": "extract",
+            "description": "Extract error message",
+            "prompt": "Extract the login error message from this page"
+          }
+        ],
+        "then": {
+          "action": "error",
+          "message": "Login verification failed - error message shown"
+        }
+      }
+    },
+    {
+      "name": "PerformSearch",
+      "action": "screenshot",
+      "description": "Ready to search - capture authenticated state"
+    },
+    {
+      "type": "try",
+      "name": "Fill Postcode",
+      "description": "Find and fill postcode field (field ID might change)",
+      "strategies": [
+        {
+          "name": "Strategy 1: Current field ID",
+          "steps": [
+            {
+              "action": "fill",
+              "locator": {"strategy": "selector", "value": "#postcode, input[name='postcode']"},
+              "value": "{{POSTCODE}}"
+            }
+          ],
+          "verify": {
+            "type": "element_exists",
+            "selector": "#postcode[value='{{POSTCODE}}'], input[name='postcode'][value='{{POSTCODE}}']",
+            "timeout": 2000
+          }
+        },
+        {
+          "name": "Strategy 2: Aria label",
+          "steps": [
+            {
+              "action": "fill",
+              "locator": {"strategy": "selector", "value": "input[aria-label*='postcode' i]"},
+              "value": "{{POSTCODE}}"
+            }
+          ]
+        },
+        {
+          "name": "Strategy 3: Vision LLM",
+          "escalate": {
+            "type": "vision_llm",
+            "prompt": "Find the postcode input field and enter '{{POSTCODE}}'",
+            "timeout": 20000,
+            "max_actions": 3
+          }
+        }
+      ]
+    },
+    {
+      "action": "click",
+      "description": "Submit search",
+      "locator": {"strategy": "role", "value": "button[name='Search']"}
+    },
+    {
+      "action": "wait",
+      "description": "Wait for results",
+      "duration": 3000
+    },
+    {
+      "type": "if",
+      "name": "Check Search Results",
+      "condition": {
+        "type": "or",
+        "conditions": [
+          {
+            "type": "element_visible",
+            "selector": ".no-results, .error, [class*='no-result']",
+            "timeout": 3000
+          },
+          {
+            "type": "element_text",
+            "selector": "body",
+            "contains": "no results",
+            "timeout": 3000
+          }
+        ]
+      },
+      "then": {
+        "type": "sequence",
+        "name": "Handle No Results",
+        "steps": [
+          {
+            "action": "screenshot",
+            "description": "No results found"
+          },
+          {
+            "action": "extract",
+            "description": "Extract error/no results message",
+            "prompt": "Extract any error messages or reasons why no results were found"
+          }
+        ]
+      },
+      "else": {
+        "type": "sequence",
+        "name": "Extract Results",
+        "steps": [
+          {
+            "action": "screenshot",
+            "description": "Results found"
+          },
+          {
+            "action": "extract",
+            "description": "Extract broadband availability data",
+            "prompt": "Extract all available broadband products, their speeds, technologies (FTTC, FTTP, etc.), availability status, and any other relevant details from this BT Wholesale availability results page"
+          }
+        ]
+      }
+    }
+  ]
+}

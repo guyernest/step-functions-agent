@@ -1,0 +1,52 @@
+{
+  "name": "OpenAI Executor Conditional Routing",
+  "description": "Demonstrate if/switch/goto with conditions",
+  "starting_page": "https://example.com",
+  "abort_on_error": false,
+  "steps": [
+    {
+      "type": "if",
+      "name": "Detect login state",
+      "condition": {"type": "element_visible", "selector": "#user-menu"},
+      "then": {"goto": "go_dashboard"},
+      "else": {"goto": "go_login"}
+    },
+    {
+      "type": "sequence",
+      "name": "go_login",
+      "steps": [
+        {"type": "click", "locator": {"strategy": "text", "value": "Log in"}},
+        {"type": "wait_for_load_state", "state": "networkidle", "timeout": 15000}
+      ]
+    },
+    {
+      "type": "sequence",
+      "name": "go_dashboard",
+      "steps": [
+        {"type": "click", "locator": {"strategy": "text", "value": "Dashboard"}}
+      ]
+    },
+    {
+      "type": "switch",
+      "name": "route_by_url",
+      "cases": [
+        {
+          "condition": {"type": "url_contains", "pattern": "/login"},
+          "steps": [
+            {"type": "click", "locator": {"strategy": "selector", "value": "input[type='email']"}},
+            {"type": "click", "locator": {"strategy": "selector", "value": "input[type='password']"}, "trigger_autofill": true}
+          ],
+          "then": {"goto": "go_dashboard"}
+        },
+        {
+          "condition": {"type": "url_contains", "pattern": "/dashboard"},
+          "steps": [
+            {"type": "click", "locator": {"strategy": "text", "value": "Settings"}}
+          ]
+        }
+      ],
+      "default": {"steps": [{"type": "screenshot"}]}
+    }
+  ]
+}
+

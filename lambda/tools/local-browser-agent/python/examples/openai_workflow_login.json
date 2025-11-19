@@ -1,0 +1,66 @@
+{
+  "name": "OpenAI Executor Login Flow",
+  "description": "Robust login using workflow, retries, and escalation",
+  "starting_page": "https://example.com/login",
+  "abort_on_error": true,
+  "steps": [
+    {
+      "type": "try",
+      "name": "Trigger password manager",
+      "strategies": [
+        {
+          "name": "Direct click on username field",
+          "steps": [
+            {
+              "type": "click",
+              "description": "Click username input using real mouse (autofill)",
+              "locator": {"strategy": "selector", "value": "input[name='username'], input[type='email']"},
+              "trigger_autofill": true,
+              "retry": {"attempts": 2, "delay_ms": 400}
+            },
+            {
+              "type": "press",
+              "description": "Select password manager suggestion",
+              "keys": ["ArrowDown", "Enter"],
+              "delay": 150
+            }
+          ],
+          "verify": {
+            "type": "url_contains",
+            "pattern": "/dashboard"
+          }
+        },
+        {
+          "name": "Escalate with vision to find login button",
+          "escalate": {
+            "type": "vision_llm",
+            "prompt": "Find and click the primary Log in or Sign in button on this page."
+          },
+          "verify": {
+            "type": "url_contains",
+            "pattern": "/dashboard"
+          }
+        },
+        {
+          "name": "Progressive escalation chain",
+          "escalate": {
+            "type": "progressive_escalation",
+            "chain": [
+              {"method": "playwright_locator", "locator": {"strategy": "text", "value": "Sign in"}},
+              {"method": "vision_find_element", "prompt": "Click the Log in / Sign in button"}
+            ]
+          },
+          "verify": {
+            "type": "url_contains",
+            "pattern": "/dashboard"
+          }
+        }
+      ],
+      "on_all_strategies_failed": {
+        "type": "error",
+        "message": "Failed to log in after all strategies"
+      }
+    }
+  ]
+}
+

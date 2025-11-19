@@ -1,0 +1,200 @@
+{
+  "name": "Login with Authentication State Check",
+  "description": "Demonstrates skipping login if already authenticated. Real-world pattern for BT Wholesale and similar sites.",
+  "starting_page": "https://example.com/dashboard",
+  "llm_provider": "openai",
+  "llm_model": "gpt-4o-mini",
+  "abort_on_error": false,
+  "session": {
+    "profile_name": "my-work-profile",
+    "clone_for_parallel": false
+  },
+  "steps": [
+    {
+      "type": "if",
+      "name": "Check if already logged in",
+      "description": "Skip login if we're already authenticated",
+      "condition": {
+        "type": "or",
+        "conditions": [
+          {
+            "type": "element_visible",
+            "selector": "#user-menu",
+            "timeout": 5000
+          },
+          {
+            "type": "element_visible",
+            "selector": ".logout-button",
+            "timeout": 5000
+          },
+          {
+            "type": "url_contains",
+            "pattern": "/dashboard"
+          }
+        ]
+      },
+      "then": {
+        "action": "screenshot",
+        "description": "Already logged in - skip to main workflow",
+        "then": {
+          "goto": "ExtractData"
+        }
+      },
+      "else": {
+        "continue": true
+      }
+    },
+    {
+      "type": "try",
+      "name": "Perform Login",
+      "description": "Try multiple login strategies (password manager, manual, etc.)",
+      "strategies": [
+        {
+          "name": "Strategy 1: Password Manager Autofill",
+          "description": "Use browser's saved credentials",
+          "steps": [
+            {
+              "action": "click",
+              "description": "Click username field to trigger autofill",
+              "locator": {"strategy": "selector", "value": "#username"},
+              "trigger_autofill": true
+            },
+            {
+              "action": "wait",
+              "description": "Wait for password manager dropdown",
+              "duration": 1000
+            },
+            {
+              "action": "press",
+              "description": "Select first saved credential",
+              "keys": "ArrowDown"
+            },
+            {
+              "action": "press",
+              "keys": "Enter"
+            },
+            {
+              "action": "wait",
+              "duration": 1000
+            },
+            {
+              "action": "execute_js",
+              "description": "Check if credentials were filled",
+              "script": "return {usernameFilled: document.querySelector('#username')?.value?.length > 0, passwordFilled: document.querySelector('#password')?.value?.length > 0};"
+            }
+          ],
+          "verify": {
+            "type": "js_eval",
+            "expression": "document.querySelector('#password')?.value?.length > 0",
+            "expected": true
+          }
+        },
+        {
+          "name": "Strategy 2: Manual credential entry",
+          "description": "Manually enter credentials from environment",
+          "steps": [
+            {
+              "action": "fill",
+              "locator": {"strategy": "selector", "value": "#username"},
+              "value": "{{USERNAME}}"
+            },
+            {
+              "action": "fill",
+              "locator": {"strategy": "selector", "value": "#password"},
+              "value": "{{PASSWORD}}"
+            }
+          ],
+          "verify": {
+            "type": "and",
+            "conditions": [
+              {
+                "type": "js_eval",
+                "expression": "document.querySelector('#username')?.value?.length > 0"
+              },
+              {
+                "type": "js_eval",
+                "expression": "document.querySelector('#password')?.value?.length > 0"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Strategy 3: Vision LLM login",
+          "description": "Let AI handle complex login forms",
+          "escalate": {
+            "type": "vision_llm",
+            "prompt": "Log in to this site. The username field might be pre-filled or you might need to select saved credentials from the password manager dropdown. Use the credentials that appear in the password manager.",
+            "timeout": 30000,
+            "max_actions": 8
+          }
+        }
+      ],
+      "on_all_strategies_failed": {
+        "action": "screenshot",
+        "description": "Login failed - capture state",
+        "then": {
+          "action": "error",
+          "message": "Failed to log in after trying all strategies"
+        }
+      }
+    },
+    {
+      "action": "click",
+      "description": "Submit login form",
+      "locator": {"strategy": "role", "value": "button[name='Login']"}
+    },
+    {
+      "action": "wait",
+      "description": "Wait for login to complete",
+      "duration": 3000
+    },
+    {
+      "type": "if",
+      "name": "Verify login successful",
+      "condition": {
+        "type": "or",
+        "conditions": [
+          {
+            "type": "element_visible",
+            "selector": "#user-menu",
+            "timeout": 5000
+          },
+          {
+            "type": "url_contains",
+            "pattern": "/dashboard"
+          },
+          {
+            "type": "not",
+            "condition": {
+              "type": "element_visible",
+              "selector": ".login-error",
+              "timeout": 2000
+            }
+          }
+        ]
+      },
+      "then": {
+        "continue": true
+      },
+      "else": {
+        "type": "sequence",
+        "steps": [
+          {
+            "action": "screenshot",
+            "description": "Login failed - capture error"
+          },
+          {
+            "action": "error",
+            "message": "Login verification failed - still on login page or error shown"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ExtractData",
+      "action": "extract",
+      "description": "Extract dashboard data (main workflow starts here)",
+      "prompt": "Extract the key metrics, recent activity, and user information from this dashboard"
+    }
+  ]
+}
