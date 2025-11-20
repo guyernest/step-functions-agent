@@ -536,6 +536,7 @@ class OpenAIPlaywrightExecutor:
             "extract": self._step_extract,
             "execute_js": self._step_execute_js,
             "press": self._step_press,
+            "error": self._step_error,
         }
 
         handler = handlers.get(step_type)
@@ -546,6 +547,11 @@ class OpenAIPlaywrightExecutor:
             }
 
         return await handler(step, step_num)
+
+    async def _step_error(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
+        """Raise an error with message."""
+        message = step.get("message", "Error action triggered")
+        raise Exception(message)
 
     async def _step_navigate(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
         """Navigate to URL"""

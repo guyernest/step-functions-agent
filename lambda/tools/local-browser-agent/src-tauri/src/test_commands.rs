@@ -225,20 +225,31 @@ pub fn validate_browser_script(script: String) -> Result<ValidationResult, Strin
         }
     };
 
-    // Detect format by checking first step
-    let is_new_format = if let Some(steps) = json_value.get("steps").and_then(|s| s.as_array()) {
-        if let Some(first_step) = steps.first() {
-            first_step.get("type").is_some() // New format uses "type"
-        } else {
+    // Detect format by checking first step OR if any step has workflow types
+    let is_workflow_format = if let Some(steps) = json_value.get("steps").and_then(|s| s.as_array()) {
+        if steps.is_empty() {
             false
+        } else {
+            // Check if ANY step uses workflow "type" field OR workflow action types
+            steps.iter().any(|step| {
+                if let Some(step_type) = step.get("type").and_then(|t| t.as_str()) {
+                    // Workflow step types
+                    matches!(step_type, "if" | "try" | "sequence" | "switch" | "goto")
+                } else if let Some(action_type) = step.get("action").and_then(|a| a.as_str()) {
+                    // Workflow action types (not Nova Act actions)
+                    !matches!(action_type, "act" | "act_with_schema" | "screenshot")
+                } else {
+                    false
+                }
+            })
         }
     } else {
         false
     };
 
-    if is_new_format {
-        // New OpenAI Playwright format - do basic validation without strict typing
-        warnings.push("Using new OpenAI Playwright format (validation is basic)".to_string());
+    if is_workflow_format {
+        // Workflow format (OpenAI Playwright) - do basic validation without strict typing
+        warnings.push("Using workflow format with OpenAI Playwright executor (validation is basic)".to_string());
 
         // Validate basic structure
         if let Some(name) = json_value.get("name").and_then(|n| n.as_str()) {

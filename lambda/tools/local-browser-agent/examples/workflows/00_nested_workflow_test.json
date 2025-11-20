@@ -1,0 +1,193 @@
+{
+  "name": "Nested Workflow Structures Test",
+  "description": "Test nested workflow control structures (if/try/sequence within sequences). Verifies the fix for nested workflow execution.",
+  "starting_page": "https://httpbin.org/forms/post",
+  "llm_provider": "openai",
+  "llm_model": "gpt-4o-mini",
+  "abort_on_error": false,
+  "steps": [
+    {
+      "type": "sequence",
+      "name": "Setup Phase",
+      "description": "Test sequence containing nested if and try blocks",
+      "steps": [
+        {
+          "action": "screenshot",
+          "description": "Initial screenshot"
+        },
+        {
+          "type": "if",
+          "name": "Check form exists (nested in sequence)",
+          "description": "Nested if block within sequence",
+          "condition": {
+            "type": "element_visible",
+            "selector": "form",
+            "timeout": 3000
+          },
+          "then": {
+            "action": "execute_js",
+            "description": "Log form found",
+            "script": "console.log('Form found'); return {form_exists: true};"
+          },
+          "else": {
+            "action": "error",
+            "message": "Form not found in nested if"
+          }
+        },
+        {
+          "type": "try",
+          "name": "Fill name field (nested in sequence)",
+          "description": "Nested try block within sequence",
+          "strategies": [
+            {
+              "name": "Strategy 1: By name attribute",
+              "steps": [
+                {
+                  "action": "fill",
+                  "locator": {"strategy": "selector", "value": "input[name='custname']"},
+                  "value": "Nested Test User"
+                }
+              ],
+              "verify": {
+                "type": "js_eval",
+                "expression": "document.querySelector('input[name=\"custname\"]')?.value === 'Nested Test User'"
+              }
+            },
+            {
+              "name": "Strategy 2: Fallback",
+              "steps": [
+                {
+                  "action": "fill",
+                  "locator": {"strategy": "selector", "value": "#custname"},
+                  "value": "Nested Test User"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "try",
+      "name": "Complex try with nested sequences",
+      "description": "Test try block containing sequences with nested workflow structures",
+      "strategies": [
+        {
+          "name": "Strategy 1: Fill all fields",
+          "steps": [
+            {
+              "type": "sequence",
+              "name": "Fill form sequence (nested in try)",
+              "steps": [
+                {
+                  "action": "fill",
+                  "locator": {"strategy": "selector", "value": "input[name='custemail']"},
+                  "value": "nested@test.com"
+                },
+                {
+                  "type": "if",
+                  "name": "Check comments field (nested in sequence in try)",
+                  "condition": {
+                    "type": "element_exists",
+                    "selector": "textarea[name='comments']",
+                    "timeout": 2000
+                  },
+                  "then": {
+                    "action": "fill",
+                    "locator": {"strategy": "selector", "value": "textarea[name='comments']"},
+                    "value": "Triple nested comment"
+                  },
+                  "else": {
+                    "continue": true
+                  }
+                }
+              ]
+            }
+          ],
+          "verify": {
+            "type": "js_eval",
+            "expression": "document.querySelector('input[name=\"custemail\"]')?.value === 'nested@test.com'"
+          }
+        }
+      ]
+    },
+    {
+      "type": "switch",
+      "name": "Switch with nested sequences",
+      "description": "Test switch cases containing sequences with nested workflow structures",
+      "cases": [
+        {
+          "condition": {
+            "type": "element_exists",
+            "selector": "textarea[name='comments']",
+            "timeout": 2000
+          },
+          "steps": [
+            {
+              "type": "sequence",
+              "name": "Comments handling sequence (nested in switch case)",
+              "steps": [
+                {
+                  "action": "execute_js",
+                  "description": "Log comments field found",
+                  "script": "console.log('Comments field exists'); return {has_comments: true};"
+                },
+                {
+                  "type": "try",
+                  "name": "Try to fill comments (nested in sequence in switch)",
+                  "strategies": [
+                    {
+                      "name": "Fill comments",
+                      "steps": [
+                        {
+                          "action": "fill",
+                          "locator": {"strategy": "selector", "value": "textarea[name='comments']"},
+                          "value": "Nested in switch → sequence → try"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "default": {
+        "steps": [
+          {
+            "action": "screenshot",
+            "description": "No comments field"
+          }
+        ]
+      }
+    },
+    {
+      "type": "if",
+      "name": "Final verification with nested sequence",
+      "description": "If block with sequence in then branch",
+      "condition": {
+        "type": "js_eval",
+        "expression": "document.querySelector('input[name=\"custname\"]')?.value?.length > 0"
+      },
+      "then": {
+        "type": "sequence",
+        "steps": [
+          {
+            "action": "execute_js",
+            "description": "Verify all fields filled",
+            "script": "return {name: document.querySelector('input[name=\"custname\"]')?.value, email: document.querySelector('input[name=\"custemail\"]')?.value, comments: document.querySelector('textarea[name=\"comments\"]')?.value};"
+          },
+          {
+            "action": "screenshot",
+            "description": "Final state with all nested structures executed"
+          }
+        ]
+      },
+      "else": {
+        "action": "error",
+        "message": "Name field was not filled by nested structures"
+      }
+    }
+  ]
+}

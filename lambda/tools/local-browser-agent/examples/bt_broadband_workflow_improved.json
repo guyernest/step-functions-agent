@@ -1,0 +1,871 @@
+{
+  "name": "BT Wholesale Broadband Availability - Improved Workflow",
+  "description": "Production-ready workflow using modern workflow engine features. Includes auth check, intelligent retry, progressive escalation, and robust error handling.",
+  "starting_page": "https://bbactotl.btwholesale.com/bbac-ui/totl/totlSearch/#/ADSL/AddressHome",
+  "llm_provider": "openai",
+  "llm_model": "gpt-4o-mini",
+  "abort_on_error": false,
+  "session": {
+    "profile_name": "Bt_broadband",
+    "clone_for_parallel": false
+  },
+  "steps": [
+    {
+      "action": "wait_for_load_state",
+      "description": "Wait for initial page load",
+      "state": "networkidle"
+    },
+    {
+      "action": "screenshot",
+      "description": "Initial page state",
+      "save_to": "01_initial.png"
+    },
+    {
+      "type": "if",
+      "name": "Check Authentication Status",
+      "description": "Detect if we're on login page or already authenticated",
+      "condition": {
+        "type": "or",
+        "conditions": [
+          {
+            "type": "element_visible",
+            "selector": "input[type='password']",
+            "timeout": 3000
+          },
+          {
+            "type": "js_eval",
+            "expression": "document.title.toLowerCase().includes('secure authentication') || document.title.toLowerCase().includes('login')"
+          }
+        ]
+      },
+      "then": {
+        "goto": "PerformLogin"
+      },
+      "else": {
+        "goto": "PerformSearch"
+      }
+    },
+    {
+      "type": "sequence",
+      "name": "PerformLogin",
+      "description": "Login workflow with intelligent retry",
+      "steps": [
+        {
+          "type": "try",
+          "name": "Fill Username",
+          "description": "Find and fill username field using multiple strategies",
+          "strategies": [
+            {
+              "name": "Strategy 1: By name attribute",
+              "steps": [
+                {
+                  "action": "fill",
+                  "locator": {"strategy": "selector", "value": "input[type='text'][name*='user'], input[type='text'][name*='username'], input[type='email']"},
+                  "value": "nterizakis",
+                  "retry": {"attempts": 2, "delay_ms": 300}
+                }
+              ],
+              "verify": {
+                "type": "js_eval",
+                "expression": "document.querySelector('input[type=\"text\"][name*=\"user\"], input[type=\"email\"]')?.value?.length > 0"
+              }
+            },
+            {
+              "name": "Strategy 2: First text input",
+              "steps": [
+                {
+                  "action": "fill",
+                  "locator": {"strategy": "selector", "value": "input[type='text']:first-of-type"},
+                  "value": "nterizakis"
+                }
+              ]
+            },
+            {
+              "name": "Strategy 3: Vision LLM",
+              "escalate": {
+                "type": "vision_llm",
+                "prompt": "Find and fill the username or email field with 'nterizakis'. This is typically the first text input on the login page.",
+                "timeout": 20000,
+                "max_actions": 3
+              }
+            }
+          ]
+        },
+        {
+          "type": "try",
+          "name": "Click Next After Username",
+          "description": "Submit username to proceed to password page",
+          "strategies": [
+            {
+              "name": "Strategy 1: Submit button",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {"strategy": "selector", "value": "button[type='submit']"},
+                  "retry": {"attempts": 2, "delay_ms": 300}
+                }
+              ]
+            },
+            {
+              "name": "Strategy 2: Next button by text",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {"strategy": "text", "value": "Next"}
+                }
+              ]
+            },
+            {
+              "name": "Strategy 3: Continue button",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {"strategy": "text", "value": "Continue"}
+                }
+              ]
+            },
+            {
+              "name": "Strategy 4: Vision LLM",
+              "escalate": {
+                "type": "vision_llm",
+                "prompt": "Click the Next or Continue button to proceed after entering username.",
+                "timeout": 15000,
+                "max_actions": 2
+              }
+            }
+          ]
+        },
+        {
+          "action": "wait_for_load_state",
+          "description": "Wait for page transition after username submit",
+          "state": "networkidle"
+        },
+        {
+          "type": "if",
+          "name": "Wait for Password Page",
+          "description": "Verify password page loaded",
+          "condition": {
+            "type": "element_visible",
+            "selector": "input[type='password']",
+            "timeout": 30000
+          },
+          "then": {
+            "type": "sequence",
+            "steps": [
+              {
+                "action": "wait_for_load_state",
+                "state": "networkidle"
+              },
+              {
+                "action": "screenshot",
+                "description": "Password page loaded",
+                "save_to": "01b_password_page.png"
+              }
+            ]
+          },
+          "else": {
+            "type": "sequence",
+            "steps": [
+              {
+                "action": "screenshot",
+                "description": "Password page not loaded - debug"
+              },
+              {
+                "action": "error",
+                "message": "Password page did not load after username submission"
+              }
+            ]
+          }
+        },
+        {
+          "type": "if",
+          "name": "Check if Password Already Filled",
+          "description": "Browser may have already autofilled the password - check first",
+          "condition": {
+            "type": "js_eval",
+            "expression": "document.querySelector('input[type=\"password\"]')?.value?.length > 0"
+          },
+          "then": {
+            "type": "sequence",
+            "steps": [
+              {
+                "action": "execute_js",
+                "description": "Log that password is already filled",
+                "script": "(function() { console.log('Password already autofilled by browser'); return {password_autofilled: true}; })()"
+              },
+              {
+                "action": "screenshot",
+                "description": "Password already filled",
+                "save_to": "01c_password_autofilled.png"
+              }
+            ]
+          },
+          "else": {
+            "type": "try",
+            "name": "Fill Password with Password Manager",
+            "description": "Password not filled - trigger password manager autofill",
+            "strategies": [
+              {
+                "name": "Strategy 1: Click password field (real mouse)",
+                "description": "Most reliable method - triggers autofill heuristics",
+                "steps": [
+                  {
+                    "action": "click",
+                    "description": "Click password field with real mouse to trigger autofill",
+                    "locator": {"strategy": "selector", "value": "input[type='password']"},
+                    "trigger_autofill": true
+                  },
+                  {
+                    "action": "wait",
+                    "description": "Wait for password manager dropdown",
+                    "duration": 1500
+                  },
+                  {
+                    "action": "press",
+                    "description": "Navigate to saved password",
+                    "keys": "ArrowDown",
+                    "delay": 150
+                  },
+                  {
+                    "action": "press",
+                    "description": "Select saved password",
+                    "keys": "Enter",
+                    "delay": 150
+                  },
+                  {
+                    "action": "wait",
+                    "description": "Wait for autofill to complete",
+                    "duration": 800
+                  }
+                ],
+                "verify": {
+                  "type": "js_eval",
+                  "expression": "document.querySelector('input[type=\"password\"]')?.value?.length > 0",
+                  "expected": true
+                }
+              },
+              {
+                "name": "Strategy 2: Extended wait for autofill",
+                "description": "Sometimes autofill needs more time",
+                "steps": [
+                  {
+                    "action": "click",
+                    "locator": {"strategy": "selector", "value": "input[type='password']"},
+                    "trigger_autofill": true
+                  },
+                  {
+                    "action": "wait",
+                    "duration": 3000
+                  },
+                  {
+                    "action": "press",
+                    "keys": ["ArrowDown", "Enter"],
+                    "delay": 200
+                  },
+                  {
+                    "action": "wait",
+                    "duration": 1000
+                  }
+                ],
+                "verify": {
+                  "type": "js_eval",
+                  "expression": "document.querySelector('input[type=\"password\"]')?.value?.length > 0"
+                }
+              },
+              {
+                "name": "Strategy 3: Progressive escalation",
+                "escalate": {
+                  "type": "progressive_escalation",
+                  "chain": [
+                    {"method": "playwright_locator", "locator": {"strategy": "selector", "value": "input[type='password']"}},
+                    {"method": "vision_find_element", "prompt": "Click the password field to trigger password manager autofill"}
+                  ]
+                },
+                "verify": {
+                  "type": "js_eval",
+                  "expression": "document.querySelector('input[type=\"password\"]')?.value?.length > 0"
+                }
+              },
+              {
+                "name": "Strategy 4: Vision LLM fallback",
+                "escalate": {
+                  "type": "vision_llm",
+                  "prompt": "The password field needs to be filled using the browser's saved password manager. Click the password field, wait for the password manager dropdown to appear, then select the saved password.",
+                  "timeout": 30000,
+                  "max_actions": 8
+                }
+              }
+            ],
+            "on_all_strategies_failed": {
+              "type": "sequence",
+              "steps": [
+                {
+                  "action": "screenshot",
+                  "description": "Password autofill failed"
+                },
+                {
+                  "action": "execute_js",
+                  "description": "Check password field state",
+                  "script": "(function() { var pwdField = document.querySelector('input[type=\"password\"]'); return { passwordFilled: pwdField ? pwdField.value.length > 0 : false, passwordLength: pwdField ? pwdField.value.length : 0, hasPasswordField: !!pwdField }; })()"
+                }
+              ],
+              "then": {
+                "action": "error",
+                "message": "Failed to fill password after all strategies. Password manager may not have saved credentials for this site."
+              }
+            }
+          }
+        },
+        {
+          "type": "try",
+          "name": "Submit Login",
+          "description": "Click login/submit button",
+          "strategies": [
+            {
+              "name": "Strategy 1: Next button by ID",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {"strategy": "selector", "value": "button#next"}
+                }
+              ]
+            },
+            {
+              "name": "Strategy 2: Next button by text",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {"strategy": "text", "value": "Next"}
+                }
+              ]
+            },
+            {
+              "name": "Strategy 3: Submit button",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {"strategy": "selector", "value": "button[type='submit']"}
+                }
+              ]
+            },
+            {
+              "name": "Strategy 4: Vision LLM",
+              "escalate": {
+                "type": "vision_llm",
+                "prompt": "Click the Next, Submit, or Login button to submit the login form.",
+                "timeout": 15000,
+                "max_actions": 2
+              }
+            }
+          ]
+        },
+        {
+          "action": "wait_for_load_state",
+          "description": "Wait for login redirect",
+          "state": "networkidle"
+        },
+        {
+          "action": "wait",
+          "description": "Wait for SSO redirect to complete",
+          "duration": 2000
+        },
+        {
+          "action": "wait_for_load_state",
+          "description": "Wait for BT portal to fully load",
+          "state": "networkidle"
+        },
+        {
+          "action": "screenshot",
+          "description": "After login state",
+          "save_to": "02_after_login.png"
+        },
+        {
+          "type": "if",
+          "name": "Verify Login Success",
+          "description": "Check we're on BT Wholesale portal",
+          "condition": {
+            "type": "js_eval",
+            "expression": "window.location.href.includes('bbactotl.btwholesale.com') || window.location.href.includes('btwholesale')"
+          },
+          "then": {
+            "continue": true
+          },
+          "else": {
+            "type": "sequence",
+            "steps": [
+              {
+                "action": "screenshot",
+                "description": "Login may have failed - wrong URL"
+              },
+              {
+                "action": "extract",
+                "description": "Extract error or page state",
+                "prompt": "Describe what's shown on this page. Is there a login error? Are we logged in? What should we do next?"
+              }
+            ]
+          }
+        },
+        {
+          "action": "navigate",
+          "description": "Navigate to Address Checker",
+          "url": "https://bbactotl.btwholesale.com/bbac-ui/totl/totlSearch/#/ADSL/AddressHome"
+        },
+        {
+          "action": "wait_for_load_state",
+          "description": "Wait for Address Checker to load",
+          "state": "networkidle"
+        }
+      ]
+    },
+    {
+      "type": "sequence",
+      "name": "PerformSearch",
+      "description": "Search for broadband availability by postcode",
+      "steps": [
+        {
+          "action": "screenshot",
+          "description": "Ready to search",
+          "save_to": "02b_address_checker.png"
+        },
+        {
+          "type": "if",
+          "name": "Verify Search Page Loaded",
+          "condition": {
+            "type": "or",
+            "conditions": [
+              {
+                "type": "element_visible",
+                "selector": "input[name='PostCode'], input[name='postcode'], input[id*='postcode' i], input[placeholder*='postcode' i]",
+                "timeout": 5000
+              },
+              {
+                "type": "js_eval",
+                "expression": "!!document.querySelector('input[name*=\"postcode\" i], input[id*=\"postcode\" i]')"
+              }
+            ]
+          },
+          "then": {
+            "continue": true
+          },
+          "else": {
+            "type": "sequence",
+            "steps": [
+              {
+                "action": "screenshot",
+                "description": "Postcode field not found"
+              },
+              {
+                "action": "error",
+                "message": "Address Checker page did not load correctly - postcode field not found"
+              }
+            ]
+          }
+        },
+        {
+          "action": "wait",
+          "description": "Wait for form to stabilize",
+          "duration": 1000
+        },
+        {
+          "type": "try",
+          "name": "Fill Postcode",
+          "description": "Find and fill postcode using multiple strategies",
+          "strategies": [
+            {
+              "name": "Strategy 1: By name 'PostCode'",
+              "steps": [
+                {
+                  "action": "fill",
+                  "locator": {"strategy": "selector", "value": "input[name='PostCode']"},
+                  "value": "DN12 1RH",
+                  "retry": {"attempts": 2, "delay_ms": 300}
+                }
+              ],
+              "verify": {
+                "type": "element_exists",
+                "selector": "input[name='PostCode'][value*='DN12 1RH']",
+                "timeout": 1000
+              }
+            },
+            {
+              "name": "Strategy 2: By name 'postcode'",
+              "steps": [
+                {
+                  "action": "fill",
+                  "locator": {"strategy": "selector", "value": "input[name='postcode']"},
+                  "value": "DN12 1RH"
+                }
+              ]
+            },
+            {
+              "name": "Strategy 3: By ID containing 'postcode'",
+              "steps": [
+                {
+                  "action": "fill",
+                  "locator": {"strategy": "selector", "value": "input[id*='ostcode' i]"},
+                  "value": "DN12 1RH"
+                }
+              ]
+            },
+            {
+              "name": "Strategy 4: By placeholder",
+              "steps": [
+                {
+                  "action": "fill",
+                  "locator": {"strategy": "selector", "value": "input[placeholder*='ostcode' i]"},
+                  "value": "DN12 1RH"
+                }
+              ]
+            },
+            {
+              "name": "Strategy 5: Vision LLM",
+              "escalate": {
+                "type": "vision_llm",
+                "prompt": "Find the postcode input field and enter 'DN12 1RH'. The field is typically labeled 'Postcode' or 'Post Code'.",
+                "timeout": 20000,
+                "max_actions": 3
+              }
+            }
+          ]
+        },
+        {
+          "type": "try",
+          "name": "Submit Search",
+          "description": "Click search button",
+          "strategies": [
+            {
+              "name": "Strategy 1: Submit button",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {"strategy": "selector", "value": "button[type='submit']"}
+                }
+              ]
+            },
+            {
+              "name": "Strategy 2: Check availability button",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {"strategy": "text", "value": "Check availability"}
+                }
+              ]
+            },
+            {
+              "name": "Strategy 3: Search button",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {"strategy": "text", "value": "Search"}
+                }
+              ]
+            },
+            {
+              "name": "Strategy 4: Vision LLM",
+              "escalate": {
+                "type": "vision_llm",
+                "prompt": "Click the search or 'Check availability' button near the postcode field.",
+                "timeout": 15000,
+                "max_actions": 2
+              }
+            }
+          ]
+        },
+        {
+          "action": "wait_for_load_state",
+          "description": "Wait for search results",
+          "state": "networkidle"
+        },
+        {
+          "action": "screenshot",
+          "description": "After postcode search",
+          "save_to": "02c_after_search.png"
+        },
+        {
+          "type": "switch",
+          "name": "Handle Search Results",
+          "description": "Detect result type and handle accordingly",
+          "cases": [
+            {
+              "condition": {
+                "type": "element_visible",
+                "selector": "form, .address-list, ul li, select",
+                "timeout": 3000
+              },
+              "steps": [
+                {
+                  "action": "extract",
+                  "description": "Check what type of selection is needed",
+                  "method": "vision",
+                  "prompt": "Analyze this page after postcode search. Answer: 1) Does it show a list of addresses to select from? 2) Does it show broadband packages directly? 3) Is there an error or 'no results' message? 4) How many addresses are visible?",
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "shows_address_list": {"type": "boolean"},
+                      "shows_packages": {"type": "boolean"},
+                      "has_error": {"type": "boolean"},
+                      "address_count": {"type": "integer"},
+                      "needs_scroll": {"type": "boolean"}
+                    },
+                    "required": ["shows_address_list", "shows_packages", "has_error", "address_count"]
+                  }
+                },
+                {
+                  "type": "if",
+                  "name": "Select Address if Needed",
+                  "condition": {
+                    "type": "js_eval",
+                    "expression": "window.__last_extract_result?.shows_address_list === true"
+                  },
+                  "then": {
+                    "goto": "SelectAddress"
+                  },
+                  "else": {
+                    "goto": "ExtractResults"
+                  }
+                }
+              ]
+            }
+          ],
+          "default": {
+            "steps": [
+              {
+                "action": "screenshot",
+                "description": "Unexpected page state"
+              },
+              {
+                "goto": "ExtractResults"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "sequence",
+      "name": "SelectAddress",
+      "description": "Select specific address from list",
+      "steps": [
+        {
+          "type": "try",
+          "name": "Find and Click Address",
+          "description": "Match address using multiple fallback strategies",
+          "strategies": [
+            {
+              "name": "Strategy 1: Exact full address",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {"strategy": "text", "value": "1 Church View, DN12 1RH"}
+                }
+              ]
+            },
+            {
+              "name": "Strategy 2: Building number and street",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {"strategy": "text", "value": "1 Church View"}
+                }
+              ]
+            },
+            {
+              "name": "Strategy 3: Street name only",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {"strategy": "text", "value": "Church View"}
+                }
+              ]
+            },
+            {
+              "name": "Strategy 4: Vision LLM",
+              "escalate": {
+                "type": "vision_llm",
+                "prompt": "Find and click the address that best matches: 1 Church View, DN12 1RH. Look for the closest match in the visible address list.",
+                "timeout": 25000,
+                "max_actions": 5
+              }
+            }
+          ]
+        },
+        {
+          "type": "try",
+          "name": "Submit Address Selection",
+          "strategies": [
+            {
+              "name": "Strategy 1: Submit button",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {"strategy": "selector", "value": "button[type='submit']"}
+                }
+              ]
+            },
+            {
+              "name": "Strategy 2: Continue button",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {"strategy": "text", "value": "Continue"}
+                }
+              ]
+            },
+            {
+              "name": "Strategy 3: Next button",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {"strategy": "text", "value": "Next"}
+                }
+              ]
+            },
+            {
+              "name": "Strategy 4: Vision LLM",
+              "escalate": {
+                "type": "vision_llm",
+                "prompt": "Click the submit, continue, or next button to confirm the address selection.",
+                "timeout": 15000,
+                "max_actions": 2
+              }
+            }
+          ]
+        },
+        {
+          "action": "wait_for_load_state",
+          "description": "Wait for address submission",
+          "state": "networkidle"
+        },
+        {
+          "action": "wait",
+          "description": "Wait for JavaScript redirect",
+          "duration": 2000
+        },
+        {
+          "action": "wait_for_load_state",
+          "description": "Wait for packages page",
+          "state": "networkidle"
+        }
+      ]
+    },
+    {
+      "type": "sequence",
+      "name": "ExtractResults",
+      "description": "Extract broadband availability data",
+      "end": true,
+      "steps": [
+        {
+          "action": "screenshot",
+          "description": "Final results page",
+          "save_to": "03_packages.png"
+        },
+        {
+          "type": "switch",
+          "name": "Check Results Type",
+          "cases": [
+            {
+              "condition": {
+                "type": "or",
+                "conditions": [
+                  {
+                    "type": "element_text",
+                    "selector": "body",
+                    "contains": "no results",
+                    "timeout": 2000
+                  },
+                  {
+                    "type": "element_text",
+                    "selector": "body",
+                    "contains": "not found",
+                    "timeout": 2000
+                  },
+                  {
+                    "type": "element_visible",
+                    "selector": ".error, .no-results, [class*='error']",
+                    "timeout": 2000
+                  }
+                ]
+              },
+              "steps": [
+                {
+                  "action": "extract",
+                  "description": "Extract error or no results message",
+                  "method": "vision",
+                  "prompt": "This page shows no results or an error. Extract: 1) The error message or reason, 2) Any suggestions for what to do next, 3) The postcode that was searched.",
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "has_results": {"type": "boolean", "enum": [false]},
+                      "error_message": {"type": "string"},
+                      "suggestions": {"type": "string"},
+                      "postcode_searched": {"type": "string"}
+                    },
+                    "required": ["has_results", "error_message"]
+                  }
+                }
+              ]
+            }
+          ],
+          "default": {
+            "steps": [
+              {
+                "action": "extract",
+                "description": "Extract full broadband availability data",
+                "method": "vision",
+                "prompt": "Extract broadband availability information from this BT Wholesale results page following these steps:\n\n1. ALWAYS CAPTURE (if visible):\n   - ALK (Access Line Key) - usually near top\n   - Exchange Code - BT exchange identifier\n\n2. CHECK FEATURED PRODUCTS SECTION:\n   - Look for 'Featured Products'\n   - Search for a row containing 'WBC FTTP'\n\n3. IF 'WBC FTTP' IS FOUND:\n   - Set fttp_avail = true\n   - From WBC FTTP row, capture 'Downstream Line Rate' (DSL speed in Mbps)\n   \n   Then navigate to:\n   a) OTHER OFFERINGS section:\n      - Check if ANY row has 'Service Availability' = 'Enabled'\n      - If found, set sogea_avail = true, else false\n   \n   b) ONT DETAILS section:\n      - Find LAST row\n      - Capture: 'Reference' field (ont_reference)\n      - Capture: 'ONT Serial Number' (ont_serial_no)\n      - Capture: 'Port Service ID' (port_service_id)\n   \n   c) PREMISE ENVIRONMENT section:\n      - Capture: 'Recommended Minimum SVR NLP' (install_type)\n      - Valid values: 'Standard' or 'Premium'\n\n4. IF 'WBC FTTP' IS NOT FOUND:\n   - Set fttp_avail = false\n   - Leave FTTP fields blank\n\nIMPORTANT: fttp_avail is REQUIRED and must be true or false.",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "alk": {
+                      "type": "string",
+                      "description": "Access Line Key (e.g., A00022059784)"
+                    },
+                    "exchange_code": {
+                      "type": "string",
+                      "description": "BT exchange code (e.g., CAMBRIDGE)"
+                    },
+                    "fttp_avail": {
+                      "type": "boolean",
+                      "description": "Whether WBC FTTP found in Featured Products"
+                    },
+                    "install_type": {
+                      "type": "string",
+                      "enum": ["Standard", "Premium", "N/A"],
+                      "description": "Premise Environment -> Recommended Minimum SVR NLP (only if WBC FTTP)"
+                    },
+                    "sogea_avail": {
+                      "type": "boolean",
+                      "description": "Other Offerings has Service Availability = Enabled (only if WBC FTTP)"
+                    },
+                    "soadsl_dsl_speed": {
+                      "type": "number",
+                      "description": "Downstream Line Rate from WBC FTTP in Mbps (only if WBC FTTP)"
+                    },
+                    "ont_reference": {
+                      "type": "string",
+                      "description": "Reference from last ONT Details row (only if WBC FTTP)"
+                    },
+                    "ont_serial_no": {
+                      "type": "string",
+                      "description": "ONT Serial Number from last ONT Details row (only if WBC FTTP)"
+                    },
+                    "port_service_id": {
+                      "type": "string",
+                      "description": "Port Service ID from last ONT Details row (only if WBC FTTP)"
+                    }
+                  },
+                  "required": ["fttp_avail"]
+                }
+              },
+              {
+                "action": "screenshot",
+                "description": "Final verification screenshot",
+                "save_to": "04_final.png"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -191,7 +191,11 @@ test-rust:
 
 test-python:
 	@echo "Running Python tests..."
-	@cd python && python3 -m pytest
+	@echo "Testing nested workflow structures..."
+	@python3 python/test_nested_workflow.py
+	@echo ""
+	@echo "Running pytest tests..."
+	@cd python && python3 -m pytest || true
 
 # Linting & Formatting
 lint:

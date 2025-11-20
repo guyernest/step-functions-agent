@@ -1,8 +1,15 @@
 """
 Workflow Executor for Browser Automation
 
-Executes workflows with conditional logic, intelligent retry strategies, and escalation.
-Supports: if/else branching, try with multiple strategies, sequences, goto jumps, and switch statements.
+Explicit flow control model inspired by AWS Step Functions.
+Eliminates index management bugs by using named steps and explicit transitions.
+
+Flow Control:
+- goto: Jump to named step
+- next: Proceed to named step
+- end: Terminate workflow successfully
+- succeed/fail: Explicit terminal states
+- default: Sequential (next in array)
 """
 
 import sys
@@ -18,13 +25,15 @@ class WorkflowError(Exception):
 
 class WorkflowExecutor:
     """
-    Executes workflow scripts with control flow.
+    Executes workflow scripts with explicit flow control.
 
-    Handles:
-    - Conditional branching (if/else, switch)
-    - Intelligent retry with multiple strategies
-    - Named sequences and goto jumps
-    - Loop detection and prevention
+    Flow resolution priority:
+    1. goto - Always honored
+    2. end: true - Terminates successfully
+    3. next - Jump to named step
+    4. type: succeed - Success terminal
+    5. type: fail - Failure terminal
+    6. default - Next in array
     """
 
     # Configuration
@@ -42,17 +51,20 @@ class WorkflowExecutor:
         self.script = script
         self.executor = executor  # OpenAIPlaywrightExecutor instance
         self.steps = script.get("steps", [])
-        self.current_index = 0
         self.step_map = self._build_step_map()
         self.condition_evaluator = None  # Initialized when page available
 
         # Execution tracking
-        self.step_visits = {}  # step_index -> visit_count
-        self.step_history = []  # [(index, step_name), ...]
+        self.step_visits = {}  # step_name -> visit_count
+        self.step_history = []  # [step_name, ...]
         self.total_steps_executed = 0
 
+        # Current execution state
+        self.current_step_name = None
+        self.next_step_name = None  # Set by flow control
+
     def _build_step_map(self) -> Dict[str, int]:
-        """Build index of named steps for goto targets."""
+        """Build index of named steps for goto/next targets."""
         step_map = {}
         for idx, step in enumerate(self.steps):
             if "name" in step:
@@ -62,74 +74,164 @@ class WorkflowExecutor:
                 step_map[step_name] = idx
         return step_map
 
+    def _get_step_by_name(self, name: str) -> Optional[Dict[str, Any]]:
+        """Get step by name."""
+        if name not in self.step_map:
+            return None
+        return self.steps[self.step_map[name]]
+
+    def _get_step_name(self, step: Dict[str, Any], index: int) -> str:
+        """Get step name (use explicit name or generate from index)."""
+        return step.get("name", f"Step_{index}")
+
+    def _get_next_step_in_array(self, current_index: int) -> Optional[str]:
+        """Get next step name in array sequence."""
+        next_index = current_index + 1
+        if next_index < len(self.steps):
+            return self._get_step_name(self.steps[next_index], next_index)
+        return None
+
+    def _resolve_next_step(self, step: Dict[str, Any], current_index: int) -> Optional[str]:
+        """
+        Resolve next step using flow control directives.
+
+        Priority:
+        1. goto - explicit jump (already handled during execution)
+        2. end: true - terminates workflow
+        3. next - named step
+        4. type: succeed/fail - terminal states (already handled)
+        5. default - next in array
+
+        Returns:
+            Next step name, or None to terminate
+        """
+        # Check if next was set by goto during execution
+        if self.next_step_name:
+            next_name = self.next_step_name
+            self.next_step_name = None  # Clear for next iteration
+            return next_name
+
+        # Check end directive
+        if step.get("end"):
+            print(f"  → Workflow terminates (end: true)", file=sys.stderr)
+            return None
+
+        # Check explicit next
+        if "next" in step:
+            next_name = step["next"]
+            if next_name not in self.step_map:
+                raise WorkflowError(f"Step '{self.current_step_name}' references unknown next step: '{next_name}'")
+            print(f"  → Explicit next: {next_name}", file=sys.stderr)
+            return next_name
+
+        # Default: sequential flow
+        next_name = self._get_next_step_in_array(current_index)
+        if next_name:
+            print(f"  → Sequential next: {next_name}", file=sys.stderr)
+        else:
+            print(f"  → End of workflow (no more steps)", file=sys.stderr)
+        return next_name
+
     async def run(self):
         """Execute the workflow from start to finish."""
         # Initialize condition evaluator with page
         self.condition_evaluator = ConditionEvaluator(self.executor.page)
 
         print(f"\n{'='*60}", file=sys.stderr)
-        print(f"Starting Workflow Execution: {self.script.get('name', 'Unnamed')}", file=sys.stderr)
-        print(f"Total steps: {len(self.steps)}", file=sys.stderr)
+        print(f"Starting Workflow: {self.script.get('name', 'Unnamed')}", file=sys.stderr)
+        print(f"Total steps defined: {len(self.steps)}", file=sys.stderr)
         print(f"{'='*60}\n", file=sys.stderr)
 
-        while self.current_index < len(self.steps):
-            # Safety checks
+        # Start with first step
+        if not self.steps:
+            print("Warning: Workflow has no steps", file=sys.stderr)
+            return
+
+        self.current_step_name = self._get_step_name(self.steps[0], 0)
+
+        # Main execution loop - follow flow control
+        while self.current_step_name is not None:
+            # Safety check
             if self.total_steps_executed >= self.MAX_TOTAL_STEPS:
                 raise WorkflowError(f"Exceeded maximum steps ({self.MAX_TOTAL_STEPS})")
 
-            step = self.steps[self.current_index]
-            step_type = step.get("type", "action")
-            step_name = step.get("name", f"Step_{self.current_index + 1}")
+            # Get step
+            step_index = self.step_map.get(self.current_step_name)
+            if step_index is None:
+                # Try to find by generated name
+                for idx, s in enumerate(self.steps):
+                    if self._get_step_name(s, idx) == self.current_step_name:
+                        step_index = idx
+                        break
 
-            # Check loop detection
-            visit_count = self.step_visits.get(self.current_index, 0)
+            if step_index is None:
+                raise WorkflowError(f"Step not found: '{self.current_step_name}'")
+
+            step = self.steps[step_index]
+
+            # Loop detection
+            visit_count = self.step_visits.get(self.current_step_name, 0)
             if visit_count >= self.MAX_VISITS_PER_STEP:
                 raise WorkflowError(
-                    f"Infinite loop detected: Step {self.current_index} ('{step_name}') "
-                    f"visited {visit_count} times"
+                    f"Infinite loop detected: '{self.current_step_name}' visited {visit_count} times"
                 )
 
-            # Track visit
-            self.step_visits[self.current_index] = visit_count + 1
-            self.step_history.append((self.current_index, step_name))
+            # Track execution
+            self.step_visits[self.current_step_name] = visit_count + 1
+            self.step_history.append(self.current_step_name)
             self.total_steps_executed += 1
 
             # Log step
-            print(f"\n[{self.total_steps_executed}] Step {self.current_index + 1}/{len(self.steps)}: {step_name}", file=sys.stderr)
+            print(f"\n[{self.total_steps_executed}] Executing: {self.current_step_name}", file=sys.stderr)
             if "description" in step:
                 print(f"  Description: {step['description']}", file=sys.stderr)
 
-            # Execute based on type
+            # Execute step
             try:
-                if step_type == "if":
-                    await self._execute_if(step)
-                elif step_type == "try":
-                    await self._execute_try(step)
-                elif step_type == "sequence":
-                    await self._execute_sequence(step)
-                elif step_type == "goto":
-                    self._execute_goto(step)
-                elif step_type == "switch":
-                    await self._execute_switch(step)
-                else:
-                    # Regular action step - delegate to executor
-                    await self.executor.execute_step(step)
-                    self.current_index += 1
+                abort_on_error = self.script.get("abort_on_error", True)
+                await self._dispatch_step(step)
 
             except Exception as e:
-                print(f"\n✗ ERROR in step {self.current_index}: {e}", file=sys.stderr)
-                if self.script.get("abort_on_error", True):
-                    raise
+                print(f"\n✗ ERROR in step '{self.current_step_name}': {e}", file=sys.stderr)
+                if abort_on_error:
+                    raise WorkflowError(f"Step '{self.current_step_name}' failed: {e}")
                 else:
                     print(f"  Continuing despite error (abort_on_error=false)", file=sys.stderr)
-                    self.current_index += 1
 
+            # Resolve next step
+            self.current_step_name = self._resolve_next_step(step, step_index)
+
+        # Workflow complete
         print(f"\n{'='*60}", file=sys.stderr)
         print(f"✓ Workflow Completed Successfully", file=sys.stderr)
-        print(f"Total steps executed: {self.total_steps_executed}", file=sys.stderr)
+        print(f"Steps executed: {self.total_steps_executed}", file=sys.stderr)
+        print(f"Unique steps visited: {len(self.step_visits)}", file=sys.stderr)
         print(f"{'='*60}\n", file=sys.stderr)
 
-    # Control flow step handlers
+    async def _dispatch_step(self, step: Dict[str, Any]):
+        """Route step to appropriate handler based on type."""
+        step_type = step.get("type", step.get("action"))
+
+        # Workflow control structures
+        if step_type == "if":
+            await self._execute_if(step)
+        elif step_type == "try":
+            await self._execute_try(step)
+        elif step_type == "sequence":
+            await self._execute_sequence(step)
+        elif step_type == "switch":
+            await self._execute_switch(step)
+        elif step_type == "goto":
+            self._execute_goto(step)
+        elif step_type == "succeed":
+            self._execute_succeed(step)
+        elif step_type == "fail":
+            self._execute_fail(step)
+        # Action steps - delegate to executor
+        elif step.get("action"):
+            await self.executor.execute_step(step)
+        else:
+            raise ValueError(f"Unknown step type: {step_type}")
 
     async def _execute_if(self, step: Dict[str, Any]):
         """Execute conditional branch."""
@@ -139,20 +241,12 @@ class WorkflowExecutor:
 
         print(f"  Evaluating condition...", file=sys.stderr)
         result = await self.condition_evaluator.evaluate(condition)
-        print(f"  → Condition result: {result}", file=sys.stderr)
+        print(f"  → Result: {result}", file=sys.stderr)
 
-        if result:
-            if "then" in step:
-                print(f"  → Taking 'then' branch", file=sys.stderr)
-                await self._handle_branch(step["then"])
-            else:
-                self.current_index += 1
-        else:
-            if "else" in step:
-                print(f"  → Taking 'else' branch", file=sys.stderr)
-                await self._handle_branch(step["else"])
-            else:
-                self.current_index += 1
+        branch = step.get("then") if result else step.get("else")
+        if branch:
+            print(f"  → Taking {'then' if result else 'else'} branch", file=sys.stderr)
+            await self._execute_branch(branch)
 
     async def _execute_try(self, step: Dict[str, Any]):
         """Execute retry block with multiple strategies."""
@@ -163,163 +257,64 @@ class WorkflowExecutor:
         step_name = step.get("name", "unnamed try block")
         print(f"  Trying {len(strategies)} strategies...", file=sys.stderr)
 
+        last_error = None
         for strategy_index, strategy in enumerate(strategies):
             strategy_name = strategy.get("name", f"Strategy_{strategy_index + 1}")
-
             print(f"\n  [{strategy_index + 1}/{len(strategies)}] Attempting: {strategy_name}", file=sys.stderr)
-            if "description" in strategy:
-                print(f"    {strategy['description']}", file=sys.stderr)
 
             try:
-                # Execute strategy based on type
-                if "steps" in strategy:
-                    # Step-based strategy
-                    await self._execute_strategy_steps(strategy)
+                # Execute strategy steps
+                strategy_steps = strategy.get("steps", [])
+                for substep in strategy_steps:
+                    await self._dispatch_step(substep)
 
-                elif "escalate" in strategy:
-                    # Escalation strategy
-                    await self._execute_escalation(strategy["escalate"])
-
-                elif "alternative" in strategy:
-                    # Alternative approach
-                    await self._execute_alternative(strategy["alternative"])
-
-                else:
-                    raise ValueError(f"Strategy '{strategy_name}' has no execution method")
-
-                # Verify success if verification specified
+                # Verify if specified
                 if "verify" in strategy:
                     print(f"    Verifying success...", file=sys.stderr)
-                    success = await self.condition_evaluator.evaluate(strategy["verify"])
-
-                    if not success:
-                        print(f"    ✗ Verification failed for {strategy_name}", file=sys.stderr)
-                        continue  # Try next strategy
+                    verify_result = await self.condition_evaluator.evaluate(strategy["verify"])
+                    if not verify_result:
+                        raise Exception("Verification failed")
 
                 # Success!
                 print(f"    ✓ {strategy_name} succeeded", file=sys.stderr)
-                self.current_index += 1
                 return
 
             except Exception as e:
+                last_error = e
                 print(f"    ✗ {strategy_name} failed: {e}", file=sys.stderr)
-                # Continue to next strategy
+                continue
 
         # All strategies failed
-        print(f"\n  ✗ All {len(strategies)} strategies failed for '{step_name}'", file=sys.stderr)
-
-        if "on_all_strategies_failed" in step:
-            print(f"  Executing failure handler...", file=sys.stderr)
-            await self._handle_failure_action(step["on_all_strategies_failed"])
-        else:
-            raise WorkflowError(f"Try block '{step_name}' exhausted all strategies")
-
-    async def _execute_strategy_steps(self, strategy: Dict[str, Any]):
-        """Execute a step-based strategy."""
-        steps = strategy.get("steps", [])
-        for step in steps:
-            await self.executor.execute_step(step)
-
-    async def _execute_escalation(self, escalate_config: Dict[str, Any]):
-        """Execute escalation strategy (vision LLM, progressive escalation, etc.)."""
-        escalate_type = escalate_config.get("type")
-
-        if escalate_type == "vision_llm":
-            # Use vision to find target and click it via executor's escalation chain
-            prompt = escalate_config.get("prompt")
-            if not prompt:
-                raise ValueError("vision_llm escalation missing 'prompt'")
-
-            print(f"    Escalating to Vision LLM (find element + click)...", file=sys.stderr)
-            print(f"    Prompt: {prompt[:100]}...", file=sys.stderr)
-
-            chain = []
-            # Optional cheap pre-check via locator if provided
-            if "locator" in escalate_config:
-                chain.append({
-                    "method": "playwright_locator",
-                    "locator": escalate_config["locator"]
-                })
-
-            # Vision fallback to find element
-            chain.append({
-                "method": "vision_find_element",
-                "prompt": prompt
-            })
-
-            click_step = {
-                "type": "click",
-                "escalation_chain": chain,
-                "trigger_autofill": escalate_config.get("trigger_autofill", False)
-            }
-            await self.executor.execute_step(click_step)
-
-        elif escalate_type == "progressive_escalation":
-            # Use existing progressive escalation engine via executor 'escalation_chain'
-            chain = escalate_config.get("chain")
-            if not chain:
-                raise ValueError("progressive_escalation missing 'chain'")
-
-            print(f"    Escalating with progressive escalation chain ({len(chain)} steps)", file=sys.stderr)
-
-            click_step = {
-                "type": "click",
-                "escalation_chain": chain,
-                "trigger_autofill": escalate_config.get("trigger_autofill", False)
-            }
-            await self.executor.execute_step(click_step)
-
-        elif escalate_type == "human_intervention":
-            # Pause and request human help
-            message = escalate_config.get("message", "Human intervention required")
-            timeout = escalate_config.get("timeout", 300000)  # 5 minutes default
-
-            print(f"    🙋 Human intervention required: {message}", file=sys.stderr)
-            print(f"    Waiting up to {timeout/1000}s for human action...", file=sys.stderr)
-
-            # Wait for resume condition if specified
-            if "resume_condition" in escalate_config:
-                try:
-                    # Poll for condition with timeout
-                    start_time = asyncio.get_event_loop().time()
-                    while (asyncio.get_event_loop().time() - start_time) * 1000 < timeout:
-                        result = await self.condition_evaluator.evaluate(
-                            escalate_config["resume_condition"]
-                        )
-                        if result:
-                            print(f"    ✓ Resume condition met, continuing...", file=sys.stderr)
-                            return
-                        await asyncio.sleep(1)
-
-                    raise TimeoutError(f"Human intervention timeout after {timeout}ms")
-                except Exception as e:
-                    raise WorkflowError(f"Human intervention failed: {e}")
-            else:
-                # Simple timed wait
-                await asyncio.sleep(timeout / 1000)
-
-        else:
-            raise ValueError(f"Unknown escalation type: {escalate_type}")
-
-    async def _execute_alternative(self, alternative_config: Dict[str, Any]):
-        """Execute alternative approach (API call, etc.)."""
-        alt_type = alternative_config.get("type")
-
-        if alt_type == "api_call":
-            # Make HTTP API call instead of UI automation
-            print(f"    Using API fallback...", file=sys.stderr)
-            # TODO: Implement HTTP client for API fallback
-            raise NotImplementedError("API fallback not yet implemented")
-
-        else:
-            raise ValueError(f"Unknown alternative type: {alt_type}")
+        raise WorkflowError(f"Try block '{step_name}' exhausted all strategies. Last error: {last_error}")
 
     async def _execute_sequence(self, step: Dict[str, Any]):
-        """Execute named sequence of steps."""
+        """Execute sequence of steps."""
         steps = step.get("steps", [])
         for substep in steps:
-            await self.executor.execute_step(substep)
-        self.current_index += 1
+            await self._dispatch_step(substep)
+
+    async def _execute_switch(self, step: Dict[str, Any]):
+        """Execute switch statement."""
+        cases = step.get("cases", [])
+
+        # Try each case
+        for case in cases:
+            condition = case.get("condition")
+            if condition:
+                result = await self.condition_evaluator.evaluate(condition)
+                if result:
+                    print(f"  → Switch case matched", file=sys.stderr)
+                    case_steps = case.get("steps", [])
+                    for substep in case_steps:
+                        await self._dispatch_step(substep)
+                    return
+
+        # Default case
+        if "default" in step:
+            print(f"  → Using default case", file=sys.stderr)
+            default_steps = step["default"].get("steps", [])
+            for substep in default_steps:
+                await self._dispatch_step(substep)
 
     def _execute_goto(self, step: Dict[str, Any]):
         """Jump to named step."""
@@ -330,103 +325,39 @@ class WorkflowExecutor:
         if target not in self.step_map:
             raise ValueError(f"goto target '{target}' not found in step map")
 
-        new_index = self.step_map[target]
-        print(f"  → Jumping to step {new_index + 1}: {target}", file=sys.stderr)
-        self.current_index = new_index
+        print(f"  → Jumping to: {target}", file=sys.stderr)
+        self.next_step_name = target
 
-    async def _execute_switch(self, step: Dict[str, Any]):
-        """Execute switch/case statement."""
-        cases = step.get("cases", [])
-        default = step.get("default")
+    def _execute_succeed(self, step: Dict[str, Any]):
+        """Explicit success terminal state."""
+        message = step.get("message", "Workflow succeeded")
+        print(f"  ✓ SUCCESS: {message}", file=sys.stderr)
+        self.next_step_name = None  # Terminate
 
-        for case in cases:
-            condition = case.get("condition")
-            if not condition:
-                continue
+    def _execute_fail(self, step: Dict[str, Any]):
+        """Explicit failure terminal state."""
+        error = step.get("error", "WORKFLOW_FAILED")
+        message = step.get("message", "Workflow failed")
+        raise WorkflowError(f"{error}: {message}")
 
-            result = await self.condition_evaluator.evaluate(condition)
-            if result:
-                print(f"  → Switch case matched", file=sys.stderr)
+    async def _execute_branch(self, branch: Any):
+        """
+        Execute a branch (then/else in if, case in switch).
 
-                # Execute case action
-                if "goto" in case:
-                    self._handle_goto_branch(case["goto"])
-                elif "steps" in case:
-                    for case_step in case["steps"]:
-                        await self.executor.execute_step(case_step)
-
-                    # Handle 'then' after steps
-                    if "then" in case:
-                        await self._handle_branch(case["then"])
-                    else:
-                        self.current_index += 1
-                else:
-                    self.current_index += 1
-
-                return
-
-        # No case matched, use default
-        if default:
-            print(f"  → Using default case", file=sys.stderr)
-            if "goto" in default:
-                self._handle_goto_branch(default["goto"])
-            elif "steps" in default:
-                for default_step in default["steps"]:
-                    await self.executor.execute_step(default_step)
-
-                if "then" in default:
-                    await self._handle_branch(default["then"])
-                else:
-                    self.current_index += 1
-            else:
-                self.current_index += 1
-        else:
-            # No match and no default
-            print(f"  → No case matched, no default specified", file=sys.stderr)
-            self.current_index += 1
-
-    # Helper methods
-
-    async def _handle_branch(self, branch: Any):
-        """Handle then/else branch action."""
+        Branches can be:
+        - {"goto": "StepName"} - jump to step
+        - {"action": "...", ...} - inline action
+        - {"type": "...", ...} - nested workflow structure
+        """
         if isinstance(branch, dict):
             if "goto" in branch:
-                self._handle_goto_branch(branch["goto"])
-            elif "continue" in branch and branch["continue"]:
-                self.current_index += 1
-            elif "action" in branch:
-                # Execute inline action
-                await self.executor.execute_step(branch)
+                # Goto jump
+                target = branch["goto"]
+                if target not in self.step_map:
+                    raise ValueError(f"Branch goto target '{target}' not found")
+                print(f"    Branch: goto {target}", file=sys.stderr)
+                self.next_step_name = target
 
-                # Check for chained 'then'
-                if "then" in branch:
-                    await self._handle_branch(branch["then"])
-                else:
-                    self.current_index += 1
-            else:
-                self.current_index += 1
-        else:
-            self.current_index += 1
-
-    def _handle_goto_branch(self, target: str):
-        """Handle goto in a branch."""
-        if target not in self.step_map:
-            raise ValueError(f"goto target '{target}' not found")
-        self.current_index = self.step_map[target]
-
-    async def _handle_failure_action(self, failure_config: Dict[str, Any]):
-        """Handle on_all_strategies_failed action."""
-        if "action" in failure_config:
-            # Execute the failure action
-            await self.executor.execute_step(failure_config)
-
-        if "type" in failure_config and failure_config["type"] == "error":
-            # Raise error
-            message = failure_config.get("message", "Strategy exhaustion")
-            raise WorkflowError(message)
-
-        # Handle then branch if present
-        if "then" in failure_config:
-            await self._handle_branch(failure_config["then"])
-        else:
-            self.current_index += 1
+            elif "action" in branch or "type" in branch:
+                # Inline step execution
+                await self._dispatch_step(branch)
