@@ -206,36 +206,36 @@
             "description": "Password not filled - trigger password manager autofill",
             "strategies": [
               {
-                "name": "Strategy 1: Click password field (real mouse)",
-                "description": "Most reliable method - triggers autofill heuristics",
+                "name": "Strategy 1: Tab + Enter keyboard navigation",
+                "description": "Try Tab key to focus dropdown, then Enter to select",
                 "steps": [
                   {
                     "action": "click",
-                    "description": "Click password field with real mouse to trigger autofill",
+                    "description": "Click password field to trigger password manager dropdown",
                     "locator": {"strategy": "selector", "value": "input[type='password']"},
                     "trigger_autofill": true
                   },
                   {
                     "action": "wait",
-                    "description": "Wait for password manager dropdown",
+                    "description": "Wait for password manager dropdown to appear",
                     "duration": 1500
                   },
                   {
                     "action": "press",
-                    "description": "Navigate to saved password",
-                    "keys": "ArrowDown",
-                    "delay": 150
+                    "description": "Try Tab key to focus first dropdown item",
+                    "key": "Tab",
+                    "delay": 300
                   },
                   {
                     "action": "press",
-                    "description": "Select saved password",
-                    "keys": "Enter",
-                    "delay": 150
+                    "description": "Press Enter to select",
+                    "key": "Enter",
+                    "delay": 300
                   },
                   {
                     "action": "wait",
-                    "description": "Wait for autofill to complete",
-                    "duration": 800
+                    "description": "Wait for password to be filled",
+                    "duration": 1000
                   }
                 ],
                 "verify": {
@@ -245,54 +245,72 @@
                 }
               },
               {
-                "name": "Strategy 2: Extended wait for autofill",
-                "description": "Sometimes autofill needs more time",
+                "name": "Strategy 2: Mouse click on dropdown item",
+                "description": "Calculate dropdown position and click first item",
                 "steps": [
                   {
                     "action": "click",
+                    "description": "Click password field to trigger dropdown",
                     "locator": {"strategy": "selector", "value": "input[type='password']"},
                     "trigger_autofill": true
                   },
                   {
                     "action": "wait",
-                    "duration": 3000
+                    "description": "Wait for dropdown to appear",
+                    "duration": 1000
                   },
                   {
-                    "action": "press",
-                    "keys": ["ArrowDown", "Enter"],
-                    "delay": 200
+                    "action": "execute_js",
+                    "description": "Click first dropdown item at calculated position",
+                    "script": "(async function() { const field = document.querySelector('input[type=\"password\"]'); const box = field.getBoundingClientRect(); const dropdownX = box.left + 50; const dropdownY = box.bottom + 25; const evt = new MouseEvent('click', { clientX: dropdownX, clientY: dropdownY, bubbles: true }); document.elementFromPoint(dropdownX, dropdownY)?.dispatchEvent(evt); await new Promise(r => setTimeout(r, 500)); return {x: dropdownX, y: dropdownY}; })()"
                   },
                   {
                     "action": "wait",
-                    "duration": 1000
+                    "description": "Wait for password to be filled",
+                    "duration": 1500
                   }
                 ],
                 "verify": {
                   "type": "js_eval",
-                  "expression": "document.querySelector('input[type=\"password\"]')?.value?.length > 0"
+                  "expression": "document.querySelector('input[type=\"password\"]')?.value?.length > 0",
+                  "expected": true
                 }
               },
               {
-                "name": "Strategy 3: Progressive escalation",
+                "name": "Strategy 3: Vision LLM to locate and click dropdown",
+                "description": "Use vision AI to identify and click the saved password in dropdown",
                 "escalate": {
-                  "type": "progressive_escalation",
-                  "chain": [
-                    {"method": "playwright_locator", "locator": {"strategy": "selector", "value": "input[type='password']"}},
-                    {"method": "vision_find_element", "prompt": "Click the password field to trigger password manager autofill"}
-                  ]
+                  "type": "vision_llm",
+                  "prompt": "A password manager dropdown has appeared on screen showing saved passwords. Your task: 1) Identify the first saved password entry in the dropdown (it will be below the password input field), 2) Click directly on that dropdown entry to select it and fill the password. Do NOT click the password field itself - click the dropdown item that contains the saved password.",
+                  "timeout": 25000,
+                  "max_actions": 5
                 },
                 "verify": {
                   "type": "js_eval",
-                  "expression": "document.querySelector('input[type=\"password\"]')?.value?.length > 0"
+                  "expression": "document.querySelector('input[type=\"password\"]')?.value?.length > 0",
+                  "expected": true
                 }
               },
               {
-                "name": "Strategy 4: Vision LLM fallback",
-                "escalate": {
-                  "type": "vision_llm",
-                  "prompt": "The password field needs to be filled using the browser's saved password manager. Click the password field, wait for the password manager dropdown to appear, then select the saved password.",
-                  "timeout": 30000,
-                  "max_actions": 8
+                "name": "Strategy 4: Manual intervention",
+                "description": "Wait for user to manually select password from dropdown",
+                "steps": [
+                  {
+                    "action": "click",
+                    "description": "Click password field to trigger dropdown",
+                    "locator": {"strategy": "selector", "value": "input[type='password']"},
+                    "trigger_autofill": true
+                  },
+                  {
+                    "action": "wait",
+                    "description": "Wait 30 seconds for user to manually select password",
+                    "duration": 30000
+                  }
+                ],
+                "verify": {
+                  "type": "js_eval",
+                  "expression": "document.querySelector('input[type=\"password\"]')?.value?.length > 0",
+                  "expected": true
                 }
               }
             ],
@@ -594,21 +612,46 @@
               },
               "steps": [
                 {
-                  "action": "extract",
-                  "description": "Check what type of selection is needed",
-                  "method": "vision",
-                  "prompt": "Analyze this page after postcode search. Answer: 1) Does it show a list of addresses to select from? 2) Does it show broadband packages directly? 3) Is there an error or 'no results' message? 4) How many addresses are visible?",
-                  "schema": {
-                    "type": "object",
-                    "properties": {
-                      "shows_address_list": {"type": "boolean"},
-                      "shows_packages": {"type": "boolean"},
-                      "has_error": {"type": "boolean"},
-                      "address_count": {"type": "integer"},
-                      "needs_scroll": {"type": "boolean"}
+                  "type": "try",
+                  "name": "Detect Page Type - Progressive Escalation",
+                  "description": "Try DOM detection first (fast), escalate to vision if needed",
+                  "strategies": [
+                    {
+                      "name": "Strategy 1: DOM-based detection (fast)",
+                      "steps": [
+                        {
+                          "action": "execute_js",
+                          "description": "Check DOM for address list indicators",
+                          "script": "(function() { const selectElement = document.querySelector('select.custom-select'); const addressOptions = selectElement ? Array.from(selectElement.options).filter(opt => opt.value && opt.value !== 'Please select') : []; const hasAddressList = addressOptions.length > 1; const hasPackages = document.querySelector('[class*=\"package\"], [class*=\"product\"], table[class*=\"result\"]') !== null; const result = { shows_address_list: hasAddressList, shows_packages: hasPackages, has_error: document.body.textContent.includes('no results') || document.body.textContent.includes('not found'), address_count: addressOptions.length, detection_method: 'dom' }; window.__last_extract_result = result; return result; })()"
+                        }
+                      ],
+                      "verify": {
+                        "type": "js_eval",
+                        "expression": "window.__last_extract_result?.shows_address_list === true"
+                      }
                     },
-                    "required": ["shows_address_list", "shows_packages", "has_error", "address_count"]
-                  }
+                    {
+                      "name": "Strategy 2: Vision LLM (expensive fallback)",
+                      "steps": [
+                        {
+                          "action": "extract",
+                          "description": "Use vision when DOM detection is ambiguous",
+                          "method": "vision",
+                          "prompt": "Analyze this page after postcode search. Answer: 1) Does it show a list of addresses to select from? 2) Does it show broadband packages directly? 3) Is there an error or 'no results' message? 4) How many addresses are visible?",
+                          "schema": {
+                            "type": "object",
+                            "properties": {
+                              "shows_address_list": {"type": "boolean"},
+                              "shows_packages": {"type": "boolean"},
+                              "has_error": {"type": "boolean"},
+                              "address_count": {"type": "integer"}
+                            },
+                            "required": ["shows_address_list", "shows_packages", "has_error", "address_count"]
+                          }
+                        }
+                      ]
+                    }
+                  ]
                 },
                 {
                   "type": "if",
