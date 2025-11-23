@@ -284,7 +284,7 @@ class OpenAIPlaywrightExecutor:
                         pass
             else:
                 # Use traditional linear execution for backward compatibility
-                await self._execute_linear_steps(steps, result, abort_on_error)
+                await self._execute_linear_steps(steps, result, abort_on_error, name)
                 if self.escalation_engine is not None:
                     try:
                         result["escalation_stats"] = self.escalation_engine.get_stats()
@@ -302,7 +302,7 @@ class OpenAIPlaywrightExecutor:
 
         return result
 
-    async def _execute_linear_steps(self, steps: List[Dict[str, Any]], result: Dict[str, Any], abort_on_error: bool):
+    async def _execute_linear_steps(self, steps: List[Dict[str, Any]], result: Dict[str, Any], abort_on_error: bool, name: str):
         """Execute steps linearly without workflow control flow (backward compatible)."""
         for idx, step in enumerate(steps):
                 step_num = idx + 1
