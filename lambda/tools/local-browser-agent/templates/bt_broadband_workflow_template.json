@@ -419,7 +419,8 @@
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/^\\s*{{building_number}}\\s+\\w+/i"
+                    "value": "text=/^\\s*{{building_number}}\\s+\\w+/i",
+                    "nth": 0
                   }
                 }
               ]
@@ -431,7 +432,8 @@
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/{{building_number}}[\\s,]+{{street}}/i"
+                    "value": "text=/{{building_number}}[\\s,]+{{street}}/i",
+                    "nth": 0
                   }
                 }
               ]
@@ -443,7 +445,8 @@
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/{{building_number}}.*{{street}}/i"
+                    "value": "text=/{{building_number}}.*{{street}}/i",
+                    "nth": 0
                   }
                 }
               ]

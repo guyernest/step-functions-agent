@@ -419,7 +419,8 @@
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/^\\s*40\\s+\\w+/i"
+                    "value": "text=/^\\s*40\\s+\\w+/i",
+                    "nth": 0
                   }
                 }
               ]
@@ -431,7 +432,8 @@
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/40[\\s,]+Withers Place/i"
+                    "value": "text=/40[\\s,]+Withers Place/i",
+                    "nth": 0
                   }
                 }
               ]
@@ -443,7 +445,8 @@
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/40.*Withers Place/i"
+                    "value": "text=/40.*Withers Place/i",
+                    "nth": 0
                   }
                 }
               ]
