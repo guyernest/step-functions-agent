@@ -507,23 +507,21 @@ class OpenAIPlaywrightExecutor:
         if self.playwright:
             await self.playwright.stop()
 
-    async def execute_step(self, step: Dict[str, Any]) -> None:
+    async def execute_step(self, step: Dict[str, Any]) -> Dict[str, Any]:
         """
         Public interface for WorkflowExecutor to execute individual steps.
 
-        Note: This doesn't return a result dict like _execute_step, as the WorkflowExecutor
-        handles its own execution tracking. This method just executes the action.
+        Returns the result dict so WorkflowExecutor can collect step results and screenshots.
         """
-        # WorkflowExecutor doesn't need step numbers or result tracking
-        # It just needs the action to be performed
-        step_type = step.get("type", "action")
-
         # Delegate to the internal execute method
         result = await self._execute_step(step, step_num=0)
 
         # Raise exception if step failed (WorkflowExecutor handles failures)
         if not result.get("success"):
             raise Exception(result.get("error", "Step execution failed"))
+
+        # Return result for WorkflowExecutor to collect
+        return result
 
     async def _execute_step(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
         """Execute a single step (internal method)"""
