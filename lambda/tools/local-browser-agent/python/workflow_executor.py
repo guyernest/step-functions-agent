@@ -213,6 +213,7 @@ class WorkflowExecutor:
     async def _dispatch_step(self, step: Dict[str, Any]):
         """Route step to appropriate handler based on type."""
         step_type = step.get("type", step.get("action"))
+        print(f"  [DISPATCH] step_type={step_type}, has_action={bool(step.get('action'))}", file=sys.stderr)
 
         # Workflow control structures
         if step_type == "if":
@@ -231,7 +232,9 @@ class WorkflowExecutor:
             self._execute_fail(step)
         # Action steps - delegate to executor
         elif step.get("action"):
+            print(f"  [DISPATCH] Calling execute_step for action: {step.get('action')}", file=sys.stderr)
             step_result = await self.executor.execute_step(step)
+            print(f"  [DISPATCH] execute_step returned: type={type(step_result)}, is_none={step_result is None}", file=sys.stderr)
             # Collect results for final output
             if step_result:
                 print(f"  → Collecting step result: {step_result.get('action', 'unknown')}, success={step_result.get('success')}", file=sys.stderr)
@@ -242,6 +245,8 @@ class WorkflowExecutor:
                 # Log extracted data if present
                 if "data" in step_result:
                     print(f"  → Extracted data collected: {list(step_result['data'].keys())}", file=sys.stderr)
+            else:
+                print(f"  [DISPATCH] WARNING: execute_step returned None or empty!", file=sys.stderr)
         else:
             raise ValueError(f"Unknown step type: {step_type}")
 
