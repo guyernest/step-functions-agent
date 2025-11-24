@@ -454,7 +454,7 @@
           "name": "CheckIfAddressSelectionNeeded",
           "condition": {
             "type": "js_eval",
-            "expression": "window.__last_extract_result?.shows_address_list === true"
+            "expression": "window.__last_extract_result?.shows_address_list !== false"
           },
           "then": {
             "type": "sequence",
