@@ -234,10 +234,14 @@ class WorkflowExecutor:
             step_result = await self.executor.execute_step(step)
             # Collect results for final output
             if step_result:
+                print(f"  → Collecting step result: {step_result.get('action', 'unknown')}, success={step_result.get('success')}", file=sys.stderr)
                 self.step_results.append(step_result)
                 # Collect screenshots if present
                 if "screenshot_s3_uri" in step_result:
                     self.screenshots.append(step_result["screenshot_s3_uri"])
+                # Log extracted data if present
+                if "data" in step_result:
+                    print(f"  → Extracted data collected: {list(step_result['data'].keys())}", file=sys.stderr)
         else:
             raise ValueError(f"Unknown step type: {step_type}")
 

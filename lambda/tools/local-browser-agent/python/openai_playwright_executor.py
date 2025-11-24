@@ -279,6 +279,8 @@ class OpenAIPlaywrightExecutor:
                 result["execution_mode"] = "workflow"
                 result["step_results"] = workflow_executor.step_results
                 result["screenshots"] = workflow_executor.screenshots
+                print(f"→ Workflow collected {len(workflow_executor.step_results)} step results", file=sys.stderr)
+                print(f"→ Workflow collected {len(workflow_executor.screenshots)} screenshots", file=sys.stderr)
                 if self.escalation_engine is not None:
                     try:
                         result["escalation_stats"] = self.escalation_engine.get_stats()
