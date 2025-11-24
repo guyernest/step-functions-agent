@@ -274,9 +274,11 @@ class OpenAIPlaywrightExecutor:
                 workflow_executor = WorkflowExecutor(script, self)
                 await workflow_executor.run()
 
-                # Update result with workflow execution stats
+                # Update result with workflow execution stats and results
                 result["steps_executed"] = workflow_executor.total_steps_executed
                 result["execution_mode"] = "workflow"
+                result["step_results"] = workflow_executor.step_results
+                result["screenshots"] = workflow_executor.screenshots
                 if self.escalation_engine is not None:
                     try:
                         result["escalation_stats"] = self.escalation_engine.get_stats()

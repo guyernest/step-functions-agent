@@ -58,6 +58,8 @@ class WorkflowExecutor:
         self.step_visits = {}  # step_name -> visit_count
         self.step_history = []  # [step_name, ...]
         self.total_steps_executed = 0
+        self.step_results = []  # Collect results from action steps
+        self.screenshots = []  # Collect screenshot URIs
 
         # Current execution state
         self.current_step_name = None
@@ -229,7 +231,13 @@ class WorkflowExecutor:
             self._execute_fail(step)
         # Action steps - delegate to executor
         elif step.get("action"):
-            await self.executor.execute_step(step)
+            step_result = await self.executor.execute_step(step)
+            # Collect results for final output
+            if step_result:
+                self.step_results.append(step_result)
+                # Collect screenshots if present
+                if "screenshot_s3_uri" in step_result:
+                    self.screenshots.append(step_result["screenshot_s3_uri"])
         else:
             raise ValueError(f"Unknown step type: {step_type}")
 
