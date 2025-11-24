@@ -410,22 +410,46 @@
         {
           "type": "try",
           "name": "SelectAddressFromList",
-          "description": "Try to select address (will fail gracefully if no list)",
+          "description": "Progressive address matching: regex → fuzzy → vision with scroll",
           "strategies": [
             {
-              "name": "Strategy 1: Exact match",
+              "name": "Strategy 1: Regex - building + first word only",
               "steps": [
                 {
                   "action": "click",
                   "locator": {
-                    "strategy": "text",
-                    "value": "{{full_address}}"
+                    "strategy": "selector",
+                    "value": "text=/^\\s*{{building_number}}\\s+\\w+/i"
                   }
                 }
               ]
             },
             {
-              "name": "Strategy 2: Partial match",
+              "name": "Strategy 2: Regex - building + street flexible",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {
+                    "strategy": "selector",
+                    "value": "text=/{{building_number}}[\\s,]+{{street}}/i"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Strategy 3: Regex - street anywhere after building",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {
+                    "strategy": "selector",
+                    "value": "text=/{{building_number}}.*{{street}}/i"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Strategy 4: Exact text match",
               "steps": [
                 {
                   "action": "click",
@@ -437,24 +461,12 @@
               ]
             },
             {
-              "name": "Strategy 3: Street name only",
-              "steps": [
-                {
-                  "action": "click",
-                  "locator": {
-                    "strategy": "text",
-                    "value": "{{street}}"
-                  }
-                }
-              ]
-            },
-            {
-              "name": "Strategy 4: Vision LLM",
+              "name": "Strategy 5: Vision LLM with scroll capability",
               "escalate": {
                 "type": "vision_llm",
-                "prompt": "Find and click the address '{{full_address}}' in the address list. Look for the closest match.",
-                "timeout": 20000,
-                "max_actions": 3
+                "prompt": "Find and click the address matching '{{full_address}}' in the address list. CRITICAL INSTRUCTIONS:\n\n1. FIRST SEARCH: Look carefully at ALL visible addresses for one containing:\n   - Building number: '{{building_number}}'\n   - Street name: '{{street}}'\n   - Format may vary (case, commas, word order)\n\n2. IF FOUND: Click it immediately\n\n3. IF NOT VISIBLE:\n   a) The list is likely SCROLLABLE - look for:\n      - A dropdown/select element that can be scrolled\n      - Scroll arrows (up/down)\n      - A scrollbar on the address list\n   b) SCROLL DOWN within the list (not the whole page)\n   c) After scrolling, SEARCH AGAIN for the address\n   d) Repeat: scroll → search → scroll → search (up to 3 scroll attempts)\n\n4. MATCHING RULES:\n   - Accept variations: '{{building_number}} {{street}}', '{{building_number}}, {{street}}', '{{building_number}} {{street}}, City'\n   - Case-insensitive matching\n   - Must have BOTH building number AND street name\n\n5. MAX ACTIONS: 8 actions total (including scrolls and clicks)\n\n6. IF STILL NOT FOUND: Click the closest match by building number, or report failure.",
+                "timeout": 30000,
+                "max_actions": 8
               }
             }
           ]

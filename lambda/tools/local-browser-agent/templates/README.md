@@ -19,6 +19,8 @@ This directory contains parameterized workflow templates that can be reused with
 - ✅ **Smart Login Detection**: Automatically detects if login is required and skips login steps if already authenticated
 - ✅ **Password Manager Support**: Multiple strategies for password autofill (Tab+Enter, Vision LLM, manual fallback)
 - ✅ **Progressive Escalation**: Tries fast DOM methods first, escalates to Vision LLM if needed
+- ✅ **Robust Address Matching**: Case-insensitive regex matching handles format variations
+- ✅ **Scroll-Aware Vision**: Vision LLM can scroll through long address lists to find matches
 - ✅ **Robust Error Handling**: Verifies each step with fallback strategies
 
 **Flow:**
@@ -128,15 +130,45 @@ The templates use password manager integration to maintain security:
 - Multiple fallback strategies ensure reliability
 - Manual intervention option as final fallback
 
+## Address Selection Strategies
+
+The workflow uses 5 progressive strategies to handle address format variations:
+
+### Strategy 1: Minimal Regex Pattern (Fastest)
+- Pattern: `/^\s*{building_number}\s+\w+/i`
+- Matches: "1 Church", "40 Withers" (case-insensitive)
+- Handles: Leading spaces, any first word of street
+
+### Strategy 2: Flexible Building + Street
+- Pattern: `/{building_number}[\s,]+{street}/i`
+- Matches: "1 Church View", "1, Church View"
+- Handles: Space or comma separators
+
+### Strategy 3: Fuzzy Match
+- Pattern: `/{building_number}.*{street}/i`
+- Matches: "1 anything Church View"
+- Handles: Extra words between building and street
+
+### Strategy 4: Exact Text Match
+- Fallback for perfect HTML matches
+- "40 Withers Place"
+
+### Strategy 5: Vision LLM with Scroll (Last Resort)
+- Searches visible addresses
+- **Scrolls down if not found** (up to 3 scroll attempts)
+- Handles: Long address lists, any format variation
+- Max 8 actions (scrolls + clicks)
+
 ## Performance Optimization
 
 The templates include several optimizations:
 
 1. **Fast Path**: Skips login if already authenticated (~20-30 second savings)
-2. **DOM-First**: Tries fast DOM detection before expensive Vision LLM calls
-3. **Named Phases**: Clear workflow structure for easy debugging
-4. **3-Second Timeouts**: Quick decisions to avoid unnecessary waits
-5. **Progressive Escalation**: Cheapest/fastest methods first, escalate only when needed
+2. **DOM-First**: Tries fast regex matching before expensive Vision LLM calls
+3. **Progressive Matching**: Starts with minimal pattern, escalates as needed
+4. **Named Phases**: Clear workflow structure for easy debugging
+5. **3-Second Timeouts**: Quick decisions to avoid unnecessary waits
+6. **Scroll-Aware Vision**: Vision LLM only used when DOM methods fail, with scroll capability
 
 ## Troubleshooting
 
