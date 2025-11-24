@@ -401,150 +401,105 @@
     {
       "type": "sequence",
       "name": "SelectAddress",
-      "description": "Select address from list",
+      "description": "Select address from list if present",
       "steps": [
         {
+          "action": "screenshot",
+          "save_to": "04b_before_address_selection.png"
+        },
+        {
           "type": "try",
-          "name": "DetectPageType",
-          "description": "Check if address list or direct results",
+          "name": "SelectAddressFromList",
+          "description": "Try to select address (will fail gracefully if no list)",
           "strategies": [
             {
-              "name": "Strategy 1: DOM detection",
+              "name": "Strategy 1: Exact match",
               "steps": [
                 {
-                  "action": "execute_js",
-                  "script": "(function() { const selectElement = document.querySelector('select.custom-select'); const addressOptions = selectElement ? Array.from(selectElement.options).filter(opt => opt.value && opt.value !== 'Please select') : []; const hasAddressList = addressOptions.length > 1; const hasPackages = document.querySelector('[class*=\"package\"], [class*=\"product\"], table[class*=\"result\"]') !== null; const result = { shows_address_list: hasAddressList, shows_packages: hasPackages, address_count: addressOptions.length, detection_method: 'dom' }; window.__last_extract_result = result; return result; })()"
+                  "action": "click",
+                  "locator": {
+                    "strategy": "text",
+                    "value": "40 Withers Place, Fordham, Ely, Cambridgeshire, CB7 5LG"
+                  }
                 }
-              ],
-              "verify": {
-                "type": "js_eval",
-                "expression": "window.__last_extract_result?.shows_address_list === true"
-              }
+              ]
             },
             {
-              "name": "Strategy 2: Vision LLM",
-              "escalate": {
-                "type": "extract",
-                "method": "vision",
-                "prompt": "Check if this page shows: 1) A list of addresses to select from, or 2) Broadband packages directly. Return shows_address_list=true if there's an address selection dropdown or list.",
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "shows_address_list": {
-                      "type": "boolean"
-                    },
-                    "shows_packages": {
-                      "type": "boolean"
-                    },
-                    "address_count": {
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "shows_address_list",
-                    "shows_packages"
-                  ]
+              "name": "Strategy 2: Partial match",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {
+                    "strategy": "text",
+                    "value": "40 Withers Place"
+                  }
                 }
+              ]
+            },
+            {
+              "name": "Strategy 3: Street name only",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {
+                    "strategy": "text",
+                    "value": "Withers Place"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Strategy 4: Vision LLM",
+              "escalate": {
+                "type": "vision_llm",
+                "prompt": "Find and click the address '40 Withers Place, Fordham, Ely, Cambridgeshire, CB7 5LG' in the address list. Look for the closest match.",
+                "timeout": 20000,
+                "max_actions": 3
               }
             }
           ]
         },
         {
-          "type": "if",
-          "name": "CheckIfAddressSelectionNeeded",
-          "condition": {
-            "type": "js_eval",
-            "expression": "window.__last_extract_result?.shows_address_list !== false"
-          },
-          "then": {
-            "type": "sequence",
-            "steps": [
-              {
-                "type": "try",
-                "name": "SelectAddress",
-                "strategies": [
-                  {
-                    "name": "Strategy 1: Exact match",
-                    "steps": [
-                      {
-                        "action": "click",
-                        "locator": {
-                          "strategy": "text",
-                          "value": "40 Withers Place, Fordham, Ely, Cambridgeshire, CB7 5LG"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "name": "Strategy 2: Partial match",
-                    "steps": [
-                      {
-                        "action": "click",
-                        "locator": {
-                          "strategy": "text",
-                          "value": "40 Withers Place"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "name": "Strategy 3: Vision LLM",
-                    "escalate": {
-                      "type": "vision_llm",
-                      "prompt": "Find and click the address '40 Withers Place, Fordham, Ely, Cambridgeshire, CB7 5LG' in the address list. Look for the closest match.",
-                      "timeout": 20000,
-                      "max_actions": 3
-                    }
+          "type": "try",
+          "name": "ClickContinueAfterAddress",
+          "strategies": [
+            {
+              "name": "Strategy 1: Submit button",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {
+                    "strategy": "selector",
+                    "value": "button[type='submit']"
                   }
-                ]
-              },
-              {
-                "type": "try",
-                "name": "ClickContinueAfterAddress",
-                "strategies": [
-                  {
-                    "name": "Strategy 1: Submit button",
-                    "steps": [
-                      {
-                        "action": "click",
-                        "locator": {
-                          "strategy": "selector",
-                          "value": "button[type='submit']"
-                        }
-                      }
-                    ]
-                  },
-                  {
-                    "name": "Strategy 2: Continue button",
-                    "steps": [
-                      {
-                        "action": "click",
-                        "locator": {
-                          "strategy": "text",
-                          "value": "Continue"
-                        }
-                      }
-                    ]
+                }
+              ]
+            },
+            {
+              "name": "Strategy 2: Continue button",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {
+                    "strategy": "text",
+                    "value": "Continue"
                   }
-                ]
-              },
-              {
-                "action": "wait_for_load_state",
-                "state": "networkidle"
-              },
-              {
-                "action": "wait",
-                "duration": 3000
-              },
-              {
-                "action": "wait_for_load_state",
-                "state": "networkidle"
-              }
-            ]
-          },
-          "else": {
-            "continue": true
-          }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "action": "wait_for_load_state",
+          "state": "networkidle"
+        },
+        {
+          "action": "wait",
+          "duration": 3000
+        },
+        {
+          "action": "wait_for_load_state",
+          "state": "networkidle"
         },
         {
           "action": "screenshot",
