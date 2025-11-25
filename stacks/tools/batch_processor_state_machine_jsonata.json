@@ -222,6 +222,14 @@
         "Subject": "Batch Processing Completed",
         "Message": "{% 'Batch processing completed successfully.\\n\\n' & 'Execution ID: ' & $states.context.Execution.Name & '\\n' & 'Target Agent: ' & $validation.Payload.target.name & '\\n' & 'Rows Processed: ' & $string($final_output.Payload.total_rows) & '\\n' & 'Rows Successful: ' & $string($final_output.Payload.successful_rows) & '\\n' & 'Rows Failed: ' & $string($final_output.Payload.failed_rows) & '\\n' & 'Success Rate: ' & $final_output.Payload.success_rate & '\\n' & 'Result S3 URI: ' & $final_output.Payload.output_location & '\\n\\n' & 'Started: ' & $states.context.Execution.StartTime & '\\n' & 'Completed: ' & $final_output.Payload.timestamp %}",
         "MessageAttributes": {
+          "file_processing_id": {
+            "DataType": "String",
+            "StringValue": "{% $fileProcessingId %}"
+          },
+          "result_s3_uri": {
+            "DataType": "String",
+            "StringValue": "{% $final_output.Payload.output_location %}"
+          },
           "execution_id": {
             "DataType": "String",
             "StringValue": "{% $states.context.Execution.Name %}"
@@ -229,14 +237,6 @@
           "status": {
             "DataType": "String",
             "StringValue": "SUCCESS"
-          },
-          "fileProcessingId": {
-            "DataType": "String",
-            "StringValue": "{% $fileProcessingId %}"
-          },
-          "resultFileKey": {
-            "DataType": "String",
-            "StringValue": "{% $final_output.Payload.output_key %}"
           },
           "target_agent": {
             "DataType": "String",
