@@ -5,6 +5,7 @@
   "llm_provider": "openai",
   "llm_model": "gpt-4o-mini",
   "abort_on_error": false,
+  "default_delay": 300,
   "session": {
     "profile_name": "Bt_broadband",
     "clone_for_parallel": false
@@ -315,41 +316,43 @@
         {
           "type": "try",
           "name": "FillPostcode",
+          "description": "Fill postcode field - uses smart form_field strategy for Angular Material forms",
           "strategies": [
             {
-              "name": "Strategy 1: By name PostCode",
+              "name": "Strategy 1: Smart form_field (handles Angular Material, MUI, etc.)",
               "steps": [
                 {
                   "action": "fill",
                   "locator": {
-                    "strategy": "selector",
-                    "value": "input[name='PostCode']"
+                    "strategy": "form_field",
+                    "label": "PostCode",
+                    "field_type": "input"
                   },
                   "value": "{{postcode}}"
                 }
               ]
             },
             {
-              "name": "Strategy 2: By name postcode",
+              "name": "Strategy 2: By ID #postCode",
               "steps": [
                 {
                   "action": "fill",
                   "locator": {
                     "strategy": "selector",
-                    "value": "input[name='postcode']"
+                    "value": "#postCode"
                   },
                   "value": "{{postcode}}"
                 }
               ]
             },
             {
-              "name": "Strategy 3: By ID containing postcode",
+              "name": "Strategy 3: By name attribute",
               "steps": [
                 {
                   "action": "fill",
                   "locator": {
                     "strategy": "selector",
-                    "value": "input[id*='postcode' i]"
+                    "value": "input[name='postCode']"
                   },
                   "value": "{{postcode}}"
                 }
@@ -360,27 +363,44 @@
         {
           "type": "try",
           "name": "ClickSearch",
+          "description": "Click search button - includes retry for temporary 'service unavailable' errors",
           "strategies": [
             {
-              "name": "Strategy 1: Submit button",
+              "name": "Strategy 1: Submit button with retry",
               "steps": [
                 {
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
                     "value": "button[type='submit']"
+                  },
+                  "delay": 500,
+                  "retry": {
+                    "attempts": 3,
+                    "delay_ms": 1000,
+                    "retry_if": {
+                      "text_visible": "service unavailable"
+                    }
                   }
                 }
               ]
             },
             {
-              "name": "Strategy 2: Text search",
+              "name": "Strategy 2: Text search with retry",
               "steps": [
                 {
                   "action": "click",
                   "locator": {
                     "strategy": "text",
                     "value": "Search"
+                  },
+                  "delay": 500,
+                  "retry": {
+                    "attempts": 3,
+                    "delay_ms": 1000,
+                    "retry_if": {
+                      "text_visible": "service unavailable"
+                    }
                   }
                 }
               ]

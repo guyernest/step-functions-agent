@@ -79,7 +79,8 @@ import sys
 import json
 import base64
 import traceback
-from typing import Dict, Any, Optional, List, Literal
+import random
+from typing import Dict, Any, Optional, List, Literal, Union
 from pathlib import Path
 import asyncio
 
@@ -153,16 +154,213 @@ class OpenAIPlaywrightExecutor:
         # Internal counter for externally-driven workflow steps
         self._workflow_step_counter = 0
 
+        # Default delay between actions (can be overridden per-step or at script level)
+        self.default_delay = 0
+
+    def _compute_delay(self, delay_config: Union[int, Dict[str, int], None], script_default: int = 0) -> int:
+        """
+        Compute delay in milliseconds from various config formats.
+
+        Supports:
+        - None: Use script default
+        - int: Fixed delay in ms
+        - {"min": 100, "max": 500}: Random delay in range
+
+        Args:
+            delay_config: Delay configuration from step
+            script_default: Default delay from script level
+
+        Returns:
+            Delay in milliseconds
+        """
+        if delay_config is None:
+            return script_default
+
+        if isinstance(delay_config, int):
+            return delay_config
+
+        if isinstance(delay_config, dict):
+            min_delay = delay_config.get("min", 0)
+            max_delay = delay_config.get("max", min_delay)
+            return random.randint(min_delay, max_delay)
+
+        return script_default
+
+    async def _check_retry_condition(self, retry_if: Dict[str, Any]) -> bool:
+        """
+        Check if retry condition is met.
+
+        Supports:
+        - element_visible: "selector" - retry if element is visible
+        - element_not_visible: "selector" - retry if element is NOT visible
+        - text_visible: "text" - retry if text is visible on page
+        - text_not_visible: "text" - retry if text is NOT visible
+
+        Returns:
+            True if should retry, False otherwise
+        """
+        if not retry_if:
+            return True  # No condition = always retry
+
+        try:
+            if "element_visible" in retry_if:
+                selector = retry_if["element_visible"]
+                locator = self.page.locator(selector)
+                is_visible = await locator.is_visible()
+                print(f"  ↳ Retry condition: element_visible('{selector}') = {is_visible}", file=sys.stderr)
+                return is_visible
+
+            if "element_not_visible" in retry_if:
+                selector = retry_if["element_not_visible"]
+                locator = self.page.locator(selector)
+                is_visible = await locator.is_visible()
+                print(f"  ↳ Retry condition: element_not_visible('{selector}') = {not is_visible}", file=sys.stderr)
+                return not is_visible
+
+            if "text_visible" in retry_if:
+                text = retry_if["text_visible"]
+                locator = self.page.get_by_text(text, exact=False)
+                is_visible = await locator.first.is_visible()
+                print(f"  ↳ Retry condition: text_visible('{text}') = {is_visible}", file=sys.stderr)
+                return is_visible
+
+            if "text_not_visible" in retry_if:
+                text = retry_if["text_not_visible"]
+                locator = self.page.get_by_text(text, exact=False)
+                try:
+                    is_visible = await locator.first.is_visible()
+                except:
+                    is_visible = False
+                print(f"  ↳ Retry condition: text_not_visible('{text}') = {not is_visible}", file=sys.stderr)
+                return not is_visible
+
+        except Exception as e:
+            print(f"  ↳ Retry condition check failed: {e}", file=sys.stderr)
+            return True  # On error, allow retry
+
+        return True  # Default: retry
+
+    async def _find_form_field(self, label: str, field_type: str = "input") -> Any:
+        """
+        Smart form field finder that handles modern CSS frameworks.
+
+        Tries multiple strategies in order of specificity:
+        1. ID match (normalized label)
+        2. Name attribute match
+        3. Placeholder text match
+        4. Angular Material pattern
+        5. MUI (Material UI) pattern
+        6. Generic label association
+        7. Aria-label match
+        8. Has-text proximity
+
+        Args:
+            label: The label text to search for (e.g., "PostCode", "Email Address")
+            field_type: Type of field to find ("input", "textarea", "select")
+
+        Returns:
+            Playwright locator for the found field
+
+        Raises:
+            Exception if no field found after all strategies
+        """
+        # Normalize label for ID/name matching
+        normalized = label.lower().replace(' ', '').replace('*', '').replace(':', '').strip()
+        # Also try with underscores and hyphens
+        normalized_underscore = label.lower().replace(' ', '_').replace('*', '').replace(':', '').strip()
+        normalized_hyphen = label.lower().replace(' ', '-').replace('*', '').replace(':', '').strip()
+
+        # Strategy chain - ordered by specificity and reliability
+        strategies = [
+            # 1. Direct ID match (most reliable if present)
+            (f"#{normalized}", f"ID #{normalized}"),
+            (f"#{normalized_underscore}", f"ID #{normalized_underscore}"),
+            (f"#{normalized_hyphen}", f"ID #{normalized_hyphen}"),
+
+            # 2. Name attribute match
+            (f"{field_type}[name='{normalized}']", f"name='{normalized}'"),
+            (f"{field_type}[name='{normalized_underscore}']", f"name='{normalized_underscore}'"),
+            (f"{field_type}[name*='{normalized}' i]", f"name contains '{normalized}'"),
+
+            # 3. Placeholder text match
+            (f"{field_type}[placeholder*='{label}' i]", f"placeholder contains '{label}'"),
+
+            # 4. Angular Material patterns
+            (f".mat-form-field:has-text('{label}') {field_type}", f"Angular Material .mat-form-field"),
+            (f"mat-form-field:has-text('{label}') {field_type}", f"Angular Material mat-form-field"),
+            (f".mat-form-field-infix:has-text('{label}') {field_type}", f"Angular Material .mat-form-field-infix"),
+
+            # 5. MUI (Material UI) patterns
+            (f".MuiFormControl-root:has-text('{label}') {field_type}", f"MUI .MuiFormControl-root"),
+            (f".MuiTextField-root:has-text('{label}') {field_type}", f"MUI .MuiTextField-root"),
+
+            # 6. Generic label association patterns
+            (f"label:has-text('{label}') + {field_type}", f"label sibling (+)"),
+            (f"label:has-text('{label}') ~ {field_type}", f"label sibling (~)"),
+            (f"label[for]:has-text('{label}')", f"label with for attribute"),  # Will resolve via for->id
+
+            # 7. Aria-label match
+            (f"{field_type}[aria-label*='{label}' i]", f"aria-label contains '{label}'"),
+
+            # 8. Common form wrapper patterns
+            (f".form-field:has-text('{label}') {field_type}", f".form-field wrapper"),
+            (f".form-group:has-text('{label}') {field_type}", f".form-group wrapper"),
+            (f".field:has-text('{label}') {field_type}", f".field wrapper"),
+            (f"div:has-text('{label}') > {field_type}", f"direct child of div"),
+
+            # 9. Broader proximity search (last resort before vision)
+            (f":has-text('{label}') >> {field_type}:visible", f"proximity search"),
+        ]
+
+        for selector, strategy_name in strategies:
+            try:
+                locator = self.page.locator(selector).first
+                # Quick visibility check with short timeout
+                is_visible = await locator.is_visible()
+                if is_visible:
+                    print(f"  ✓ Found form field '{label}' using: {strategy_name}", file=sys.stderr)
+                    return locator
+            except Exception:
+                continue
+
+        # Special handling for label[for] - resolve the for attribute to find input by ID
+        try:
+            for_value = await self.page.locator(f"label:has-text('{label}')").first.get_attribute("for")
+            if for_value:
+                locator = self.page.locator(f"#{for_value}")
+                if await locator.is_visible():
+                    print(f"  ✓ Found form field '{label}' using: label[for='{for_value}'] -> #{for_value}", file=sys.stderr)
+                    return locator
+        except Exception:
+            pass
+
+        raise Exception(f"Could not find form field with label '{label}' using any strategy")
+
     async def execute_step(self, step: Dict[str, Any]) -> Dict[str, Any]:
         """Public step executor used by WorkflowExecutor.
 
         Maintains an internal step counter for logging and result consistency.
+
+        Supports:
+        - delay: Wait before executing (int ms or {"min": x, "max": y})
+        - retry: Retry configuration with optional conditions
+          - attempts: Number of retry attempts
+          - delay_ms: Delay between retries
+          - retry_if: Conditional retry (element_visible, text_visible, etc.)
         """
         self._workflow_step_counter += 1
-        # Support per-step retry here too, so workflow mode benefits
+
+        # Apply pre-action delay (human-like timing)
+        step_delay = self._compute_delay(step.get("delay"), self.default_delay)
+        if step_delay > 0:
+            print(f"  ⏳ Waiting {step_delay}ms before action...", file=sys.stderr)
+            await asyncio.sleep(step_delay / 1000.0)
+
+        # Support per-step retry with optional conditions
         retry_cfg = step.get("retry", {}) or {}
         attempts = int(retry_cfg.get("attempts", 1))
-        delay_ms = int(retry_cfg.get("delay_ms", 500))
+        retry_delay_ms = int(retry_cfg.get("delay_ms", 500))
+        retry_if = retry_cfg.get("retry_if", {})
 
         last_exc = None
         for attempt in range(1, attempts + 1):
@@ -175,9 +373,15 @@ class OpenAIPlaywrightExecutor:
             if res.get("success"):
                 return res
 
+            # Check if we should retry based on conditions
             if attempt < attempts:
-                print(f"  ↻ Step failed (attempt {attempt}/{attempts}). Retrying after {delay_ms}ms...", file=sys.stderr)
-                await asyncio.sleep(delay_ms / 1000.0)
+                should_retry = await self._check_retry_condition(retry_if)
+                if should_retry:
+                    print(f"  ↻ Step failed (attempt {attempt}/{attempts}). Retrying after {retry_delay_ms}ms...", file=sys.stderr)
+                    await asyncio.sleep(retry_delay_ms / 1000.0)
+                else:
+                    print(f"  ✗ Retry condition not met, stopping retries", file=sys.stderr)
+                    break
 
         if last_exc:
             res["traceback"] = traceback.format_exc()
@@ -234,6 +438,10 @@ class OpenAIPlaywrightExecutor:
             self.llm_provider = script["llm_provider"]
         if "llm_model" in script:
             self.llm_model = script["llm_model"]
+
+        # Set default delay between actions (human-like timing)
+        # Can be overridden per-step with "delay" field
+        self.default_delay = script.get("default_delay", 0)
 
         print(f"\n{'='*60}", file=sys.stderr)
         print(f"OpenAI Playwright Executor", file=sys.stderr)
@@ -316,10 +524,17 @@ class OpenAIPlaywrightExecutor:
                 print(f"\n[Step {step_num}/{len(steps)}] {step_type}: {step_desc}", file=sys.stderr)
 
                 try:
-                    # Optional per-step retry policy
+                    # Apply pre-action delay (human-like timing)
+                    step_delay = self._compute_delay(step.get("delay"), self.default_delay)
+                    if step_delay > 0:
+                        print(f"  ⏳ Waiting {step_delay}ms before action...", file=sys.stderr)
+                        await asyncio.sleep(step_delay / 1000.0)
+
+                    # Optional per-step retry policy with conditions
                     retry_cfg = step.get("retry", {}) or {}
                     attempts = int(retry_cfg.get("attempts", 1))
-                    delay_ms = int(retry_cfg.get("delay_ms", 500))
+                    retry_delay_ms = int(retry_cfg.get("delay_ms", 500))
+                    retry_if = retry_cfg.get("retry_if", {})
 
                     last_exc = None
                     for attempt in range(1, attempts + 1):
@@ -332,10 +547,15 @@ class OpenAIPlaywrightExecutor:
                         if step_result.get("success"):
                             break
 
+                        # Check if we should retry based on conditions
                         if attempt < attempts:
-                            print(f"  ↻ Step failed (attempt {attempt}/{attempts}). Retrying after {delay_ms}ms...", file=sys.stderr)
-                            await asyncio.sleep(delay_ms / 1000.0)
-                            continue
+                            should_retry = await self._check_retry_condition(retry_if)
+                            if should_retry:
+                                print(f"  ↻ Step failed (attempt {attempt}/{attempts}). Retrying after {retry_delay_ms}ms...", file=sys.stderr)
+                                await asyncio.sleep(retry_delay_ms / 1000.0)
+                            else:
+                                print(f"  ✗ Retry condition not met, stopping retries", file=sys.stderr)
+                                break
 
                     if not step_result.get("success") and last_exc:
                         step_result["traceback"] = traceback.format_exc()
@@ -841,7 +1061,7 @@ class OpenAIPlaywrightExecutor:
         return False
 
     async def _step_fill(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
-        """Fill input field (with optional escalation)"""
+        """Fill input field (with optional escalation or smart form_field strategy)"""
         value = self._substitute_variables(step.get("value", ""))
 
         # Check if escalation chain is provided
@@ -883,17 +1103,42 @@ class OpenAIPlaywrightExecutor:
                     "error": str(e),
                 }
         else:
-            # Traditional direct locator approach
             locator_config = step.get("locator", {})
-            locator = self._get_locator(locator_config)
-            await locator.fill(value, timeout=10000)
+            strategy = locator_config.get("strategy", "selector")
 
-            return {
-                "success": True,
-                "action": "fill",
-                "locator": locator_config,
-                "value": value,
-            }
+            # Smart form_field strategy - tries multiple patterns for modern CSS frameworks
+            if strategy == "form_field":
+                label = locator_config.get("label", "")
+                field_type = locator_config.get("field_type", "input")
+
+                try:
+                    locator = await self._find_form_field(label, field_type)
+                    await locator.fill(value, timeout=10000)
+
+                    return {
+                        "success": True,
+                        "action": "fill",
+                        "locator": locator_config,
+                        "value": value,
+                        "method": "form_field",
+                    }
+                except Exception as e:
+                    return {
+                        "success": False,
+                        "action": "fill",
+                        "error": f"form_field strategy failed for '{label}': {e}",
+                    }
+            else:
+                # Traditional direct locator approach
+                locator = self._get_locator(locator_config)
+                await locator.fill(value, timeout=10000)
+
+                return {
+                    "success": True,
+                    "action": "fill",
+                    "locator": locator_config,
+                    "value": value,
+                }
 
     async def _step_wait(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
         """Wait for element or timeout"""

@@ -159,6 +159,114 @@ The workflow uses 5 progressive strategies to handle address format variations:
 - Handles: Long address lists, any format variation
 - Max 8 actions (scrolls + clicks)
 
+## Advanced Features
+
+### Human-Like Timing (Delays)
+
+Prevent bot detection by adding delays between actions. Delays mimic human reaction time.
+
+**Script-level default delay:**
+```json
+{
+  "name": "My Workflow",
+  "default_delay": 300,
+  "steps": [...]
+}
+```
+
+**Per-step delay (overrides default):**
+```json
+{
+  "action": "click",
+  "delay": 500,
+  "locator": {"strategy": "selector", "value": "button"}
+}
+```
+
+**Random delay range (most human-like):**
+```json
+{
+  "action": "click",
+  "delay": {"min": 200, "max": 500},
+  "locator": {"strategy": "selector", "value": "button"}
+}
+```
+
+### Conditional Retry
+
+Retry steps only when specific conditions are met. This is useful for temporary errors like "service unavailable" that may resolve on retry, while avoiding retries for permanent errors like "invalid credentials".
+
+**Retry on visible error message:**
+```json
+{
+  "action": "click",
+  "locator": {"strategy": "selector", "value": "button[type='submit']"},
+  "retry": {
+    "attempts": 3,
+    "delay_ms": 1000,
+    "retry_if": {
+      "text_visible": "service unavailable"
+    }
+  }
+}
+```
+
+**Available retry conditions:**
+- `text_visible`: Retry if text appears on page
+- `text_not_visible`: Retry if text does NOT appear on page
+- `element_visible`: Retry if element is visible
+- `element_not_visible`: Retry if element is NOT visible
+
+**Example - Retry until success indicator appears:**
+```json
+{
+  "action": "click",
+  "locator": {"strategy": "text", "value": "Submit"},
+  "retry": {
+    "attempts": 5,
+    "delay_ms": 2000,
+    "retry_if": {
+      "element_not_visible": ".address-list"
+    }
+  }
+}
+```
+
+### Smart Form Field Locator
+
+The `form_field` strategy intelligently finds form fields in modern CSS frameworks (Angular Material, MUI, Bootstrap, etc.) that use complex nested DOM structures.
+
+**Usage:**
+```json
+{
+  "action": "fill",
+  "locator": {
+    "strategy": "form_field",
+    "label": "PostCode",
+    "field_type": "input"
+  },
+  "value": "CB7 5LG"
+}
+```
+
+**How it works:**
+The `form_field` strategy tries multiple patterns in order:
+1. Direct ID match (`#postcode`)
+2. Name attribute (`input[name='postcode']`)
+3. Placeholder text (`input[placeholder*='PostCode']`)
+4. Angular Material (`.mat-form-field:has-text('PostCode') input`)
+5. MUI (`.MuiFormControl-root:has-text('PostCode') input`)
+6. Generic label association (`label:has-text('PostCode') + input`)
+7. Aria-label match (`input[aria-label*='PostCode']`)
+8. Proximity search (`:has-text('PostCode') >> input`)
+
+**Benefits:**
+- ✅ Works with Angular Material, MUI, Bootstrap, and custom forms
+- ✅ No need to inspect complex DOM structures
+- ✅ Automatically handles label-to-input association
+- ✅ Falls back gracefully through multiple strategies
+- ✅ Logs which strategy succeeded for debugging
+
 ## Performance Optimization
 
 The templates include several optimizations:
@@ -169,6 +277,8 @@ The templates include several optimizations:
 4. **Named Phases**: Clear workflow structure for easy debugging
 5. **3-Second Timeouts**: Quick decisions to avoid unnecessary waits
 6. **Scroll-Aware Vision**: Vision LLM only used when DOM methods fail, with scroll capability
+7. **Human-Like Timing**: Default delays prevent bot detection while maintaining speed
+8. **Smart Retries**: Conditional retry avoids wasteful retries on permanent errors
 
 ## Troubleshooting
 
