@@ -29,7 +29,8 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
             "agent_name": "agent-name",
             "input_mapping": {...},
             "output_mapping": {...},
-            "max_concurrency": 10  # optional
+            "max_concurrency": 10,  # optional
+            "fileProcessingId": "unique-id"  # optional - for DynamoDB tracking
         }
     }
     """
@@ -74,6 +75,10 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
                 "max_concurrency": tool_input.get('max_concurrency', 10)
             }
         }
+
+        # Add fileProcessingId if provided (used for DynamoDB tracking)
+        if 'fileProcessingId' in tool_input:
+            config['fileProcessingId'] = tool_input['fileProcessingId']
 
         # For broadband-checker-structured, provide the known fields if none specified
         if agent_name == "broadband-checker-structured" and not output_mapping.get('structured_output_fields'):

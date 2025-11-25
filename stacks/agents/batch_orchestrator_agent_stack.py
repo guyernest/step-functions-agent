@@ -511,6 +511,10 @@ Always confirm the processing requirements with the user before starting large b
                             "type": "integer",
                             "description": "Maximum concurrent executions (default: 10)",
                             "default": 10
+                        },
+                        "fileProcessingId": {
+                            "type": "string",
+                            "description": "Unique identifier for tracking this file processing job (used for DynamoDB updates)"
                         }
                     },
                     "required": ["csv_s3_uri", "agent_name", "input_mapping", "output_mapping"]
