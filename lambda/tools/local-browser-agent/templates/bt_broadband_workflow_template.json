@@ -6,6 +6,10 @@
   "llm_model": "gpt-4o-mini",
   "abort_on_error": false,
   "default_delay": 300,
+  "screenshot_config": {
+    "s3_prefix": "verification",
+    "upload_mode": "marked_only"
+  },
   "session": {
     "profile_name": "Bt_broadband",
     "clone_for_parallel": false
@@ -546,8 +550,15 @@
     {
       "type": "sequence",
       "name": "ExtractResults",
-      "description": "Extract broadband availability data",
+      "description": "Capture verification screenshot and extract broadband availability data",
       "steps": [
+        {
+          "action": "screenshot",
+          "save_to": "06_extraction_page.png",
+          "upload_to_s3": true,
+          "include_in_result": true,
+          "description": "Capture page for extraction verification"
+        },
         {
           "action": "extract",
           "method": "vision",

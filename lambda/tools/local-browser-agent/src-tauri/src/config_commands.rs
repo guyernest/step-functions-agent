@@ -240,6 +240,161 @@ pub async fn test_aws_connection(aws_profile: String, aws_region: Option<String>
     }
 }
 
+/// Test S3 upload capability
+/// Uploads a small test file to verify S3 bucket access and permissions
+#[tauri::command]
+pub async fn test_s3_upload(s3_bucket: String, aws_profile: String, aws_region: Option<String>) -> Result<S3TestResult, String> {
+    info!("Testing S3 upload to bucket: {} with profile: {}", s3_bucket, aws_profile);
+
+    if s3_bucket.is_empty() {
+        return Ok(S3TestResult {
+            success: false,
+            message: "S3 bucket name is empty".to_string(),
+            error: Some("Please configure an S3 bucket name first".to_string()),
+            test_file_key: None,
+            upload_duration_ms: None,
+        });
+    }
+
+    // Load AWS config
+    let mut config_builder = aws_config::from_env().profile_name(&aws_profile);
+
+    if let Some(ref region) = aws_region {
+        info!("Using region: {}", region);
+        config_builder = config_builder.region(aws_sdk_s3::config::Region::new(region.clone()));
+    }
+
+    let aws_config = config_builder.load().await;
+    let s3_client = aws_sdk_s3::Client::new(&aws_config);
+
+    // Create a small test file content
+    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+    let test_key = format!("_connection_tests/upload_test_{}.txt", timestamp);
+    let test_content = format!(
+        "Local Browser Agent S3 Upload Test\n\
+         Timestamp: {}\n\
+         Profile: {}\n\
+         Bucket: {}\n\
+         \n\
+         This file was created to verify S3 upload permissions.\n\
+         It can be safely deleted.",
+        timestamp, aws_profile, s3_bucket
+    );
+
+    info!("Uploading test file to s3://{}/{}", s3_bucket, test_key);
+
+    let start_time = std::time::Instant::now();
+
+    // Try to upload the test file
+    let upload_result = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        s3_client
+            .put_object()
+            .bucket(&s3_bucket)
+            .key(&test_key)
+            .body(aws_sdk_s3::primitives::ByteStream::from(test_content.into_bytes()))
+            .content_type("text/plain")
+            .send()
+    ).await;
+
+    let upload_duration_ms = start_time.elapsed().as_millis() as u64;
+
+    match upload_result {
+        Ok(Ok(_)) => {
+            info!("✓ S3 upload test successful in {}ms", upload_duration_ms);
+
+            // Optionally verify the file exists by doing a HEAD request
+            let verify_result = s3_client
+                .head_object()
+                .bucket(&s3_bucket)
+                .key(&test_key)
+                .send()
+                .await;
+
+            match verify_result {
+                Ok(head_response) => {
+                    let size = head_response.content_length().unwrap_or(0);
+                    info!("✓ Verified test file exists, size: {} bytes", size);
+
+                    Ok(S3TestResult {
+                        success: true,
+                        message: format!(
+                            "Successfully uploaded and verified test file!\n\
+                             Location: s3://{}/{}\n\
+                             Size: {} bytes\n\
+                             Upload time: {}ms",
+                            s3_bucket, test_key, size, upload_duration_ms
+                        ),
+                        error: None,
+                        test_file_key: Some(format!("s3://{}/{}", s3_bucket, test_key)),
+                        upload_duration_ms: Some(upload_duration_ms),
+                    })
+                }
+                Err(e) => {
+                    // Upload succeeded but verification failed
+                    info!("⚠ Upload succeeded but verification failed: {}", e);
+                    Ok(S3TestResult {
+                        success: true,
+                        message: format!(
+                            "Upload succeeded but verification failed.\n\
+                             The file may still exist at: s3://{}/{}",
+                            s3_bucket, test_key
+                        ),
+                        error: Some(format!("Verification error: {}", e)),
+                        test_file_key: Some(format!("s3://{}/{}", s3_bucket, test_key)),
+                        upload_duration_ms: Some(upload_duration_ms),
+                    })
+                }
+            }
+        }
+        Ok(Err(e)) => {
+            let error_msg = format!("{}", e);
+            let error_debug = format!("{:?}", e);
+            info!("✗ S3 upload failed: {}", error_msg);
+
+            // Provide helpful error messages based on common issues
+            let user_message = if error_msg.contains("NoSuchBucket") || error_msg.contains("bucket does not exist") {
+                format!("Bucket '{}' does not exist or is not accessible", s3_bucket)
+            } else if error_msg.contains("AccessDenied") {
+                format!(
+                    "Access denied to bucket '{}'. Check that:\n\
+                     1. The AWS profile '{}' has s3:PutObject permission\n\
+                     2. The bucket policy allows uploads from this account\n\
+                     3. The bucket name is correct",
+                    s3_bucket, aws_profile
+                )
+            } else if error_msg.contains("InvalidAccessKeyId") || error_msg.contains("SignatureDoesNotMatch") {
+                "AWS credentials are invalid or expired. Try refreshing your credentials.".to_string()
+            } else if error_msg.contains("PermanentRedirect") {
+                format!(
+                    "Bucket '{}' is in a different region. Try specifying the correct AWS region in configuration.",
+                    s3_bucket
+                )
+            } else {
+                format!("Failed to upload to S3: {}", error_msg)
+            };
+
+            Ok(S3TestResult {
+                success: false,
+                message: user_message,
+                error: Some(error_debug),
+                test_file_key: None,
+                upload_duration_ms: Some(upload_duration_ms),
+            })
+        }
+        Err(_) => {
+            info!("✗ S3 upload test timed out after 30 seconds");
+            Ok(S3TestResult {
+                success: false,
+                message: "Upload test timed out after 30 seconds".to_string(),
+                error: Some("Check your network connection and ensure the S3 bucket is accessible".to_string()),
+                test_file_key: None,
+                upload_duration_ms: None,
+            })
+        }
+    }
+}
+
 /// Check if Activity ARN is valid
 #[tauri::command]
 pub async fn validate_activity_arn(activity_arn: String, aws_profile: String) -> Result<ValidationResult, String> {
@@ -359,6 +514,15 @@ pub struct ValidationResult {
     pub valid: bool,
     pub message: String,
     pub details: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct S3TestResult {
+    pub success: bool,
+    pub message: String,
+    pub error: Option<String>,
+    pub test_file_key: Option<String>,
+    pub upload_duration_ms: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

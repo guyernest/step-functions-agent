@@ -32,6 +32,7 @@ tokio = { version = "1.35", features = ["full"] }
 # AWS SDK - use defaults like local-agent (includes proper TLS support)
 aws-config = "1.5"
 aws-sdk-sfn = "1.12"
+aws-sdk-s3 = "1.12"
 anyhow = "1.0"
 thiserror = "1.0"
 log = "0.4"

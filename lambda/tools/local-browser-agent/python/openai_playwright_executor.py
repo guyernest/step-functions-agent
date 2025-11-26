@@ -150,12 +150,18 @@ class OpenAIPlaywrightExecutor:
         # Execution state
         self.variables = {}  # For template variable substitution
         self.screenshots = []
+        self.verification_screenshots = []  # Screenshots marked for inclusion in result
         self.escalation_engine: Optional[ProgressiveEscalationEngine] = None
         # Internal counter for externally-driven workflow steps
         self._workflow_step_counter = 0
 
         # Default delay between actions (can be overridden per-step or at script level)
         self.default_delay = 0
+
+        # Screenshot upload configuration
+        self.s3_prefix = "verification"  # Default S3 prefix for screenshots
+        self.execution_id = None  # Will be set from variables or generated
+        self.local_screenshot_dir = None  # For local testing mode
 
     def _compute_delay(self, delay_config: Union[int, Dict[str, int], None], script_default: int = 0) -> int:
         """
@@ -336,6 +342,82 @@ class OpenAIPlaywrightExecutor:
 
         raise Exception(f"Could not find form field with label '{label}' using any strategy")
 
+    async def _upload_single_screenshot(self, filename: str, screenshot_bytes: bytes, step: Dict[str, Any] = None) -> str:
+        """
+        Upload a single screenshot to S3 and return the URI.
+
+        Args:
+            filename: Name of the screenshot file
+            screenshot_bytes: PNG image data
+            step: Optional step config for custom S3 prefix
+
+        Returns:
+            S3 URI of the uploaded screenshot
+        """
+        if not self.s3_bucket:
+            raise Exception("S3 bucket not configured for screenshot upload")
+
+        s3_client = self.boto_session.client('s3')
+
+        # Get S3 prefix from step config or use default
+        s3_prefix = self.s3_prefix
+        if step and step.get("s3_prefix"):
+            s3_prefix = step["s3_prefix"]
+
+        # Generate execution ID if not set
+        if not self.execution_id:
+            import time
+            self.execution_id = f"exec_{int(time.time())}"
+
+        # Build S3 key
+        s3_key = f"{s3_prefix}/{self.execution_id}/{filename}"
+
+        print(f"  📤 Uploading screenshot to s3://{self.s3_bucket}/{s3_key}", file=sys.stderr)
+
+        s3_client.put_object(
+            Bucket=self.s3_bucket,
+            Key=s3_key,
+            Body=screenshot_bytes,
+            ContentType='image/png',
+        )
+
+        s3_uri = f"s3://{self.s3_bucket}/{s3_key}"
+        print(f"  ✓ Screenshot uploaded: {s3_uri}", file=sys.stderr)
+
+        return s3_uri
+
+    async def _save_screenshot_locally(self, filename: str, screenshot_bytes: bytes) -> str:
+        """
+        Save a screenshot to the local filesystem (for testing without S3).
+
+        Args:
+            filename: Name of the screenshot file
+            screenshot_bytes: PNG image data
+
+        Returns:
+            Local file path of the saved screenshot
+        """
+        from pathlib import Path
+
+        # Use configured directory or default to ./screenshots
+        local_dir = Path(self.local_screenshot_dir) if self.local_screenshot_dir else Path("./screenshots")
+        local_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate execution ID subdirectory
+        if not self.execution_id:
+            import time
+            self.execution_id = f"exec_{int(time.time())}"
+
+        exec_dir = local_dir / self.execution_id
+        exec_dir.mkdir(parents=True, exist_ok=True)
+
+        local_path = exec_dir / filename
+        local_path.write_bytes(screenshot_bytes)
+
+        print(f"  💾 Screenshot saved locally: {local_path}", file=sys.stderr)
+
+        return str(local_path)
+
     async def execute_step(self, step: Dict[str, Any]) -> Dict[str, Any]:
         """Public step executor used by WorkflowExecutor.
 
@@ -443,6 +525,22 @@ class OpenAIPlaywrightExecutor:
         # Can be overridden per-step with "delay" field
         self.default_delay = script.get("default_delay", 0)
 
+        # Screenshot configuration
+        screenshot_config = script.get("screenshot_config", {})
+        self.s3_prefix = screenshot_config.get("s3_prefix", "verification")
+        self.local_screenshot_dir = screenshot_config.get("local_dir", None)
+
+        # Set execution ID from variables, script, or generate one
+        import time
+        self.execution_id = (
+            self.variables.get("execution_id") or
+            script.get("execution_id") or
+            f"exec_{name.replace(' ', '_').lower()}_{int(time.time())}"
+        )
+
+        # Reset verification screenshots for this execution
+        self.verification_screenshots = []
+
         print(f"\n{'='*60}", file=sys.stderr)
         print(f"OpenAI Playwright Executor", file=sys.stderr)
         print(f"{'='*60}", file=sys.stderr)
@@ -451,6 +549,9 @@ class OpenAIPlaywrightExecutor:
         print(f"LLM: {self.llm_provider} ({self.llm_model})", file=sys.stderr)
         print(f"Starting Page: {starting_page}", file=sys.stderr)
         print(f"Total Steps: {len(steps)}", file=sys.stderr)
+        print(f"Execution ID: {self.execution_id}", file=sys.stderr)
+        if self.s3_bucket:
+            print(f"Screenshots: s3://{self.s3_bucket}/{self.s3_prefix}/{self.execution_id}/", file=sys.stderr)
         print(f"{'='*60}\n", file=sys.stderr)
 
         result = {
@@ -635,9 +736,20 @@ class OpenAIPlaywrightExecutor:
                         result["error"] = error_msg
                         break
 
-                # Upload screenshots to S3 if configured
+                # Upload screenshots to S3 if configured (batch upload for non-immediate screenshots)
                 if self.s3_bucket and self.screenshots:
                     result["screenshots"] = await self._upload_screenshots(name)
+
+        # Include verification screenshots in result (for user verification)
+        if self.verification_screenshots:
+            result["verification_screenshots"] = self.verification_screenshots
+            print(f"\n📸 Verification screenshots: {len(self.verification_screenshots)}", file=sys.stderr)
+            for vs in self.verification_screenshots:
+                loc = vs.get("s3_uri") or vs.get("local_path", "unknown")
+                print(f"   • {vs['filename']}: {loc}", file=sys.stderr)
+
+        # Add execution metadata
+        result["execution_id"] = self.execution_id
 
         print(f"\n{'='*60}", file=sys.stderr)
         print(f"Execution {'✓ Complete' if result['success'] else '✗ Failed'}", file=sys.stderr)
@@ -1212,21 +1324,75 @@ class OpenAIPlaywrightExecutor:
             }
 
     async def _step_screenshot(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
-        """Take screenshot"""
-        screenshot_bytes = await self.page.screenshot(full_page=True)
+        """
+        Take screenshot with optional S3 upload.
+
+        Supports:
+        - save_to: Filename for the screenshot (default: step_{num}.png)
+        - upload_to_s3: Immediately upload to S3 (default: False)
+        - include_in_result: Include S3 URI in final result for verification (default: False)
+        - s3_prefix: Custom S3 prefix (default: uses self.s3_prefix)
+        - full_page: Take full page screenshot (default: True)
+        """
+        full_page = step.get("full_page", True)
+        screenshot_bytes = await self.page.screenshot(full_page=full_page)
 
         filename = step.get("save_to", f"step_{step_num}.png")
-        self.screenshots.append({
+        upload_to_s3 = step.get("upload_to_s3", False)
+        include_in_result = step.get("include_in_result", False)
+
+        # Store screenshot data in memory
+        screenshot_data = {
             "filename": filename,
             "data": screenshot_bytes,
             "step": step_num,
-        })
+            "upload_to_s3": upload_to_s3,
+            "include_in_result": include_in_result,
+        }
+        self.screenshots.append(screenshot_data)
 
-        return {
+        result = {
             "success": True,
             "action": "screenshot",
             "filename": filename,
         }
+
+        # Immediate upload if requested
+        if upload_to_s3:
+            if self.s3_bucket:
+                try:
+                    s3_uri = await self._upload_single_screenshot(filename, screenshot_bytes, step)
+                    result["screenshot_s3_uri"] = s3_uri
+
+                    # Track for inclusion in final result
+                    if include_in_result:
+                        self.verification_screenshots.append({
+                            "filename": filename,
+                            "s3_uri": s3_uri,
+                            "step": step_num,
+                            "step_name": step.get("description", f"Step {step_num}"),
+                        })
+                except Exception as e:
+                    print(f"  ⚠ Failed to upload screenshot: {e}", file=sys.stderr)
+                    result["upload_error"] = str(e)
+            else:
+                # Local fallback when S3 not configured
+                try:
+                    local_path = await self._save_screenshot_locally(filename, screenshot_bytes)
+                    result["local_path"] = local_path
+
+                    if include_in_result:
+                        self.verification_screenshots.append({
+                            "filename": filename,
+                            "local_path": local_path,
+                            "step": step_num,
+                            "step_name": step.get("description", f"Step {step_num}"),
+                        })
+                except Exception as e:
+                    print(f"  ⚠ Failed to save screenshot locally: {e}", file=sys.stderr)
+                    result["save_error"] = str(e)
+
+        return result
 
     async def _step_extract(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
         """Extract data using LLM vision and optionally execute action"""
@@ -1559,6 +1725,7 @@ async def main():
     parser.add_argument("--llm-model", default="gpt-4o-mini", help="LLM model name")
     parser.add_argument("--aws-profile", default="browser-agent", help="AWS profile")
     parser.add_argument("--s3-bucket", help="S3 bucket for screenshots")
+    parser.add_argument("--local-screenshots", help="Local directory for screenshots (for testing without S3)")
     parser.add_argument("--headless", action="store_true", help="Run in headless mode")
     parser.add_argument("--browser-channel", help="Browser channel (chrome, msedge, firefox)")
     parser.add_argument("--user-data-dir", help="User data directory for profile")
@@ -1579,6 +1746,10 @@ async def main():
         browser_channel=args.browser_channel,
         user_data_dir=Path(args.user_data_dir) if args.user_data_dir else None,
     )
+
+    # Set local screenshot directory for testing
+    if args.local_screenshots:
+        executor.local_screenshot_dir = args.local_screenshots
 
     # Execute script
     result = await executor.execute_script(script)

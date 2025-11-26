@@ -44,6 +44,14 @@ interface ValidationResult {
   details: string | null
 }
 
+interface S3TestResult {
+  success: boolean
+  message: string
+  error: string | null
+  test_file_key: string | null
+  upload_duration_ms: number | null
+}
+
 interface SetupResult {
   success: boolean
   message: string
@@ -89,6 +97,8 @@ function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
   const [settingUp, setSettingUp] = useState(false)
   const [setupResult, setSetupResult] = useState<SetupResult | null>(null)
+  const [testingS3, setTestingS3] = useState(false)
+  const [s3TestResult, setS3TestResult] = useState<S3TestResult | null>(null)
 
   useEffect(() => {
     loadInitialData()
@@ -279,6 +289,36 @@ function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
     }
   }
 
+  const handleTestS3Upload = async () => {
+    if (!config.s3_bucket) {
+      alert('Please enter an S3 bucket name first')
+      return
+    }
+
+    setTestingS3(true)
+    setS3TestResult(null)
+
+    try {
+      const result = await invoke<S3TestResult>('test_s3_upload', {
+        s3Bucket: config.s3_bucket,
+        awsProfile: config.aws_profile,
+        awsRegion: config.aws_region,
+      })
+
+      setS3TestResult(result)
+    } catch (error) {
+      setS3TestResult({
+        success: false,
+        message: `S3 test failed: ${error}`,
+        error: String(error),
+        test_file_key: null,
+        upload_duration_ms: null,
+      })
+    } finally {
+      setTestingS3(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="screen-container">
@@ -425,7 +465,7 @@ function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
               onChange={(e) => setConfig({ ...config, s3_bucket: e.target.value })}
               placeholder="browser-agent-recordings-prod-123456789"
             />
-            <span className="form-hint">From CDK deployment outputs</span>
+            <span className="form-hint">From CDK deployment outputs - used for screenshots and recordings</span>
           </div>
 
           <div className="form-actions">
@@ -436,6 +476,13 @@ function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
             >
               {validating ? 'Validating...' : 'Validate ARN'}
             </button>
+            <button
+              onClick={handleTestS3Upload}
+              disabled={testingS3 || !config.s3_bucket || !config.aws_profile}
+              className="btn-secondary"
+            >
+              {testingS3 ? 'Testing S3...' : 'Test S3 Upload'}
+            </button>
           </div>
 
           {validationResult && (
@@ -443,6 +490,20 @@ function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
               <strong>{validationResult.message}</strong>
               {validationResult.details && (
                 <div className="alert-details">{validationResult.details}</div>
+              )}
+            </div>
+          )}
+
+          {s3TestResult && (
+            <div className={`alert ${s3TestResult.success ? 'alert-success' : 'alert-error'}`}>
+              <strong>{s3TestResult.success ? '✓ S3 Upload Test Passed' : '✗ S3 Upload Test Failed'}</strong>
+              <div className="alert-details" style={{ whiteSpace: 'pre-line' }}>
+                {s3TestResult.message}
+              </div>
+              {s3TestResult.error && (
+                <div className="alert-details" style={{ marginTop: '8px', fontSize: '12px', opacity: 0.8 }}>
+                  {s3TestResult.error}
+                </div>
               )}
             </div>
           )}

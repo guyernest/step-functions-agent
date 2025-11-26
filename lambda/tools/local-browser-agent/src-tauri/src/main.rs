@@ -102,6 +102,7 @@ async fn main() -> Result<()> {
             config_commands::load_config_from_file,
             config_commands::save_config_to_file,
             config_commands::test_aws_connection,
+            config_commands::test_s3_upload,
             config_commands::validate_activity_arn,
             config_commands::list_chrome_profiles,
             config_commands::check_python_environment,
