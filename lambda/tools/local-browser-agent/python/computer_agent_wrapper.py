@@ -316,17 +316,35 @@ def execute_script(command: Dict[str, Any]) -> Dict[str, Any]:
             if not browser_channel:
                 browser_channel = 'msedge' if platform.system() == 'Windows' else 'chrome'
 
-            # Resolve profile if specified
+            # Resolve profile using tag-based resolution
+            # Priority: profile_name (exact match) -> required_tags (AND logic) -> temp profile -> error
             user_data_dir = None
             session_config = command.get('session', {})
             if session_config and isinstance(session_config, dict):
-                profile_name = session_config.get('profile_name')
-                if profile_name:
-                    profile_manager = ProfileManager()
-                    clone_for_parallel = session_config.get('clone_for_parallel', False)
-                    profile_config = profile_manager.get_nova_act_config(profile_name, clone_for_parallel=clone_for_parallel)
-                    user_data_dir = profile_config["user_data_dir"]
-                    print(f"[INFO] Using profile '{profile_name}' with user_data_dir: {user_data_dir}", file=sys.stderr)
+                profile_manager = ProfileManager()
+
+                # Use resolve_profile for tag-based resolution with fallback
+                try:
+                    resolved_profile = profile_manager.resolve_profile(session_config, verbose=True)
+
+                    if resolved_profile:
+                        # Successfully resolved a named profile
+                        clone_for_parallel = session_config.get('clone_for_parallel', False)
+                        profile_config = profile_manager.get_nova_act_config(
+                            resolved_profile["name"],
+                            clone_for_parallel=clone_for_parallel
+                        )
+                        user_data_dir = profile_config["user_data_dir"]
+                        print(f"[INFO] Resolved profile '{resolved_profile['name']}' (tags: {resolved_profile.get('tags', [])})", file=sys.stderr)
+                        print(f"[INFO] Using user_data_dir: {user_data_dir}", file=sys.stderr)
+                    else:
+                        # Using temporary profile (allow_temp_profile was True)
+                        print(f"[INFO] Using temporary profile (no persistent session)", file=sys.stderr)
+
+                except ValueError as e:
+                    # Profile resolution failed and temp not allowed
+                    print(f"[ERROR] Profile resolution failed: {e}", file=sys.stderr)
+                    raise
 
             # Create executor
             executor = OpenAIPlaywrightExecutor(
@@ -491,32 +509,29 @@ def setup_login(command: Dict[str, Any]) -> Dict[str, Any]:
         # We don't need LLM for manual login, so no API key required
         import time
         from playwright.sync_api import sync_playwright
+        from browser_launch_config import get_launch_options, log_launch_config
 
         print(f"Opening browser for manual login (no API key required)...", file=sys.stderr)
 
+        # Get consistent launch options for profile setup
+        # Key features:
+        # - Removes --enable-automation (hides "controlled by automation" bar)
+        # - Removes --disable-component-extensions-with-background-pages (enables password manager UI)
+        # - Adds --no-sandbox in containerized environments
+        launch_options = get_launch_options(
+            headless=False,  # Must be visible for manual login
+            browser_channel=browser_channel,
+            is_persistent_context=True,
+        )
+        log_launch_config(launch_options, "profile_setup")
+
         with sync_playwright() as p:
             # Launch browser with user_data_dir for session persistence
-            # Note: user_data_dir must be passed to launch_persistent_context, not to launch + new_context
-            if browser_channel == 'msedge':
-                context = p.chromium.launch_persistent_context(
-                    user_data_dir,
-                    channel='msedge',
-                    headless=False,
-                    ignore_https_errors=True,
-                )
-            elif browser_channel == 'chrome':
-                context = p.chromium.launch_persistent_context(
-                    user_data_dir,
-                    channel='chrome',
-                    headless=False,
-                    ignore_https_errors=True,
-                )
-            else:
-                context = p.chromium.launch_persistent_context(
-                    user_data_dir,
-                    headless=False,
-                    ignore_https_errors=True,
-                )
+            # Using shared launch configuration for password manager support
+            context = p.chromium.launch_persistent_context(
+                user_data_dir,
+                **launch_options
+            )
 
             # Create page and navigate
             page = context.new_page()

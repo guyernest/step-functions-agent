@@ -889,7 +889,9 @@ class OpenAIPlaywrightExecutor:
         return result
 
     async def _init_browser(self):
-        """Initialize Playwright browser"""
+        """Initialize Playwright browser using shared configuration"""
+        from browser_launch_config import get_launch_options, log_launch_config
+
         self.playwright = await async_playwright().start()
 
         browser_type = self.playwright.chromium
@@ -898,31 +900,19 @@ class OpenAIPlaywrightExecutor:
         elif self.browser_channel == "firefox":
             browser_type = self.playwright.firefox
 
-        # Configure browser arguments and default-arg overrides to allow password manager UI
-        # Key points:
-        # - Remove --enable-automation so Chromium doesn't suppress sensitive UX (password manager bubbles)
-        # - Remove --disable-component-extensions-with-background-pages (password manager UI uses a component extension)
-        # - Keep headful mode for password manager prompts
-        args = [
-            "--disable-dev-shm-usage",
-            "--no-sandbox",
-        ]
-
-        # Some sites check AutomationControlled; keep this flag only in ephemeral sessions
-        if not self.user_data_dir:
-            args.append("--disable-blink-features=AutomationControlled")
-
-        ignore_default_args = [
-            "--enable-automation",
-            "--disable-component-extensions-with-background-pages",
-        ]
-
-        launch_options = {
-            "headless": self.headless,
-            "channel": self.browser_channel if self.browser_channel != "chromium" else None,
-            "args": args,
-            "ignore_default_args": ignore_default_args,
-        }
+        # Use shared browser launch configuration for consistency across all entry points
+        # Key features from browser_launch_config:
+        # - Removes --enable-automation (hides "controlled by automation" bar, enables password save)
+        # - Removes --disable-component-extensions-with-background-pages (enables password manager UI)
+        # - Adds --no-sandbox only in containerized environments (security)
+        # - Adds --disable-blink-features=AutomationControlled only for ephemeral sessions
+        is_persistent = bool(self.user_data_dir)
+        launch_options = get_launch_options(
+            headless=self.headless,
+            browser_channel=self.browser_channel,
+            is_persistent_context=is_persistent,
+        )
+        log_launch_config(launch_options, "script_execution" if is_persistent else "ephemeral")
 
         if self.user_data_dir:
             # Use persistent context with user data directory
