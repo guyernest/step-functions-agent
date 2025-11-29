@@ -7,17 +7,17 @@
   "abort_on_error": false,
   "steps": [
     {
-      "type": "wait",
+      "action": "wait",
       "description": "Wait for page to load",
       "duration": 2000
     },
     {
-      "type": "screenshot",
+      "action": "screenshot",
       "description": "Take screenshot of page",
       "save_to": "google_homepage.png"
     },
     {
-      "type": "extract",
+      "action": "extract",
       "description": "Extract page title using vision",
       "method": "vision",
       "prompt": "What is the title of this webpage? Look at the browser tab or page header.",

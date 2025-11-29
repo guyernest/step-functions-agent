@@ -95,6 +95,9 @@ from workflow_executor import WorkflowExecutor, WorkflowError
 # Import workflow executor
 from workflow_executor import WorkflowExecutor
 
+# Import profile manager for tag-based profile resolution
+from profile_manager import ProfileManager
+
 # Flag for optional LLM providers (imported on-demand)
 ANTHROPIC_AVAILABLE = False
 GEMINI_AVAILABLE = False
@@ -162,6 +165,125 @@ class OpenAIPlaywrightExecutor:
         self.s3_prefix = "verification"  # Default S3 prefix for screenshots
         self.execution_id = None  # Will be set from variables or generated
         self.local_screenshot_dir = None  # For local testing mode
+
+        # Profile resolution tracking
+        self._resolved_profile_name = None  # Name of resolved profile (for logging)
+        self._profile_manager = None  # Lazy-initialized ProfileManager
+
+    def _resolve_profile_from_script(self, script: Dict[str, Any]) -> Optional[Path]:
+        """
+        Resolve browser profile from script session configuration.
+
+        This method implements tag-based profile resolution with security checks.
+
+        Profile Resolution Priority:
+        1. Command-line --user-data-dir (if already set, takes precedence)
+        2. Exact profile_name match from script session config
+        3. Tag-based matching using required_tags (AND logic - all tags must match)
+        4. Temporary profile (if allow_temp_profile is True, default)
+        5. Error (if no profile found and temp not allowed)
+
+        Tag Matching Logic:
+        - By default, uses AND logic: profile must have ALL required tags
+        - Most recently used profile is selected when multiple profiles match
+        - Tags are case-sensitive and compared exactly
+
+        Args:
+            script: Script dictionary with optional 'session' configuration
+
+        Returns:
+            Path to user_data_dir if profile resolved, None for temporary profile
+
+        Raises:
+            ValueError: If no suitable profile found and temp profile not allowed
+        """
+        # If user_data_dir was already set via command line, use it (highest priority)
+        if self.user_data_dir:
+            print(f"\n{'='*60}", file=sys.stderr)
+            print(f"Profile Resolution", file=sys.stderr)
+            print(f"{'='*60}", file=sys.stderr)
+            print(f"✓ Using profile from command line: {self.user_data_dir}", file=sys.stderr)
+            print(f"{'='*60}\n", file=sys.stderr)
+            return self.user_data_dir
+
+        # Get session configuration from script
+        session_config = script.get("session", {})
+
+        # If no session config at all, use temporary profile (backward compatible)
+        if not session_config:
+            print(f"\n{'='*60}", file=sys.stderr)
+            print(f"Profile Resolution", file=sys.stderr)
+            print(f"{'='*60}", file=sys.stderr)
+            print(f"→ No session config in script - using temporary profile", file=sys.stderr)
+            print(f"  ⚠ Sessions will NOT be preserved between runs", file=sys.stderr)
+            print(f"{'='*60}\n", file=sys.stderr)
+            return None
+
+        # Initialize profile manager (lazy)
+        if self._profile_manager is None:
+            self._profile_manager = ProfileManager()
+
+        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"Profile Resolution", file=sys.stderr)
+        print(f"{'='*60}", file=sys.stderr)
+
+        # Log what we're looking for
+        profile_name = session_config.get("profile_name")
+        required_tags = session_config.get("required_tags", [])
+        allow_temp = session_config.get("allow_temp_profile", True)
+
+        if profile_name:
+            print(f"Looking for profile: '{profile_name}'", file=sys.stderr)
+        if required_tags:
+            print(f"Required tags: {required_tags}", file=sys.stderr)
+        print(f"Allow temporary profile: {allow_temp}", file=sys.stderr)
+        print(f"-" * 40, file=sys.stderr)
+
+        try:
+            # Use ProfileManager's centralized resolution logic
+            resolved_profile = self._profile_manager.resolve_profile(session_config, verbose=True)
+
+            if resolved_profile:
+                # Successfully resolved a named profile
+                self._resolved_profile_name = resolved_profile["name"]
+                user_data_dir = Path(resolved_profile["user_data_dir"])
+
+                # Validate profile directory exists
+                if not user_data_dir.exists():
+                    print(f"\n✗ ERROR: Profile directory does not exist!", file=sys.stderr)
+                    print(f"  Path: {user_data_dir}", file=sys.stderr)
+                    print(f"  Run 'setup-login' to initialize this profile.", file=sys.stderr)
+                    raise ValueError(
+                        f"Profile '{resolved_profile['name']}' directory does not exist: {user_data_dir}. "
+                        f"Please run profile setup to initialize it."
+                    )
+
+                # Update usage statistics
+                self._profile_manager.update_profile_usage(resolved_profile["name"])
+
+                print(f"\n✓ Profile resolved successfully!", file=sys.stderr)
+                print(f"  Name: {resolved_profile['name']}", file=sys.stderr)
+                print(f"  Tags: {resolved_profile.get('tags', [])}", file=sys.stderr)
+                print(f"  Path: {user_data_dir}", file=sys.stderr)
+                print(f"{'='*60}\n", file=sys.stderr)
+
+                return user_data_dir
+            else:
+                # Using temporary profile (resolved_profile is None)
+                print(f"\n→ Using temporary profile (no persistent session)", file=sys.stderr)
+                print(f"  ⚠ Sessions will NOT be preserved between runs", file=sys.stderr)
+                print(f"{'='*60}\n", file=sys.stderr)
+                return None
+
+        except ValueError as e:
+            # Profile resolution failed and temp not allowed
+            print(f"\n✗ ERROR: Profile resolution failed!", file=sys.stderr)
+            print(f"  {e}", file=sys.stderr)
+            print(f"\nTo fix this:", file=sys.stderr)
+            print(f"  1. Create a profile with the required tags using the UI", file=sys.stderr)
+            print(f"  2. Or set allow_temp_profile: true in the script session config", file=sys.stderr)
+            print(f"{'='*60}\n", file=sys.stderr)
+            raise
 
     def _compute_delay(self, delay_config: Union[int, Dict[str, int], None], script_default: int = 0) -> int:
         """
@@ -562,10 +684,18 @@ class OpenAIPlaywrightExecutor:
             "step_results": [],
             "screenshots": [],
             "error": None,
+            "profile_used": None,  # Will be set after profile resolution
         }
 
         try:
-            # Initialize Playwright
+            # Resolve browser profile from script session config
+            # This sets self.user_data_dir based on profile_name or required_tags
+            resolved_user_data_dir = self._resolve_profile_from_script(script)
+            if resolved_user_data_dir:
+                self.user_data_dir = resolved_user_data_dir
+                result["profile_used"] = self._resolved_profile_name or str(resolved_user_data_dir)
+
+            # Initialize Playwright with resolved profile
             await self._init_browser()
 
             # Navigate to starting page
@@ -1719,22 +1849,94 @@ async def main():
     """Main entry point for testing"""
     import argparse
 
-    parser = argparse.ArgumentParser(description="OpenAI Playwright Executor")
-    parser.add_argument("--script", required=True, help="Path to script JSON file")
+    parser = argparse.ArgumentParser(
+        description="OpenAI Playwright Executor - Browser automation with profile support",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Profile Resolution Priority:
+  1. --user-data-dir (explicit path, highest priority)
+  2. --profile (profile name lookup)
+  3. Script session.profile_name (exact name match)
+  4. Script session.required_tags (tag-based matching, AND logic)
+  5. Temporary profile (if allow_temp_profile: true, default)
+
+Examples:
+  # Run with script's session config (profile_name or required_tags)
+  python openai_playwright_executor.py --script my_script.json
+
+  # Run with explicit profile name
+  python openai_playwright_executor.py --script my_script.json --profile Bt_broadband
+
+  # Run with explicit user data directory
+  python openai_playwright_executor.py --script my_script.json --user-data-dir ~/.browser-profiles/my-profile
+
+  # List available profiles
+  python openai_playwright_executor.py --list-profiles
+"""
+    )
+    parser.add_argument("--script", help="Path to script JSON file")
     parser.add_argument("--llm-provider", default="openai", help="LLM provider (openai, claude, gemini)")
     parser.add_argument("--llm-model", default="gpt-4o-mini", help="LLM model name")
-    parser.add_argument("--aws-profile", default="browser-agent", help="AWS profile")
+    parser.add_argument("--aws-profile", default="browser-agent", help="AWS profile for S3")
     parser.add_argument("--s3-bucket", help="S3 bucket for screenshots")
     parser.add_argument("--local-screenshots", help="Local directory for screenshots (for testing without S3)")
     parser.add_argument("--headless", action="store_true", help="Run in headless mode")
     parser.add_argument("--browser-channel", help="Browser channel (chrome, msedge, firefox)")
-    parser.add_argument("--user-data-dir", help="User data directory for profile")
+    parser.add_argument("--user-data-dir", help="User data directory path (overrides all profile resolution)")
+    parser.add_argument("--profile", help="Browser profile name (resolved via ProfileManager)")
+    parser.add_argument("--list-profiles", action="store_true", help="List available profiles and exit")
 
     args = parser.parse_args()
+
+    # Handle --list-profiles
+    if args.list_profiles:
+        profile_manager = ProfileManager()
+        profiles = profile_manager.list_profiles()
+        print(f"\n{'='*60}")
+        print(f"Available Browser Profiles")
+        print(f"{'='*60}")
+        if not profiles:
+            print("No profiles found. Create one using the Local Browser Agent UI.")
+        else:
+            for p in profiles:
+                tags = p.get('tags', [])
+                last_used = p.get('last_used', 'Never')
+                print(f"\n  {p['name']}")
+                print(f"    Tags: {tags}")
+                print(f"    Path: {p.get('user_data_dir', 'N/A')}")
+                print(f"    Last used: {last_used}")
+        print(f"\n{'='*60}\n")
+        sys.exit(0)
+
+    # Require --script for execution
+    if not args.script:
+        parser.error("--script is required (unless using --list-profiles)")
 
     # Load script
     with open(args.script, 'r') as f:
         script = json.load(f)
+
+    # Resolve user_data_dir from various sources
+    user_data_dir = None
+
+    # Priority 1: --user-data-dir (explicit path)
+    if args.user_data_dir:
+        user_data_dir = Path(args.user_data_dir)
+        print(f"Using explicit user-data-dir: {user_data_dir}", file=sys.stderr)
+
+    # Priority 2: --profile (name lookup)
+    elif args.profile:
+        profile_manager = ProfileManager()
+        profile = profile_manager.get_profile(args.profile)
+        if profile:
+            user_data_dir = Path(profile["user_data_dir"])
+            print(f"Using profile '{args.profile}': {user_data_dir}", file=sys.stderr)
+        else:
+            print(f"ERROR: Profile '{args.profile}' not found.", file=sys.stderr)
+            print(f"Use --list-profiles to see available profiles.", file=sys.stderr)
+            sys.exit(1)
+
+    # Priority 3-5: Let execute_script handle via script session config
 
     # Create executor
     executor = OpenAIPlaywrightExecutor(
@@ -1744,7 +1946,7 @@ async def main():
         aws_profile=args.aws_profile,
         headless=args.headless,
         browser_channel=args.browser_channel,
-        user_data_dir=Path(args.user_data_dir) if args.user_data_dir else None,
+        user_data_dir=user_data_dir,
     )
 
     # Set local screenshot directory for testing
@@ -1752,7 +1954,18 @@ async def main():
         executor.local_screenshot_dir = args.local_screenshots
 
     # Execute script
-    result = await executor.execute_script(script)
+    try:
+        result = await executor.execute_script(script)
+    except ValueError as e:
+        # Profile resolution error
+        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"PROFILE RESOLUTION ERROR", file=sys.stderr)
+        print(f"{'='*60}", file=sys.stderr)
+        print(f"{e}", file=sys.stderr)
+        print(f"\nUse --list-profiles to see available profiles.", file=sys.stderr)
+        print(f"Or create a new profile with the required tags using the UI.", file=sys.stderr)
+        print(f"{'='*60}\n", file=sys.stderr)
+        sys.exit(1)
 
     # Print result
     print(json.dumps(result, indent=2))

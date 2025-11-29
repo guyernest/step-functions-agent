@@ -12,6 +12,8 @@
   },
   "session": {
     "profile_name": "Bt_broadband",
+    "required_tags": ["bt.com", "authenticated"],
+    "allow_temp_profile": false,
     "clone_for_parallel": false
   },
   "steps": [

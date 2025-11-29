@@ -6,7 +6,7 @@
   "starting_url": "https://httpbin.org/forms/post",
   "steps": [
     {
-      "type": "navigate",
+      "action": "navigate",
       "url": "https://httpbin.org/forms/post",
       "description": "Navigate to HTTPBin test form"
     },
@@ -16,17 +16,17 @@
       "state": "networkidle"
     },
     {
-      "type": "wait",
+      "action": "wait",
       "description": "Wait for form to initialize (SPA pattern)",
       "duration": 1000
     },
     {
-      "type": "screenshot",
+      "action": "screenshot",
       "description": "Screenshot of empty form",
       "save_to": "01_empty_form.png"
     },
     {
-      "type": "extract",
+      "action": "extract",
       "description": "Analyze form structure and fields",
       "method": "vision",
       "prompt": "Analyze this HTML form and identify all form fields. For each field, extract:\n- Field name/label: What the field is called\n- Field type: text input, email, phone, select dropdown, radio button, checkbox, textarea, etc.\n- Is required: Whether the field appears to be required (often marked with * or 'required' text)\n- Current value: What value is currently in the field (if any)\n\nAlso check:\n- Is there a submit button?\n- What does the submit button say?",
@@ -71,7 +71,7 @@
       }
     },
     {
-      "type": "fill",
+      "action": "fill",
       "description": "Fill customer name field",
       "escalation_chain": [
         {
@@ -101,7 +101,7 @@
       "value": "John Doe"
     },
     {
-      "type": "fill",
+      "action": "fill",
       "description": "Fill customer telephone field",
       "escalation_chain": [
         {
@@ -131,7 +131,7 @@
       "value": "555-0123"
     },
     {
-      "type": "fill",
+      "action": "fill",
       "description": "Fill customer email field",
       "escalation_chain": [
         {
@@ -161,7 +161,7 @@
       "value": "john.doe@example.com"
     },
     {
-      "type": "click",
+      "action": "click",
       "description": "Select Medium pizza size (radio button)",
       "escalation_chain": [
         {
@@ -190,7 +190,7 @@
       ]
     },
     {
-      "type": "click",
+      "action": "click",
       "description": "Select Bacon topping (checkbox)",
       "escalation_chain": [
         {
@@ -219,7 +219,7 @@
       ]
     },
     {
-      "type": "fill",
+      "action": "fill",
       "description": "Fill delivery time",
       "escalation_chain": [
         {
@@ -249,7 +249,7 @@
       "value": "19:00"
     },
     {
-      "type": "fill",
+      "action": "fill",
       "description": "Fill delivery instructions textarea",
       "escalation_chain": [
         {
@@ -279,12 +279,12 @@
       "value": "Please ring doorbell twice and leave at door"
     },
     {
-      "type": "screenshot",
+      "action": "screenshot",
       "description": "Screenshot of filled form",
       "save_to": "02_filled_form.png"
     },
     {
-      "type": "extract",
+      "action": "extract",
       "description": "Validate form completion",
       "method": "vision",
       "prompt": "Look at this filled form and verify:\n1. Are all the required fields filled in?\n2. Is the submit button now enabled (not greyed out or disabled)?\n3. Are there any validation error messages visible?\n4. Does the form appear ready to submit?",
@@ -317,7 +317,7 @@
       }
     },
     {
-      "type": "extract",
+      "action": "extract",
       "description": "Extract all filled form data for verification",
       "method": "vision",
       "prompt": "Extract ALL the data that was filled into this form. Read each field's current value:\n- Customer name\n- Customer email\n- Customer phone\n- Pizza size (Small/Medium/Large)\n- Selected toppings (list all checked)\n- Delivery time\n- Delivery instructions/comments",

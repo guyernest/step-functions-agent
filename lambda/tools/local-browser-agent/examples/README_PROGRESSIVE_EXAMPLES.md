@@ -35,8 +35,8 @@ This directory contains example scripts demonstrating the Progressive Escalation
 **Migration from Nova Act**:
 | Old (Nova Act) | New (Progressive) | Improvement |
 |----------------|-------------------|-------------|
-| `action: "act_with_schema"` | `type: "extract"` + `method: "vision"` | Explicit, predictable |
-| `action: "act"` for navigation | `type: "navigate"` | Clearer intent |
+| `action: "act_with_schema"` | `action: "extract"` + `method: "vision"` | Explicit, predictable |
+| `action: "act"` for navigation | `action: "navigate"` | Clearer intent |
 | Single agent call for clicks | Progressive escalation chain | 10x faster, free |
 
 **Key improvements**:
@@ -106,7 +106,7 @@ This directory contains example scripts demonstrating the Progressive Escalation
 ### New Format (Progressive Escalation)
 ```json
 {
-  "type": "fill",
+  "action": "fill",
   "description": "Fill customer name field",
   "escalation_chain": [
     {
@@ -245,7 +245,7 @@ python openai_playwright_executor.py \
 
    // New
    {
-     "type": "click",
+     "action": "click",
      "description": "Click Next button",
      "escalation_chain": [
        {"method": "playwright_locator", "locator": {"strategy": "text", "value": "Next"}},
@@ -261,7 +261,7 @@ python openai_playwright_executor.py \
 
    // New
    {
-     "type": "fill",
+     "action": "fill",
      "escalation_chain": [
        {"method": "playwright_locator", "locator": {"strategy": "selector", "value": "input[type='email']"}},
        {"method": "vision_find_element", "prompt": "Find the email field"}
@@ -276,7 +276,7 @@ python openai_playwright_executor.py \
    {"action": "act_with_schema", "prompt": "Extract book titles", "schema": {...}}
 
    // New
-   {"type": "extract", "method": "vision", "prompt": "Extract book titles", "schema": {...}}
+   {"action": "extract", "method": "vision", "prompt": "Extract book titles", "schema": {...}}
    ```
 
 6. **Add wait steps after navigation**:
@@ -287,8 +287,64 @@ python openai_playwright_executor.py \
 
 7. **Add screenshots for debugging**:
    ```json
-   {"type": "screenshot", "save_to": "01_step_name.png"}
+   {"action": "screenshot", "save_to": "01_step_name.png"}
    ```
+
+---
+
+## Browser Profile Selection
+
+Scripts can specify which browser profile to use for authenticated sessions.
+
+### Session Configuration
+
+Add a `session` block to your script to specify profile requirements:
+
+```json
+{
+  "name": "My Script",
+  "session": {
+    "profile_name": "My-Profile",
+    "required_tags": ["example.com", "authenticated"],
+    "allow_temp_profile": false,
+    "clone_for_parallel": false
+  },
+  "steps": [...]
+}
+```
+
+### Profile Resolution Priority
+
+1. **Command-line `--user-data-dir`**: Explicit path (highest priority)
+2. **Command-line `--profile`**: Profile name lookup
+3. **Script `session.profile_name`**: Exact name match
+4. **Script `session.required_tags`**: Tag-based matching (AND logic)
+5. **Temporary profile**: If `allow_temp_profile: true` (default)
+6. **Error**: If no profile found and temp not allowed
+
+### Tag Matching Logic
+
+- **AND logic by default**: Profile must have ALL required tags
+- **Most recently used**: Selected when multiple profiles match
+- **Case-sensitive**: Tags are compared exactly
+
+### Security Recommendation
+
+For scripts that require authenticated sessions, always set:
+```json
+"session": {
+  "required_tags": ["domain.com", "authenticated"],
+  "allow_temp_profile": false
+}
+```
+
+This prevents accidental execution without the correct profile.
+
+### List Available Profiles
+
+```bash
+python openai_playwright_executor.py --list-profiles
+```
 
 ---
 
@@ -301,6 +357,7 @@ python openai_playwright_executor.py \
 5. **Add screenshots**: At key stages for debugging
 6. **Structured schemas**: Clear prompts, required fields
 7. **Cost-conscious**: Aim for <$0.02 per run, <5 vision calls
+8. **Use profile tags**: Set `required_tags` and `allow_temp_profile: false` for authenticated scripts
 
 ---
 

@@ -7,19 +7,19 @@
   "abort_on_error": false,
   "steps": [
     {
-      "type": "wait",
+      "action": "wait",
       "description": "Wait for page to load",
       "duration": 2000
     },
     {
-      "type": "screenshot",
+      "action": "screenshot",
       "description": "Take screenshot",
       "save_to": "example_page.png"
     },
     {
-      "type": "execute_js",
+      "action": "execute_js",
       "description": "Get page title via JavaScript",
-      "script": "return document.title;"
+      "script": "document.title"
     }
   ]
 }

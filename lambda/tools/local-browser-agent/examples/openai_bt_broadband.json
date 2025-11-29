@@ -7,12 +7,12 @@
   "abort_on_error": true,
   "steps": [
     {
-      "type": "wait",
+      "action": "wait",
       "description": "Wait for page to load",
       "duration": 3000
     },
     {
-      "type": "click",
+      "action": "click",
       "description": "Click 'Check availability' button",
       "locator": {
         "strategy": "text",
@@ -20,7 +20,7 @@
       }
     },
     {
-      "type": "wait",
+      "action": "wait",
       "description": "Wait for postcode input",
       "locator": {
         "strategy": "selector",
@@ -29,7 +29,7 @@
       "timeout": 10000
     },
     {
-      "type": "fill",
+      "action": "fill",
       "description": "Enter postcode",
       "locator": {
         "strategy": "selector",
@@ -38,7 +38,7 @@
       "value": "{{postcode}}"
     },
     {
-      "type": "click",
+      "action": "click",
       "description": "Click search button",
       "locator": {
         "strategy": "selector",
@@ -47,17 +47,17 @@
       }
     },
     {
-      "type": "wait",
+      "action": "wait",
       "description": "Wait for results",
       "duration": 5000
     },
     {
-      "type": "screenshot",
+      "action": "screenshot",
       "description": "Take screenshot of results",
       "save_to": "bt_results.png"
     },
     {
-      "type": "extract",
+      "action": "extract",
       "description": "Extract broadband packages and pricing",
       "method": "vision",
       "prompt": "Extract all broadband packages shown on this page. For each package, identify:\n1. Package name/type (e.g., 'Fibre 1', 'Full Fibre 100')\n2. Download speed\n3. Upload speed (if shown)\n4. Monthly price\n5. Whether it's available (look for 'Available' or 'Not available' indicators)\n\nReturn as a structured list of packages.",

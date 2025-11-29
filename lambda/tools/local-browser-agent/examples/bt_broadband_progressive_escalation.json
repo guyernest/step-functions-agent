@@ -16,17 +16,17 @@
       "state": "networkidle"
     },
     {
-      "type": "screenshot",
+      "action": "screenshot",
       "description": "Screenshot of initial page",
       "save_to": "01_initial_page.png"
     },
     {
-      "type": "execute_js",
+      "action": "execute_js",
       "description": "Check page state - DOM method (fastest)",
       "script": "(function() { var title = document.title.toLowerCase(); return { title: document.title, url: window.location.href, isLoginPage: title.includes('secure authentication') || title.includes('login') || title.includes('sign in'), hasLoginForm: !!document.querySelector('input[type=\"password\"]'), hasSearchForm: !!document.querySelector('input[name=\"postcode\"], input[id*=\"postcode\"], input[placeholder*=\"postcode\"]') }; })()"
     },
     {
-      "type": "extract",
+      "action": "extract",
       "description": "Identify page type using vision (if DOM unclear)",
       "method": "vision",
       "prompt": "Analyze this BT Wholesale webpage and determine: 1) Is this a login/authentication page (might show 'Secure Authentication'), a search/checker page, or results page? 2) What is the main call-to-action? 3) Are there any error messages or notices visible?",
@@ -59,7 +59,7 @@
       }
     },
     {
-      "type": "fill",
+      "action": "fill",
       "description": "Enter username (if on login page)",
       "escalation_chain": [
         {
@@ -89,7 +89,7 @@
       "value": "nterizakis"
     },
     {
-      "type": "click",
+      "action": "click",
       "description": "Click Next/Continue button after username",
       "escalation_chain": [
         {
@@ -126,7 +126,7 @@
       ]
     },
     {
-      "type": "wait",
+      "action": "wait",
       "description": "Wait for password field to appear",
       "locator": {
         "strategy": "selector",
@@ -140,22 +140,22 @@
       "state": "networkidle"
     },
     {
-      "type": "screenshot",
+      "action": "screenshot",
       "description": "Screenshot of password page",
       "save_to": "01b_after_username.png"
     },
     {
-      "type": "wait",
+      "action": "wait",
       "description": "Wait for browser autofill to complete",
       "duration": 2000
     },
     {
-      "type": "execute_js",
+      "action": "execute_js",
       "description": "Check if password was autofilled",
       "script": "(function() { var pwdField = document.querySelector('input[type=\"password\"]'); return { passwordFilled: pwdField ? pwdField.value.length > 0 : false, passwordLength: pwdField ? pwdField.value.length : 0, hasPasswordField: !!pwdField }; })()"
     },
     {
-      "type": "click",
+      "action": "click",
       "description": "Click password field to activate password manager",
       "trigger_autofill": true,
       "escalation_chain": [
@@ -170,28 +170,28 @@
       ]
     },
     {
-      "type": "wait",
+      "action": "wait",
       "description": "Wait for password manager dropdown to appear",
       "duration": 10000
     },
     {
-      "type": "press",
+      "action": "press",
       "description": "Select password from manager (Arrow Down + Enter)",
       "keys": ["ArrowDown", "Enter"],
       "delay": 5000
     },
     {
-      "type": "execute_js",
+      "action": "execute_js",
       "description": "Verify password was filled after password manager interaction",
       "script": "(function() { var pwdField = document.querySelector('input[type=\"password\"]'); var filled = pwdField && pwdField.value.length > 0; return { passwordFilled: filled, passwordLength: pwdField ? pwdField.value.length : 0, hasPasswordField: !!pwdField }; })()"
     },
     {
-      "type": "wait",
+      "action": "wait",
       "description": "Wait for password to fill from manager",
       "duration": 500
     },
     {
-      "type": "click",
+      "action": "click",
       "description": "Click Next button on password page",
       "escalation_chain": [
         {
@@ -226,7 +226,7 @@
       "state": "networkidle"
     },
     {
-      "type": "wait",
+      "action": "wait",
       "description": "Wait for SSO redirect to complete (BT portal)",
       "duration": 3000
     },
@@ -236,17 +236,17 @@
       "state": "networkidle"
     },
     {
-      "type": "screenshot",
+      "action": "screenshot",
       "description": "Screenshot after login and SSO redirect",
       "save_to": "02_after_login.png"
     },
     {
-      "type": "execute_js",
+      "action": "execute_js",
       "description": "Verify we're on BT wholesale portal",
       "script": "(function() { var url = window.location.href; var hash = window.location.hash; return { url: url, hash: hash, onBTWholesale: url.includes('bbactotl.btwholesale.com') || url.includes('btwholesale'), currentPage: hash }; })()"
     },
     {
-      "type": "navigate",
+      "action": "navigate",
       "description": "Navigate to Address Checker page",
       "url": "https://bbactotl.btwholesale.com/bbac-ui/totl/totlSearch/#/ADSL/AddressHome"
     },
@@ -256,22 +256,22 @@
       "state": "networkidle"
     },
     {
-      "type": "screenshot",
+      "action": "screenshot",
       "description": "Screenshot of Address Checker page",
       "save_to": "02b_address_checker.png"
     },
     {
-      "type": "execute_js",
+      "action": "execute_js",
       "description": "Verify Address Checker page loaded",
       "script": "(function() { var url = window.location.href; var hash = window.location.hash; var postcodeInput = document.querySelector('input[name*=\"postcode\"], input[id*=\"postcode\"], input[placeholder*=\"postcode\" i]'); return { url: url, hash: hash, hasPostcodeField: !!postcodeInput, postcodeFieldVisible: postcodeInput ? window.getComputedStyle(postcodeInput).display !== 'none' : false, pageTitle: document.title }; })()"
     },
     {
-      "type": "wait",
+      "action": "wait",
       "description": "Wait for Address Checker form to be ready",
       "duration": 2000
     },
     {
-      "type": "fill",
+      "action": "fill",
       "description": "Enter postcode in search field",
       "escalation_chain": [
         {
@@ -310,7 +310,7 @@
       "value": "{{postcode}}"
     },
     {
-      "type": "click",
+      "action": "click",
       "description": "Click search/check availability button",
       "escalation_chain": [
         {
@@ -352,12 +352,12 @@
       "state": "networkidle"
     },
     {
-      "type": "screenshot",
+      "action": "screenshot",
       "description": "Screenshot after search",
       "save_to": "02_after_search.png"
     },
     {
-      "type": "extract",
+      "action": "extract",
       "description": "Check if address selection is needed",
       "method": "vision",
       "prompt": "Look at this page after postcode search. Answer: 1) Does it show a list of addresses to select from? 2) Does it show broadband packages directly? 3) Is there an error or 'no results' message?",
@@ -394,7 +394,7 @@
       }
     },
     {
-      "type": "click",
+      "action": "click",
       "description": "Select matching address from list",
       "escalation_chain": [
         {
@@ -431,7 +431,7 @@
       ]
     },
     {
-      "type": "click",
+      "action": "click",
       "description": "Click the submit/continue button after selecting the address",
       "escalation_chain": [
         {
@@ -481,7 +481,7 @@
       "state": "networkidle"
     },
     {
-      "type": "wait",
+      "action": "wait",
       "description": "Wait for JavaScript redirect to complete (address details page)",
       "duration": 3000
     },
@@ -491,12 +491,12 @@
       "state": "networkidle"
     },
     {
-      "type": "screenshot",
+      "action": "screenshot",
       "description": "Screenshot of packages page",
       "save_to": "03_packages.png"
     },
     {
-      "type": "extract",
+      "action": "extract",
       "description": "Extract all broadband packages with conditional logic",
       "method": "vision",
       "prompt": "Extract broadband availability information from the results page following these steps: 1. ALWAYS CAPTURE (if visible):   - ALK (Access Line Key) - usually displayed near top  - Exchange Code - BT exchange identifier 2. CHECK FEATURED PRODUCTS SECTION:  Look for a section called 'Featured Products'.   Search for a row/line containing 'WBC FTTP'. 3. IF 'WBC FTTP' IS FOUND:  - Set fttp_avail = true   - From the WBC FTTP row, capture 'Downstream Line Rate' (this is the SOADSL DSL speed in Mbps).   Then navigate to OTHER SECTIONS:   a) OTHER OFFERINGS section:     - Check if ANY row has 'Service Availability' field = 'Enabled'    - If found, set sogea_avail = true, otherwise false.   b) ONT DETAILS section:  - Find the LAST row in this section   - Capture: 'Reference' field (this is ont_reference)   - Capture: 'ONT Serial Number' field (this is ont_serial_no)    - Capture: 'Port Service ID' field (this is port_service_id)   c) PREMISE ENVIRONMENT section:      - Capture: 'Recommended Minimum SVR NLP' field (this is install_type)    - Valid values are typically 'Standard' or 'Premium'. 4. IF 'WBC FTTP' IS NOT FOUND:   - Set fttp_avail = false  - Leave all FTTP-related fields blank (install_type, sogea_avail, soadsl_dsl_speed, ont_reference, ont_serial_no, port_service_id). IMPORTANT: fttp_avail is REQUIRED and must always be set to true or false based on whether WBC FTTP is present in Featured Products.",
@@ -545,7 +545,7 @@
       }
     },
     {
-      "type": "screenshot",
+      "action": "screenshot",
       "description": "Final screenshot for verification",
       "save_to": "04_final.png"
     }

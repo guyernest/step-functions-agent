@@ -6,7 +6,7 @@
   "starting_url": "https://books.toscrape.com/",
   "steps": [
     {
-      "type": "navigate",
+      "action": "navigate",
       "url": "https://books.toscrape.com/",
       "description": "Navigate to Books to Scrape homepage"
     },
@@ -16,12 +16,12 @@
       "state": "networkidle"
     },
     {
-      "type": "screenshot",
+      "action": "screenshot",
       "description": "Screenshot of homepage",
       "save_to": "01_homepage.png"
     },
     {
-      "type": "click",
+      "action": "click",
       "description": "Click on Travel category",
       "escalation_chain": [
         {
@@ -55,12 +55,12 @@
       "state": "networkidle"
     },
     {
-      "type": "screenshot",
+      "action": "screenshot",
       "description": "Screenshot of Travel category",
       "save_to": "02_travel_category.png"
     },
     {
-      "type": "extract",
+      "action": "extract",
       "description": "Extract first 5 books from Travel category",
       "method": "vision",
       "prompt": "Extract information about the first 5 books shown on this page. For each book, extract:\n- Title: Full book title\n- Price: Price shown (with currency symbol)\n- Rating: Star rating if visible (e.g., '5 stars', '4 stars')\n- Availability: In stock or not\n\nReturn exactly 5 books in order from top to bottom.",
@@ -97,7 +97,7 @@
       }
     },
     {
-      "type": "navigate",
+      "action": "navigate",
       "url": "https://news.ycombinator.com/",
       "description": "Navigate to Hacker News"
     },
@@ -107,12 +107,12 @@
       "state": "networkidle"
     },
     {
-      "type": "screenshot",
+      "action": "screenshot",
       "description": "Screenshot of Hacker News",
       "save_to": "03_hackernews.png"
     },
     {
-      "type": "extract",
+      "action": "extract",
       "description": "Extract top 5 news headlines",
       "method": "vision",
       "prompt": "Extract the top 5 news articles from this Hacker News page. For each article, extract:\n- Headline: Full article title\n- Points: Number of points/upvotes if visible\n- Author: Username who posted it\n- Comments: Number of comments if visible\n\nReturn exactly 5 articles in order from top to bottom.",
@@ -149,7 +149,7 @@
       }
     },
     {
-      "type": "navigate",
+      "action": "navigate",
       "url": "https://example.com",
       "description": "Navigate to example.com for boolean checks"
     },
@@ -159,12 +159,12 @@
       "state": "networkidle"
     },
     {
-      "type": "screenshot",
+      "action": "screenshot",
       "description": "Screenshot of example.com",
       "save_to": "04_example_com.png"
     },
     {
-      "type": "extract",
+      "action": "extract",
       "description": "Boolean check: Does page have a heading?",
       "method": "vision",
       "prompt": "Look at this page and answer: Is there an H1 heading element visible on this page?",
@@ -184,7 +184,7 @@
       }
     },
     {
-      "type": "extract",
+      "action": "extract",
       "description": "Boolean check: Does heading contain 'Example'?",
       "method": "vision",
       "prompt": "Look at the main heading on this page. Does it contain the word 'Example'?",

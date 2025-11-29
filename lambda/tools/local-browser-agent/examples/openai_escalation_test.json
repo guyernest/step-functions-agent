@@ -1,50 +1,46 @@
 {
   "name": "Progressive Escalation Test",
-  "description": "Demonstrates progressive escalation from DOM checks to vision",
+  "description": "Demonstrates progressive escalation - click link on example.com",
   "llm_provider": "openai",
   "llm_model": "gpt-4o-mini",
-  "starting_page": "https://www.google.com",
+  "starting_page": "https://example.com",
   "abort_on_error": true,
   "steps": [
     {
-      "type": "wait",
+      "action": "wait",
       "description": "Wait for page to load",
       "duration": 2000
     },
     {
-      "type": "click",
-      "description": "Click search button with escalation",
+      "action": "screenshot",
+      "description": "Screenshot before click",
+      "save_to": "escalation_test_before.png"
+    },
+    {
+      "action": "click",
+      "description": "Click 'More information' link with escalation",
       "escalation_chain": [
         {
-          "method": "playwright_dom",
-          "strategy": "check_page_title",
-          "matchers": {
-            "google_search": ["google"]
+          "method": "playwright_locator",
+          "locator": {
+            "strategy": "text",
+            "value": "More information"
           },
-          "confidence_threshold": 0.8,
-          "comment": "Try DOM check first - cheapest and fastest"
+          "confidence_threshold": 0.9,
+          "comment": "Try text match first - free and fast"
         },
         {
           "method": "playwright_locator",
           "locator": {
             "strategy": "selector",
-            "value": "input[name='btnK']"
+            "value": "a[href]"
           },
-          "confidence_threshold": 0.9,
-          "comment": "Try known selector second - still free and fast"
-        },
-        {
-          "method": "playwright_locator",
-          "locator": {
-            "strategy": "text",
-            "value": "Google Search"
-          },
-          "confidence_threshold": 0.9,
-          "comment": "Try text match third"
+          "confidence_threshold": 0.85,
+          "comment": "Try any link selector second"
         },
         {
           "method": "vision_find_element",
-          "prompt": "Find the main Google Search button. This is the primary search button in the center of the page.",
+          "prompt": "Find the 'More information' link on this page.",
           "prefer": "selector",
           "fallback": "coordinates",
           "confidence_threshold": 0.7,
@@ -53,9 +49,14 @@
       ]
     },
     {
-      "type": "screenshot",
-      "description": "Take final screenshot",
-      "save_to": "escalation_test_final.png"
+      "type": "wait_for_load_state",
+      "description": "Wait for navigation to complete",
+      "state": "networkidle"
+    },
+    {
+      "action": "screenshot",
+      "description": "Screenshot after click",
+      "save_to": "escalation_test_after.png"
     }
   ]
 }
