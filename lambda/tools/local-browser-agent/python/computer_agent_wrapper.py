@@ -490,6 +490,10 @@ def setup_login(command: Dict[str, Any]) -> Dict[str, Any]:
         if not browser_channel:
             browser_channel = 'msedge' if platform.system() == 'Windows' else 'chrome'
 
+        # Store browser_channel in profile metadata for consistency
+        # This ensures script execution uses the same browser for cookie compatibility
+        profile_manager.update_browser_channel(profile_name, browser_channel)
+
         print(f"", file=sys.stderr)
         print(f"╔═══════════════════════════════════════════════════════════╗", file=sys.stderr)
         print(f"║  PROFILE LOGIN SETUP (ComputerAgent)                      ║", file=sys.stderr)
@@ -551,13 +555,41 @@ def setup_login(command: Dict[str, Any]) -> Dict[str, Any]:
                 print(f"Timeout reached. Closing browser and saving session...", file=sys.stderr)
 
             finally:
+                # Wait for any pending network requests to complete (cookie flush)
+                # This ensures cookies are fully saved before closing the context
+                try:
+                    print(f"Waiting for network idle before saving session...", file=sys.stderr)
+                    page.wait_for_load_state("networkidle", timeout=5000)
+                except Exception:
+                    # Network may not become fully idle, continue anyway
+                    pass
+
+                # Give browser extra time to flush cookies to disk
+                time.sleep(1)
+
                 # Close page and context (browser is closed with context in persistent mode)
                 page.close()
                 context.close()
 
+        # Verify profile was saved correctly
+        import os
+        user_data_path = Path(user_data_dir)
+        cookies_file = user_data_path / "Default" / "Cookies"
+        local_state_file = user_data_path / "Local State"
+
         print(f"", file=sys.stderr)
         print(f"✓ Profile '{profile_name}' login setup completed!", file=sys.stderr)
-        print(f"  User data directory: {user_data_dir}", file=sys.stderr)
+        print(f"", file=sys.stderr)
+        print(f"  Profile Debug Info:", file=sys.stderr)
+        print(f"  ├─ User data dir: {user_data_dir}", file=sys.stderr)
+        print(f"  ├─ Is absolute: {user_data_path.is_absolute()}", file=sys.stderr)
+        print(f"  ├─ Dir exists: {user_data_path.exists()}", file=sys.stderr)
+        print(f"  ├─ Browser channel: {browser_channel}", file=sys.stderr)
+        print(f"  ├─ Cookies file: {cookies_file}", file=sys.stderr)
+        print(f"  │   └─ Exists: {cookies_file.exists()}", file=sys.stderr)
+        print(f"  └─ Local State: {local_state_file}", file=sys.stderr)
+        print(f"      └─ Exists: {local_state_file.exists()}", file=sys.stderr)
+        print(f"", file=sys.stderr)
         print(f"  Future scripts can reuse this authenticated session", file=sys.stderr)
 
         return {
@@ -565,6 +597,8 @@ def setup_login(command: Dict[str, Any]) -> Dict[str, Any]:
             "message": f"Login setup completed for profile '{profile_name}'",
             "profile_name": profile_name,
             "user_data_dir": user_data_dir,
+            "browser_channel": browser_channel,
+            "cookies_file_exists": cookies_file.exists(),
         }
 
     except Exception as e:

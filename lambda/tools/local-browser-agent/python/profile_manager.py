@@ -111,7 +111,8 @@ class ProfileManager:
         profile_name: str,
         description: str = "",
         tags: List[str] = None,
-        auto_login_sites: List[str] = None
+        auto_login_sites: List[str] = None,
+        browser_channel: str = None
     ) -> Dict[str, Any]:
         """
         Create a new browser profile
@@ -121,6 +122,8 @@ class ProfileManager:
             description: Description of the profile's purpose
             tags: Tags for categorization (e.g., ['banking', 'production'])
             auto_login_sites: Sites where auto-login should be attempted
+            browser_channel: Browser channel used for setup ('msedge', 'chrome', 'chromium')
+                            This should be used for script execution to ensure cookie compatibility
 
         Returns:
             Profile configuration dict
@@ -139,6 +142,7 @@ class ProfileManager:
             "tags": tags or [],
             "auto_login_sites": auto_login_sites or [],
             "user_data_dir": str(profile_dir),
+            "browser_channel": browser_channel,  # Browser used for setup (for cookie compatibility)
             "created_at": datetime.now().isoformat(),
             "last_used": None,
             "usage_count": 0,
@@ -258,6 +262,14 @@ class ProfileManager:
         """
         import sys
 
+        def ensure_absolute_path(profile: Dict[str, Any]) -> Dict[str, Any]:
+            """Ensure profile user_data_dir is absolute path."""
+            if profile and "user_data_dir" in profile:
+                abs_path = str(Path(profile["user_data_dir"]).expanduser().resolve())
+                # Return a copy with the absolute path to avoid modifying cached metadata
+                return {**profile, "user_data_dir": abs_path}
+            return profile
+
         # Priority 1: Try exact name match (backward compatibility)
         profile_name = session_config.get('profile_name')
         if profile_name:
@@ -265,7 +277,7 @@ class ProfileManager:
             if profile:
                 if verbose:
                     print(f"✓ Resolved profile by exact name: '{profile_name}'", file=sys.stderr)
-                return profile
+                return ensure_absolute_path(profile)
             else:
                 if verbose:
                     print(f"⚠ Profile '{profile_name}' not found, trying tag matching...", file=sys.stderr)
@@ -282,11 +294,10 @@ class ProfileManager:
             )
 
             if matched_profiles:
-                selected_profile = matched_profiles[0]  # Most recently used
+                selected_profile = ensure_absolute_path(matched_profiles[0])  # Most recently used
                 if verbose:
-                    profile_path = selected_profile.get('user_data_dir', '')
-                    abs_profile_path = os.path.abspath(profile_path) if profile_path else 'N/A'
-                    profile_exists = os.path.exists(abs_profile_path) if profile_path else False
+                    abs_profile_path = selected_profile.get('user_data_dir', 'N/A')
+                    profile_exists = os.path.exists(abs_profile_path) if abs_profile_path != 'N/A' else False
 
                     print(
                         f"✓ Resolved profile by tags: '{selected_profile['name']}' "
@@ -409,8 +420,12 @@ class ProfileManager:
         # Update usage statistics
         self.update_profile_usage(profile_name)
 
+        # Ensure user_data_dir is always an absolute path
+        # This handles legacy profiles that may have relative paths stored
+        user_data_dir = Path(profile["user_data_dir"]).expanduser().resolve()
+
         return {
-            "user_data_dir": profile["user_data_dir"],
+            "user_data_dir": str(user_data_dir),
             "clone_user_data_dir": clone_for_parallel,  # False for session reuse
             "profile_metadata": {
                 "name": profile_name,
@@ -458,6 +473,51 @@ class ProfileManager:
         profile["tags"] = tags
         self._save_metadata()
         return True
+
+    def update_browser_channel(self, profile_name: str, browser_channel: str) -> bool:
+        """
+        Update the browser_channel for an existing profile.
+
+        This should be called during setup_login to record which browser was used,
+        ensuring script execution uses the same browser for cookie compatibility.
+
+        Args:
+            profile_name: Name of the profile to update
+            browser_channel: Browser channel ('msedge', 'chrome', 'chromium')
+
+        Returns:
+            True if updated successfully, False if profile not found
+        """
+        if profile_name not in self.metadata["profiles"]:
+            return False
+
+        profile = self.metadata["profiles"][profile_name]
+        old_channel = profile.get("browser_channel")
+        profile["browser_channel"] = browser_channel
+
+        # Log if browser channel changed (potential cookie incompatibility)
+        if old_channel and old_channel != browser_channel:
+            print(
+                f"⚠ Profile '{profile_name}' browser_channel changed from "
+                f"'{old_channel}' to '{browser_channel}'. "
+                f"Re-login may be required.",
+                file=sys.stderr
+            )
+
+        self._save_metadata()
+        return True
+
+    def get_browser_channel(self, profile_name: str) -> Optional[str]:
+        """
+        Get the browser_channel for a profile.
+
+        Returns:
+            Browser channel string or None if not set
+        """
+        profile = self.get_profile(profile_name)
+        if profile:
+            return profile.get("browser_channel")
+        return None
 
     def export_profile(self, profile_name: str, export_path: str) -> str:
         """
@@ -639,18 +699,109 @@ class ProfileManager:
         return details
 
     def validate_profile(self, profile_name: str) -> Dict[str, Any]:
-        """Validate a named profile's user_data_dir (static checks only)."""
+        """
+        Validate a named profile's user_data_dir and metadata.
+
+        Returns comprehensive validation info for UI display including:
+        - Static file checks (cookies, preferences, etc.)
+        - Browser channel consistency
+        - Cookie count (if readable)
+        - Session age and timeout status
+        - Recommendations for fixing issues
+        """
         profile = self.get_profile(profile_name)
         if not profile:
             return {"success": False, "error": f"Profile '{profile_name}' not found"}
-        static = self.validate_user_data_dir(profile["user_data_dir"]) 
+
+        # Get absolute path for validation
+        user_data_dir = str(Path(profile["user_data_dir"]).expanduser().resolve())
+        static = self.validate_user_data_dir(user_data_dir)
+
+        # Build recommendations based on issues found
         recs = []
+        warnings = []
+
         if static.get("status") == "missing":
-            recs.append("Profile directory missing/incomplete. Run human login bootstrap.")
+            recs.append("Profile directory missing/incomplete. Run 'Setup Login' to initialize.")
         if static.get("status") == "warn":
-            recs.append("Profile present but may lack auth artifacts. Validate at runtime.")
-        recs.append("Use clone_user_data_dir=False to persist sessions; True only for parallel runs.")
-        return {"success": True, "profile": profile_name, "static": static, "recommendations": recs}
+            recs.append("Profile present but may lack auth artifacts. Try logging in again.")
+
+        # Check browser_channel
+        browser_channel = profile.get("browser_channel")
+        if not browser_channel:
+            warnings.append("Browser channel not set - may cause cookie compatibility issues between setup and execution.")
+            recs.append("Re-run 'Setup Login' to record the browser channel.")
+
+        # Check session age
+        last_used = profile.get("last_used")
+        session_info = {"last_used": last_used, "expired": False}
+        if last_used:
+            try:
+                last_used_dt = datetime.fromisoformat(last_used)
+                age_hours = (datetime.now() - last_used_dt).total_seconds() / 3600
+                session_info["age_hours"] = round(age_hours, 1)
+
+                timeout_hours = profile.get("session_timeout_hours", 24)
+                if age_hours > timeout_hours:
+                    session_info["expired"] = True
+                    warnings.append(f"Session may have expired (last used {age_hours:.1f}h ago, timeout is {timeout_hours}h).")
+                    recs.append("Re-run 'Setup Login' to refresh the session.")
+            except Exception:
+                pass
+
+        # Try to count cookies
+        cookie_info = {"count": None, "readable": False}
+        if static.get("has_cookies_db"):
+            try:
+                import sqlite3
+                cookies_path = Path(user_data_dir) / "Default" / "Network" / "Cookies"
+                if not cookies_path.exists():
+                    cookies_path = Path(user_data_dir) / "Default" / "Cookies"
+
+                if cookies_path.exists():
+                    conn = sqlite3.connect(str(cookies_path))
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM cookies")
+                    cookie_count = cursor.fetchone()[0]
+                    cookie_info["count"] = cookie_count
+                    cookie_info["readable"] = True
+
+                    # Get top domains
+                    cursor.execute(
+                        "SELECT host_key, COUNT(*) as cnt FROM cookies "
+                        "GROUP BY host_key ORDER BY cnt DESC LIMIT 5"
+                    )
+                    domains = cursor.fetchall()
+                    cookie_info["top_domains"] = [
+                        {"domain": d[0], "count": d[1]} for d in domains
+                    ]
+                    conn.close()
+
+                    if cookie_count == 0:
+                        warnings.append("Cookies database exists but contains no cookies.")
+            except Exception as e:
+                cookie_info["error"] = str(e)
+
+        # Check tags
+        tags = profile.get("tags", [])
+        if not tags:
+            warnings.append("No tags set - tag-based profile resolution will not match this profile.")
+
+        # General recommendation
+        if not recs:
+            recs.append("Profile looks healthy. Use clone_user_data_dir=False to persist sessions.")
+
+        return {
+            "success": True,
+            "profile": profile_name,
+            "browser_channel": browser_channel,
+            "tags": tags,
+            "static": static,
+            "session": session_info,
+            "cookies": cookie_info,
+            "warnings": warnings,
+            "recommendations": recs
+        }
 
 
 def create_login_profile_interactive(profile_manager: ProfileManager, profile_name: str, starting_url: str):

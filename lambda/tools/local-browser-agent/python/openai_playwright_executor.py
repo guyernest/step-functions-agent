@@ -261,9 +261,24 @@ class OpenAIPlaywrightExecutor:
                 # Update usage statistics
                 self._profile_manager.update_profile_usage(resolved_profile["name"])
 
+                # Check for browser_channel in profile metadata
+                profile_browser_channel = resolved_profile.get("browser_channel")
+                if profile_browser_channel and not self.browser_channel:
+                    # Use the browser_channel from profile if not explicitly set
+                    print(f"\n[INFO] Using browser_channel from profile: {profile_browser_channel}", file=sys.stderr)
+                    self.browser_channel = profile_browser_channel
+                elif profile_browser_channel and self.browser_channel != profile_browser_channel:
+                    # Warn if using different browser than profile was set up with
+                    print(
+                        f"\n⚠ WARNING: Using browser '{self.browser_channel}' but profile was set up with "
+                        f"'{profile_browser_channel}'. Cookies may not work correctly.",
+                        file=sys.stderr
+                    )
+
                 print(f"\n✓ Profile resolved successfully!", file=sys.stderr)
                 print(f"  Name: {resolved_profile['name']}", file=sys.stderr)
                 print(f"  Tags: {resolved_profile.get('tags', [])}", file=sys.stderr)
+                print(f"  Browser: {resolved_profile.get('browser_channel', 'not set')}", file=sys.stderr)
                 print(f"  Path: {user_data_dir}", file=sys.stderr)
                 print(f"{'='*60}\n", file=sys.stderr)
 
