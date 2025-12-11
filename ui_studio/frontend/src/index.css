@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: dark;
+  color: rgba(255, 255, 255, 0.9);
+  background-color: #1a1a2e;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#root {
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-studio-panel;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-studio-accent rounded;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-studio-highlight;
+}
+
+/* Panel styling */
+.panel {
+  @apply bg-studio-panel rounded-lg border border-studio-accent/30;
+}
+
+.panel-header {
+  @apply px-4 py-2 border-b border-studio-accent/30 font-medium text-sm text-gray-300;
+}
+
+/* Button base */
+.btn {
+  @apply px-4 py-2 rounded-md font-medium transition-colors duration-200;
+}
+
+.btn-primary {
+  @apply bg-studio-highlight text-white hover:bg-studio-highlight/80;
+}
+
+.btn-secondary {
+  @apply bg-studio-accent text-gray-200 hover:bg-studio-accent/80;
+}
+
+/* Recording indicator animation */
+@keyframes pulse-recording {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.recording-indicator {
+  animation: pulse-recording 1.5s ease-in-out infinite;
+}
