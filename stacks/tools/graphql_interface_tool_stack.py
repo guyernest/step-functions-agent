@@ -366,6 +366,8 @@ def handler(event, context):
             raise ValueError(f"Tool name mismatch! Specs: {spec_names}, Declared: {declared_names}")
         
         # Use MultiToolConstruct to register GraphQL interface tools
+        # The secret_requirements registers "graphql-interface" in the ToolSecrets registry
+        # with empty keys (dynamic discovery) since endpoints are nested objects
         MultiToolConstruct(
             self,
             "GraphQLInterfaceToolsRegistry",
@@ -375,5 +377,8 @@ def handler(event, context):
                     "lambda_function": self.graphql_interface_lambda
                 }
             ],
-            env_name=self.env_name
+            env_name=self.env_name,
+            secret_requirements={
+                "graphql-interface": []  # Empty list = dynamic endpoint discovery
+            }
         )

@@ -53,7 +53,7 @@ def handler(event, context):
 def register_tool(event: Dict[str, Any]) -> Dict[str, Any]:
     """
     Register a new tool's secret requirements in DynamoDB
-    
+
     Expected event structure:
     {
         "operation": "register_tool",
@@ -61,16 +61,19 @@ def register_tool(event: Dict[str, Any]) -> Dict[str, Any]:
         "secret_keys": ["GOOGLE_MAPS_API_KEY"],
         "description": "Google Maps API key for geocoding and places"
     }
+
+    For tools with dynamic/nested secrets (like graphql-interface with multiple endpoints),
+    secret_keys can be empty []. The UI will discover actual keys from the secret values.
     """
-    
+
     tool_name = event.get('tool_name')
     secret_keys = event.get('secret_keys', [])
     description = event.get('description', '')
-    
-    if not tool_name or not secret_keys:
+
+    if not tool_name:
         return {
             'statusCode': 400,
-            'body': json.dumps({'error': 'tool_name and secret_keys are required'})
+            'body': json.dumps({'error': 'tool_name is required'})
         }
     
     # Register in DynamoDB
@@ -231,36 +234,40 @@ def update_consolidated_secret_structure():
     """
     Update the consolidated secret structure based on registered tools
     Ensures all registered tools have placeholder entries in the secret
+
+    For tools with empty secret_keys (dynamic discovery), only ensures
+    the tool entry exists without adding placeholders.
     """
-    
+
     try:
         # Get all registered tools
         response = tool_secrets_table.scan()
         tools = response.get('Items', [])
-        
+
         # Get current consolidated secret
         secret_response = secretsmanager.get_secret_value(SecretId=CONSOLIDATED_SECRET_NAME)
         current_secrets = json.loads(secret_response['SecretString'])
-        
+
         # Ensure each tool has an entry with placeholder values
         for tool in tools:
             tool_name = tool['tool_name']
             secret_keys = tool.get('secret_keys', [])
-            
+
             if tool_name not in current_secrets:
                 current_secrets[tool_name] = {}
-            
-            # Add placeholder for any missing keys
-            for key in secret_keys:
-                if key not in current_secrets[tool_name]:
-                    current_secrets[tool_name][key] = f"PLACEHOLDER_{key}"
-        
+
+            # Add placeholder for any missing keys (skip for empty secret_keys - dynamic discovery)
+            if secret_keys:
+                for key in secret_keys:
+                    if key not in current_secrets[tool_name]:
+                        current_secrets[tool_name][key] = f"PLACEHOLDER_{key}"
+
         # Update the secret
         secretsmanager.update_secret(
             SecretId=CONSOLIDATED_SECRET_NAME,
             SecretString=json.dumps(current_secrets)
         )
-        
+
     except Exception as e:
         print(f"Error updating consolidated secret structure: {e}")
         raise

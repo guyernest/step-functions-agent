@@ -8,6 +8,7 @@ from constructs import Construct
 from ..shared.naming_conventions import NamingConventions
 from typing import List, Dict, Any, Optional
 import json
+import hashlib
 from datetime import datetime, timezone
 
 
@@ -199,25 +200,36 @@ class BaseToolConstruct(Construct):
         )
     
     def _register_secret_requirements(self):
-        """Register tool secret requirements with the secret structure manager"""
-        
+        """Register tool secret requirements with the secret structure manager
+
+        Supports both:
+        - Standard tools with flat secret keys: {"google-maps": ["GOOGLE_MAPS_API_KEY"]}
+        - Dynamic/nested tools with empty keys: {"graphql-interface": []}
+          (endpoints discovered dynamically from existing secret values)
+        """
+
         if not self.secret_structure_manager_arn:
             print(f"Warning: Secret structure manager not available. Skipping secret registration.")
             return
-        
+
         # Register each tool's secret requirements
         for tool_name, secret_keys in self.secret_requirements.items():
-            if not secret_keys:
-                continue
-            
+            # Allow empty secret_keys for dynamic discovery tools
+
             # Find the tool description from specs
             description = ""
             for spec in self.tool_specs:
                 if spec.get("tool_name") == tool_name:
                     description = f"Secrets for {spec.get('description', tool_name)}"
                     break
-            
+
+            # Create a hash of the configuration to force re-registration when config changes
+            config_hash = hashlib.md5(
+                json.dumps({"tool_name": tool_name, "secret_keys": secret_keys, "description": description}).encode()
+            ).hexdigest()[:8]
+
             # Create custom resource to invoke the secret structure manager
+            # Include config_hash in payload to trigger on_update when configuration changes
             cr.AwsCustomResource(
                 self,
                 f"RegisterSecrets{tool_name.replace('-', '')}",
@@ -230,7 +242,8 @@ class BaseToolConstruct(Construct):
                             "operation": "register_tool",
                             "tool_name": tool_name,
                             "secret_keys": secret_keys,
-                            "description": description
+                            "description": description,
+                            "config_hash": config_hash  # Triggers update when config changes
                         })
                     },
                     physical_resource_id=cr.PhysicalResourceId.of(
@@ -246,7 +259,8 @@ class BaseToolConstruct(Construct):
                             "operation": "register_tool",
                             "tool_name": tool_name,
                             "secret_keys": secret_keys,
-                            "description": description
+                            "description": description,
+                            "config_hash": config_hash
                         })
                     },
                     physical_resource_id=cr.PhysicalResourceId.of(
@@ -266,28 +280,46 @@ class BaseToolConstruct(Construct):
 class MultiToolConstruct(Construct):
     """
     Multi-Tool Construct - For tools that span multiple Lambda functions
-    
+
     This construct handles the special case where multiple tools
     are deployed across different Lambda functions (like research tools
     with both Go and Python functions).
+
+    Also supports shared secret requirements for tools that share the same
+    secret configuration (e.g., multiple GraphQL tools sharing endpoint configs).
     """
 
     def __init__(
-        self, 
-        scope: Construct, 
-        construct_id: str, 
+        self,
+        scope: Construct,
+        construct_id: str,
         tool_groups: List[Dict[str, Any]],
         env_name: str = "prod",
+        secret_requirements: Optional[Dict[str, List[str]]] = None,
         **kwargs
     ) -> None:
+        """
+        Initialize MultiToolConstruct
+
+        Args:
+            scope: CDK scope
+            construct_id: Construct ID
+            tool_groups: List of tool groups, each with tool_specs and lambda_function
+            env_name: Environment name (prod, dev, etc.)
+            secret_requirements: Optional dict mapping secret_name to list of required keys
+                                For nested/dynamic secrets, use empty list [].
+                                Example: {"graphql-interface": []} for dynamic endpoint discovery
+        """
         super().__init__(scope, construct_id, **kwargs)
-        
+
         # Create a BaseToolConstruct for each tool group
+        # Only pass secret_requirements to the first group to avoid duplicate registration
         for i, tool_group in enumerate(tool_groups):
             BaseToolConstruct(
                 self,
                 f"ToolGroup{i}",
                 tool_specs=tool_group["tool_specs"],
                 lambda_function=tool_group["lambda_function"],
-                env_name=env_name
+                env_name=env_name,
+                secret_requirements=secret_requirements if i == 0 else None
             )
