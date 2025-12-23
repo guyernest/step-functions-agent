@@ -271,56 +271,80 @@ const ToolSecrets: React.FC = () => {
                 <Divider />
 
                 <Flex direction="column" gap="0.75rem">
-                  {tool.secret_keys && tool.secret_keys.map((key) => {
-                    const isEditing = editMode[tool.tool_name];
-                    const currentValue = isEditing 
-                      ? (tempValues[tool.tool_name]?.[key] || '') // Empty for new input when editing
-                      : (secretValues[tool.tool_name]?.[key] || ''); // Masked value when viewing
-                    const isPlaceholder = currentValue && currentValue.startsWith('PLACEHOLDER_');
-                    const fieldKey = `${tool.tool_name}-${key}`;
-                    
-                    return (
-                      <Flex key={key} direction="column" gap="0.25rem">
-                        <Flex justifyContent="space-between" alignItems="center">
-                          <Text fontWeight="bold">{key}</Text>
-                          {isPlaceholder && (
-                            <Badge variation="warning" size="small">
-                              Not Configured
-                            </Badge>
+                  {(() => {
+                    // Merge registered keys with discovered keys from actual secret values
+                    // This enables dynamic discovery for tools like graphql-interface
+                    const registeredKeys = tool.secret_keys || [];
+                    const discoveredKeys = Object.keys(secretValues[tool.tool_name] || {});
+                    const allKeys = [...new Set([...registeredKeys, ...discoveredKeys])].sort();
+
+                    if (allKeys.length === 0) {
+                      return (
+                        <Text variation="secondary" fontStyle="italic">
+                          No secrets configured. Use the AWS Console to add endpoint configurations.
+                        </Text>
+                      );
+                    }
+
+                    return allKeys.map((key) => {
+                      const isEditing = editMode[tool.tool_name];
+                      const currentValue = isEditing
+                        ? (tempValues[tool.tool_name]?.[key] || '') // Empty for new input when editing
+                        : (secretValues[tool.tool_name]?.[key] || ''); // Masked value when viewing
+                      const isPlaceholder = currentValue && currentValue.startsWith('PLACEHOLDER_');
+                      const isDynamicallyDiscovered = !registeredKeys.includes(key);
+                      const fieldKey = `${tool.tool_name}-${key}`;
+
+                      return (
+                        <Flex key={key} direction="column" gap="0.25rem">
+                          <Flex justifyContent="space-between" alignItems="center">
+                            <Flex alignItems="center" gap="0.5rem">
+                              <Text fontWeight="bold">{key}</Text>
+                              {isDynamicallyDiscovered && (
+                                <Badge variation="info" size="small">
+                                  Discovered
+                                </Badge>
+                              )}
+                            </Flex>
+                            {isPlaceholder && (
+                              <Badge variation="warning" size="small">
+                                Not Configured
+                              </Badge>
+                            )}
+                          </Flex>
+
+                          {editMode[tool.tool_name] ? (
+                            <Flex alignItems="center" gap="0.5rem">
+                              <TextField
+                                label=""
+                                value={currentValue}
+                                onChange={(e) => handleSecretChange(tool.tool_name, key, e.target.value)}
+                                type={showPasswords[fieldKey] ? "text" : "password"}
+                                placeholder={`Enter new ${key} (leave empty to keep current)`}
+                                width="100%"
+                              />
+                              <Button
+                                size="small"
+                                onClick={() => togglePasswordVisibility(fieldKey)}
+                              >
+                                {showPasswords[fieldKey] ? 'Hide' : 'Show'}
+                              </Button>
+                            </Flex>
+                          ) : (
+                            <Text
+                              variation="secondary"
+                              fontFamily="monospace"
+                              backgroundColor={isPlaceholder ? "var(--amplify-colors-orange-10)" : "var(--amplify-colors-neutral-10)"}
+                              padding="0.25rem 0.5rem"
+                              borderRadius="0.25rem"
+                            >
+                              {isPlaceholder ? 'Not configured - click Edit to add' : maskSecret(currentValue)}
+                            </Text>
                           )}
                         </Flex>
-                        
-                        {editMode[tool.tool_name] ? (
-                          <Flex alignItems="center" gap="0.5rem">
-                            <TextField
-                              label=""
-                              value={currentValue}
-                              onChange={(e) => handleSecretChange(tool.tool_name, key, e.target.value)}
-                              type={showPasswords[fieldKey] ? "text" : "password"}
-                              placeholder={`Enter new ${key} (leave empty to keep current)`}
-                              width="100%"
-                            />
-                            <Button
-                              size="small"
-                              onClick={() => togglePasswordVisibility(fieldKey)}
-                            >
-                              {showPasswords[fieldKey] ? 'Hide' : 'Show'}
-                            </Button>
-                          </Flex>
-                        ) : (
-                          <Text
-                            variation="secondary"
-                            fontFamily="monospace"
-                            backgroundColor={isPlaceholder ? "var(--amplify-colors-orange-10)" : "var(--amplify-colors-neutral-10)"}
-                            padding="0.25rem 0.5rem"
-                            borderRadius="0.25rem"
-                          >
-                            {isPlaceholder ? 'Not configured - click Edit to add' : maskSecret(currentValue)}
-                          </Text>
-                        )}
-                      </Flex>
-                    );
-                  })}
+                      );
+                    });
+                  })()}
                 </Flex>
 
                 {tool.registered_at && (
