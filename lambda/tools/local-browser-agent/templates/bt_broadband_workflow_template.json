@@ -126,18 +126,24 @@
         {
           "type": "if",
           "name": "CheckPasswordPage",
+          "description": "Wait for password page to load (SPA may take time to render)",
           "condition": {
             "type": "element_visible",
             "selector": "input[type='password']",
-            "timeout": 10000
+            "timeout": 60000
           },
           "then": {
             "type": "sequence",
             "steps": [
               {
                 "action": "wait",
-                "description": "Wait for autofill",
-                "duration": 2000
+                "description": "Wait for password manager autofill",
+                "duration": 4000
+              },
+              {
+                "action": "screenshot",
+                "description": "Debug: password field state",
+                "save_to": "02a_password_field.png"
               },
               {
                 "type": "if",
@@ -227,6 +233,11 @@
                 }
               },
               {
+                "action": "wait",
+                "description": "Brief pause before clicking submit",
+                "duration": 1000
+              },
+              {
                 "type": "try",
                 "name": "ClickNextAfterPassword",
                 "strategies": [
@@ -253,8 +264,37 @@
                         }
                       }
                     ]
+                  },
+                  {
+                    "name": "Strategy 3: Sign In button by text",
+                    "steps": [
+                      {
+                        "action": "click",
+                        "locator": {
+                          "strategy": "text",
+                          "value": "Sign In"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "name": "Strategy 4: Login button by text",
+                    "steps": [
+                      {
+                        "action": "click",
+                        "locator": {
+                          "strategy": "text",
+                          "value": "Login"
+                        }
+                      }
+                    ]
                   }
                 ]
+              },
+              {
+                "action": "screenshot",
+                "description": "Debug: after clicking submit",
+                "save_to": "02b_after_submit_click.png"
               }
             ]
           }
@@ -301,6 +341,79 @@
       "steps": [
         {
           "action": "screenshot",
+          "save_to": "03_before_navigation.png"
+        },
+        {
+          "type": "if",
+          "name": "CheckIfOnAddressHomePage",
+          "description": "Check if we're on the correct AddressHome page, if not navigate there",
+          "condition": {
+            "type": "or",
+            "conditions": [
+              {
+                "type": "element_visible",
+                "selector": "input[name='PostCode'], input[name='postcode'], input[id*='postcode' i]",
+                "timeout": 3000
+              },
+              {
+                "type": "url_contains",
+                "pattern": "AddressHome"
+              }
+            ]
+          },
+          "then": {
+            "continue": true
+          },
+          "else": {
+            "type": "sequence",
+            "description": "Navigate to AddressHome page",
+            "steps": [
+              {
+                "type": "try",
+                "name": "NavigateToAddressHome",
+                "description": "Try clicking tab first, then direct navigation",
+                "strategies": [
+                  {
+                    "name": "Strategy 1: Click Address Checker link by ID",
+                    "steps": [
+                      {
+                        "action": "click",
+                        "locator": {
+                          "strategy": "selector",
+                          "value": "a#addressNav"
+                        }
+                      },
+                      {
+                        "action": "wait_for_load_state",
+                        "state": "networkidle"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "Strategy 2: Direct navigation to AddressHome",
+                    "steps": [
+                      {
+                        "action": "navigate",
+                        "url": "https://bbactotl.btwholesale.com/bbac-ui/totl/totlSearch/#/ADSL/AddressHome"
+                      },
+                      {
+                        "action": "wait_for_load_state",
+                        "state": "networkidle"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "action": "wait",
+          "description": "Wait for Angular app to stabilize",
+          "duration": 1000
+        },
+        {
+          "action": "screenshot",
           "save_to": "03_search_page.png"
         },
         {
@@ -316,7 +429,7 @@
           },
           "else": {
             "action": "error",
-            "message": "Postcode field not found on search page"
+            "message": "Postcode field not found on search page after navigation attempts"
           }
         },
         {
@@ -436,7 +549,7 @@
         {
           "type": "try",
           "name": "SelectAddressFromList",
-          "description": "Progressive address matching: regex → fuzzy → vision with scroll",
+          "description": "Progressive address matching: regex -> fuzzy -> vision with scroll",
           "strategies": [
             {
               "name": "Strategy 1: Regex - building + first word only",
@@ -493,7 +606,7 @@
               "name": "Strategy 5: Vision LLM with scroll capability",
               "escalate": {
                 "type": "vision_llm",
-                "prompt": "Find and click the address matching '{{full_address}}' in the address list. CRITICAL INSTRUCTIONS:\n\n1. FIRST SEARCH: Look carefully at ALL visible addresses for one containing:\n   - Building number: '{{building_number}}'\n   - Street name: '{{street}}'\n   - Format may vary (case, commas, word order)\n\n2. IF FOUND: Click it immediately\n\n3. IF NOT VISIBLE:\n   a) The list is likely SCROLLABLE - look for:\n      - A dropdown/select element that can be scrolled\n      - Scroll arrows (up/down)\n      - A scrollbar on the address list\n   b) SCROLL DOWN within the list (not the whole page)\n   c) After scrolling, SEARCH AGAIN for the address\n   d) Repeat: scroll → search → scroll → search (up to 3 scroll attempts)\n\n4. MATCHING RULES:\n   - Accept variations: '{{building_number}} {{street}}', '{{building_number}}, {{street}}', '{{building_number}} {{street}}, City'\n   - Case-insensitive matching\n   - Must have BOTH building number AND street name\n\n5. MAX ACTIONS: 8 actions total (including scrolls and clicks)\n\n6. IF STILL NOT FOUND: Click the closest match by building number, or report failure.",
+                "prompt": "Find and click the address matching '{{full_address}}' in the address list. CRITICAL INSTRUCTIONS:\n\n1. FIRST SEARCH: Look carefully at ALL visible addresses for one containing:\n   - Building number: '{{building_number}}'\n   - Street name: '{{street}}'\n   - Format may vary (case, commas, word order)\n\n2. IF FOUND: Click it immediately\n\n3. IF NOT VISIBLE:\n   a) The list is likely SCROLLABLE - look for:\n      - A dropdown/select element that can be scrolled\n      - Scroll arrows (up/down)\n      - A scrollbar on the address list\n   b) SCROLL DOWN within the list (not the whole page)\n   c) After scrolling, SEARCH AGAIN for the address\n   d) Repeat: scroll -> search -> scroll -> search (up to 3 scroll attempts)\n\n4. MATCHING RULES:\n   - Accept variations: '{{building_number}} {{street}}', '{{building_number}}, {{street}}', '{{building_number}} {{street}}, City'\n   - Case-insensitive matching\n   - Must have BOTH building number AND street name\n\n5. MAX ACTIONS: 8 actions total (including scrolls and clicks)\n\n6. IF STILL NOT FOUND: Report failure.",
                 "timeout": 30000,
                 "max_actions": 8
               }
@@ -501,29 +614,51 @@
           ]
         },
         {
+          "action": "wait",
+          "description": "Wait before clicking submit to avoid bot detection",
+          "duration": 500
+        },
+        {
           "type": "try",
           "name": "ClickContinueAfterAddress",
+          "description": "Click submit with retry for 'service unavailable' errors",
           "strategies": [
             {
-              "name": "Strategy 1: Submit button",
+              "name": "Strategy 1: Submit button with retry",
               "steps": [
                 {
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
                     "value": "button[type='submit']"
+                  },
+                  "delay": 300,
+                  "retry": {
+                    "attempts": 5,
+                    "delay_ms": 3000,
+                    "retry_if": {
+                      "text_visible": "service unavailable"
+                    }
                   }
                 }
               ]
             },
             {
-              "name": "Strategy 2: Continue button",
+              "name": "Strategy 2: Continue button with retry",
               "steps": [
                 {
                   "action": "click",
                   "locator": {
                     "strategy": "text",
                     "value": "Continue"
+                  },
+                  "delay": 300,
+                  "retry": {
+                    "attempts": 5,
+                    "delay_ms": 3000,
+                    "retry_if": {
+                      "text_visible": "service unavailable"
+                    }
                   }
                 }
               ]
@@ -536,7 +671,8 @@
         },
         {
           "action": "wait",
-          "duration": 3000
+          "description": "Wait for results page to fully render",
+          "duration": 5000
         },
         {
           "action": "wait_for_load_state",
@@ -564,17 +700,13 @@
         {
           "action": "extract",
           "method": "vision",
-          "prompt": "Extract broadband availability information from the results page following these steps: 1. ALWAYS CAPTURE (if visible):   - ALK (Access Line Key) - usually displayed near top  - Exchange Code - BT exchange identifier 2. CHECK FEATURED PRODUCTS SECTION:  Look for a section called 'Featured Products'.   Search for a row/line containing 'WBC FTTP'. 3. IF 'WBC FTTP' IS FOUND:  - Set fttp_avail = true   - From the WBC FTTP row, capture 'Downstream Line Rate' (this is the SOADSL DSL speed in Mbps).   Then navigate to OTHER SECTIONS:   a) OTHER OFFERINGS section:     - Check if ANY row has 'Service Availability' field = 'Enabled'    - If found, set sogea_avail = true, otherwise false.   b) ONT DETAILS section:  - Find the LAST row in this section   - Capture: 'Reference' field (this is ont_reference)   - Capture: 'ONT Serial Number' field (this is ont_serial_no)    - Capture: 'Port Service ID' field (this is port_service_id)   c) PREMISE ENVIRONMENT section:      - Capture: 'Recommended Minimum SVR NLP' field (this is install_type)    - Valid values are typically 'Standard' or 'Premium'. 4. IF 'WBC FTTP' IS NOT FOUND:   - Set fttp_avail = false  - Leave all FTTP-related fields blank (install_type, sogea_avail, soadsl_dsl_speed, ont_reference, ont_serial_no, port_service_id). IMPORTANT: fttp_avail is REQUIRED and must always be set to true or false based on whether WBC FTTP is present in Featured Products.",
+          "prompt": "You are a BT Broadband Availability Checker assistant that uses browser automation to check broadband availability for UK addresses. You can see and read the contents of images provided in the message. Use the screenshot image as if it were the rendered web page. Strictly follow and execute the following steps and output ONLY the JSON object. Step1: ALWAYS capture the  'Exchange Code'– This is the field 'exchange_code'.  This is required and should be captured at all times. Step 2: Then check  the first table with first column called 'FEATURED PRODUCTS': Search for a row containing the value 'WBC FTTP'.  if not fund, skip to steo 3. If found:, capture the field  'Downstream Line Rate' (this is the SOADSL DSL speed in Mbps) in the same row. Then set fttp_avail = true.  Navigate to the table that has the first column named 'OTHER OFFERINGS': Check if ANY row has the value 'VDSL Multicast' and 'Service Availability' column = 'Enabled'. If found, set sogea_avail = true, otherwise set sogea_avail = false. Then search for a table titled ONT DETAILS.  If it exists then from the row with 'Status' column = 'Working',  capture: 'Reference' column (this is ont_reference)   - Capture: 'ONT Serial Number' column (this is ont_serial_no)    - Capture: 'Port Service ID' column (this is port_service_id). Skip to step 5 . Steo 3: If no line with value 'WBC FTTP' is found in the first table that has 'FEATURED PRODUCS' as its first heading, then check if there is a table whose first column is named 'SOADSL Products'. If there is none, then skip to step 4. If there is then find the row with value 'SOADSL WBC' and column 'WBC SOADSL Availability' = 'Enabled'.  From this row capture the numeric value of the field 'Downstream Line Rate' (this is the SOADSL DSL speed in Mbps). Then set fttp_avail = false - Leave all other fields blank (sogea_avail, ont_reference, ont_serial_no, port_service_id). Skip to step 5. Step 4: Check if there is a table with a column named 'WBC SOGEA AVAILABILITY' and with value 'Enabled' or 'Exception'.  if thre is then from the same table, capture the value of the column of the first line under the  heading 'Downstream Line Rate (Mbps)' – sub heading  'Low'. (this is the SOADSL DSL speed in Mbps). Then check if there is a second table with a column 'Featured Products' under the first one, with a line 'WBC FTTP'.  If there is and the value of the column 'Service Availability' = 'Enabled' then set fttp_avail = true, otherwise set fttp_avail = false. Then check if there is a table 'ONT Details.  If yes then from the row with 'Status' field = 'Working',  Capture: 'Reference' field (this is ont_reference)   - Capture: 'ONT Serial Number' field (this is ont_serial_no)    - Capture: 'Port Service ID' field (this is port_service_id). Step 5. Navigate to the table titled 'PREMISE ENVIRONMENT.   Capture the value of 'Recommended Minimum SVR NLP' field (this is install_type) - Valid values are typically 'Standard', 'Premium', or 'Advanced'. IMPORTANT: At all times, ignore other tables not listed above.",
           "schema": {
             "type": "object",
             "properties": {
-              "alk": {
-                "type": "string",
-                "description": "Access Line Key identifier (e.g., A00022059784)"
-              },
               "exchange_code": {
                 "type": "string",
-                "description": "BT exchange code (e.g., CAMBRIDGE)"
+                "description": "Exchange Code (e.g., LCBOL, or SLCBR)."
               },
               "fttp_avail": {
                 "type": "boolean",
@@ -585,6 +717,7 @@
                 "enum": [
                   "Standard",
                   "Premium",
+                  "Advanced",
                   "N/A"
                 ],
                 "description": "Value from Premise Environment -> Recommended Minimum SVR NLP (only if WBC FTTP found)"
@@ -617,7 +750,7 @@
         },
         {
           "action": "screenshot",
-          "save_to": "06_final.png"
+          "save_to": "07_final.png"
         }
       ],
       "end": true

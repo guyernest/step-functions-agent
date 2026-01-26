@@ -80,6 +80,7 @@ import json
 import base64
 import traceback
 import random
+import re
 from typing import Dict, Any, Optional, List, Literal, Union
 from pathlib import Path
 import asyncio
@@ -937,9 +938,10 @@ class OpenAIPlaywrightExecutor:
             )
             self.page = self.context.pages[0] if self.context.pages else await self.context.new_page()
         else:
-            # Use regular browser
+            # Use regular browser - ignore_https_errors goes to new_context, not launch
+            ignore_https_errors = launch_options.pop("ignore_https_errors", False)
             self.browser = await browser_type.launch(**launch_options)
-            self.context = await self.browser.new_context()
+            self.context = await self.browser.new_context(ignore_https_errors=ignore_https_errors)
             self.page = await self.context.new_page()
 
         # Set default navigation timeout
@@ -1001,8 +1003,10 @@ class OpenAIPlaywrightExecutor:
             "fill": self._step_fill,
             "wait": self._step_wait,
             "wait_for_load_state": self._step_wait_for_load_state,
+            "wait_for_selector": self._step_wait_for_selector,
             "screenshot": self._step_screenshot,
             "extract": self._step_extract,
+            "extract_dom": self._step_extract_dom,
             "execute_js": self._step_execute_js,
             "press": self._step_press,
             "error": self._step_error,
@@ -1458,6 +1462,68 @@ class OpenAIPlaywrightExecutor:
                 "error": f"Timeout waiting for load state '{state}': {str(e)}"
             }
 
+    async def _step_wait_for_selector(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
+        """
+        Wait for a selector to appear/disappear with optional state.
+
+        This is more flexible than wait_for_load_state for detecting specific
+        page content like results tables, loading indicators, etc.
+
+        Usage in script:
+        {
+          "action": "wait_for_selector",
+          "description": "Wait for results table to appear",
+          "selector": "text=/Exchange Code|FEATURED PRODUCTS/i",
+          "state": "visible",  // "visible" (default), "hidden", "attached", "detached"
+          "timeout": 30000
+        }
+
+        Can also wait for loading indicators to disappear:
+        {
+          "action": "wait_for_selector",
+          "description": "Wait for loading spinner to disappear",
+          "selector": ".loading, .spinner, [class*='loading']",
+          "state": "hidden",
+          "timeout": 30000
+        }
+        """
+        selector = step.get("selector")
+        if not selector:
+            return {
+                "success": False,
+                "error": "wait_for_selector requires 'selector' field"
+            }
+
+        state = step.get("state", "visible")
+        timeout = step.get("timeout", self.navigation_timeout)
+
+        valid_states = ["visible", "hidden", "attached", "detached"]
+        if state not in valid_states:
+            return {
+                "success": False,
+                "error": f"Invalid state '{state}'. Must be one of: {valid_states}"
+            }
+
+        print(f"⏳ Waiting for selector: {selector} (state: {state}, timeout: {timeout}ms)", file=sys.stderr)
+
+        try:
+            await self.page.wait_for_selector(selector, state=state, timeout=timeout)
+            print(f"✓ Selector reached state '{state}': {selector}", file=sys.stderr)
+
+            return {
+                "success": True,
+                "action": "wait_for_selector",
+                "selector": selector,
+                "state": state,
+                "timeout": timeout,
+            }
+        except Exception as e:
+            print(f"✗ Timeout waiting for selector '{selector}' (state: {state}): {e}", file=sys.stderr)
+            return {
+                "success": False,
+                "error": f"Timeout waiting for selector '{selector}' (state: {state}): {str(e)}"
+            }
+
     async def _step_screenshot(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
         """
         Take screenshot with optional S3 upload.
@@ -1581,6 +1647,209 @@ class OpenAIPlaywrightExecutor:
                 "success": False,
                 "error": f"Unknown extraction method: {method}"
             }
+
+    async def _step_extract_dom(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
+        """
+        Extract precise values directly from DOM using CSS selectors, XPath, or regex.
+
+        This is ideal for extracting long alphanumeric values that vision models
+        struggle with (ONT references, serial numbers, exchange codes, etc.).
+
+        Usage in script:
+        {
+          "action": "extract_dom",
+          "description": "Extract precise values from results page",
+          "extractions": [
+            {
+              "field": "exchange_code",
+              "strategy": "css",
+              "selector": "td:has-text('Exchange') + td, th:has-text('Exchange') ~ td"
+            },
+            {
+              "field": "ont_reference",
+              "strategy": "xpath",
+              "xpath": "//td[contains(text(),'Reference')]/following-sibling::td[1]"
+            },
+            {
+              "field": "ont_serial_no",
+              "strategy": "regex",
+              "selector": "table",
+              "pattern": "ONT[A-Z0-9]{10,}"
+            },
+            {
+              "field": "downstream_speed",
+              "strategy": "table_cell",
+              "table_selector": "table:has-text('FEATURED PRODUCTS')",
+              "row_contains": "WBC FTTP",
+              "column_header": "Downstream Line Rate"
+            },
+            {
+              "field": "port_service_id",
+              "strategy": "js",
+              "expression": "document.querySelector('[data-field=\"port-id\"]')?.textContent"
+            }
+          ]
+        }
+
+        Strategies:
+        - css: Use CSS selector to find element and get text content
+        - xpath: Use XPath expression to find element
+        - regex: Find text matching regex pattern within a container element
+        - table_cell: Extract cell value from a table by row content and column header
+        - js: Execute custom JavaScript expression
+        """
+        extractions = step.get("extractions", [])
+        if not extractions:
+            return {
+                "success": False,
+                "error": "extract_dom requires 'extractions' array"
+            }
+
+        results = {}
+        errors = []
+
+        for extraction in extractions:
+            field = extraction.get("field")
+            strategy = extraction.get("strategy", "css")
+
+            if not field:
+                errors.append("Extraction missing 'field' name")
+                continue
+
+            try:
+                value = None
+
+                if strategy == "css":
+                    selector = extraction.get("selector")
+                    if not selector:
+                        errors.append(f"{field}: CSS strategy requires 'selector'")
+                        continue
+
+                    # Try to find element and get text
+                    try:
+                        element = await self.page.query_selector(selector)
+                        if element:
+                            value = await element.text_content()
+                            if value:
+                                value = value.strip()
+                    except Exception as e:
+                        print(f"  ⚠ CSS selector failed for {field}: {e}", file=sys.stderr)
+
+                elif strategy == "xpath":
+                    xpath = extraction.get("xpath")
+                    if not xpath:
+                        errors.append(f"{field}: XPath strategy requires 'xpath'")
+                        continue
+
+                    try:
+                        # Use Playwright's XPath support
+                        element = await self.page.query_selector(f"xpath={xpath}")
+                        if element:
+                            value = await element.text_content()
+                            if value:
+                                value = value.strip()
+                    except Exception as e:
+                        print(f"  ⚠ XPath failed for {field}: {e}", file=sys.stderr)
+
+                elif strategy == "regex":
+                    container_selector = extraction.get("selector", "body")
+                    pattern = extraction.get("pattern")
+                    if not pattern:
+                        errors.append(f"{field}: Regex strategy requires 'pattern'")
+                        continue
+
+                    try:
+                        # Get text content from container
+                        element = await self.page.query_selector(container_selector)
+                        if element:
+                            text = await element.text_content()
+                            if text:
+                                match = re.search(pattern, text)
+                                if match:
+                                    value = match.group(0)
+                    except Exception as e:
+                        print(f"  ⚠ Regex extraction failed for {field}: {e}", file=sys.stderr)
+
+                elif strategy == "table_cell":
+                    table_selector = extraction.get("table_selector", "table")
+                    row_contains = extraction.get("row_contains")
+                    column_header = extraction.get("column_header")
+
+                    if not row_contains or not column_header:
+                        errors.append(f"{field}: table_cell requires 'row_contains' and 'column_header'")
+                        continue
+
+                    try:
+                        # Use JavaScript to navigate table structure
+                        js_code = """
+                        (args) => {
+                            const [tableSelector, rowText, colHeader] = args;
+                            const table = document.querySelector(tableSelector);
+                            if (!table) return null;
+
+                            // Find column index from header
+                            const headers = table.querySelectorAll('th');
+                            let colIndex = -1;
+                            headers.forEach((th, i) => {
+                                if (th.textContent.toLowerCase().includes(colHeader.toLowerCase())) {
+                                    colIndex = i;
+                                }
+                            });
+                            if (colIndex === -1) return null;
+
+                            // Find row containing the text
+                            const rows = table.querySelectorAll('tr');
+                            for (const row of rows) {
+                                if (row.textContent.toLowerCase().includes(rowText.toLowerCase())) {
+                                    const cells = row.querySelectorAll('td');
+                                    if (cells[colIndex]) {
+                                        return cells[colIndex].textContent.trim();
+                                    }
+                                }
+                            }
+                            return null;
+                        }
+                        """
+                        value = await self.page.evaluate(js_code, [table_selector, row_contains, column_header])
+                    except Exception as e:
+                        print(f"  ⚠ Table cell extraction failed for {field}: {e}", file=sys.stderr)
+
+                elif strategy == "js":
+                    expression = extraction.get("expression")
+                    if not expression:
+                        errors.append(f"{field}: JS strategy requires 'expression'")
+                        continue
+
+                    try:
+                        value = await self.page.evaluate(expression)
+                        if value and isinstance(value, str):
+                            value = value.strip()
+                    except Exception as e:
+                        print(f"  ⚠ JS evaluation failed for {field}: {e}", file=sys.stderr)
+
+                else:
+                    errors.append(f"{field}: Unknown strategy '{strategy}'")
+                    continue
+
+                # Store result
+                if value:
+                    results[field] = value
+                    print(f"  ✓ Extracted {field}: {value[:50]}{'...' if len(str(value)) > 50 else ''}", file=sys.stderr)
+                else:
+                    print(f"  ⚠ No value found for {field}", file=sys.stderr)
+
+            except Exception as e:
+                errors.append(f"{field}: {str(e)}")
+                print(f"  ✗ Error extracting {field}: {e}", file=sys.stderr)
+
+        return {
+            "success": len(results) > 0,
+            "action": "extract_dom",
+            "data": results,
+            "fields_found": len(results),
+            "fields_requested": len(extractions),
+            "errors": errors if errors else None,
+        }
 
     async def _execute_extracted_action(self, extracted_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -1936,6 +2205,10 @@ Examples:
         if profile:
             user_data_dir = Path(profile["user_data_dir"])
             print(f"Using profile '{args.profile}': {user_data_dir}", file=sys.stderr)
+            # Use browser_channel from profile if not explicitly set via command line
+            if not args.browser_channel and profile.get("browser_channel"):
+                args.browser_channel = profile["browser_channel"]
+                print(f"Using browser_channel from profile: {args.browser_channel}", file=sys.stderr)
         else:
             print(f"ERROR: Profile '{args.profile}' not found.", file=sys.stderr)
             print(f"Use --list-profiles to see available profiles.", file=sys.stderr)
