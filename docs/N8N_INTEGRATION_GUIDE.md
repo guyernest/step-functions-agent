@@ -213,6 +213,7 @@ cdk deploy MCPServerStack-prod
    - Header Value: Your API key
 
 ### Step 3: Create Agent Workflow
+{% raw %}
 ```json
 {
   "nodes": [
@@ -250,6 +251,7 @@ cdk deploy MCPServerStack-prod
   ]
 }
 ```
+{% endraw %}
 
 ## Benefits
 

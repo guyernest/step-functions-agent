@@ -177,6 +177,7 @@ https://n8n.example.com/rest/oauth2-credential/callback
 
 For testing or simple setups:
 
+{% raw %}
 ```json
 {
   "headers": {
@@ -185,11 +186,13 @@ For testing or simple setups:
   }
 }
 ```
+{% endraw %}
 
 ## Workflow Templates
 
 ### Basic Agent Execution Workflow
 
+{% raw %}
 ```json
 {
   "name": "Basic Agent Execution",
@@ -313,9 +316,11 @@ For testing or simple setups:
   }
 }
 ```
+{% endraw %}
 
 ### Advanced Polling Workflow
 
+{% raw %}
 ```json
 {
   "name": "Agent Execution with Polling",
@@ -486,6 +491,7 @@ For testing or simple setups:
   }
 }
 ```
+{% endraw %}
 
 ## Visual Workflow Examples
 
