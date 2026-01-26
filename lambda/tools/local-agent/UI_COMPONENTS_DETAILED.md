@@ -1,7 +1,4 @@
----
-render_with_liquid: false
----
-
+{% raw %}
 # Detailed UI Component Design for Local Agent
 
 ## 1. Monitor Screen Component
@@ -1276,3 +1273,4 @@ export const NotificationProvider: FC<{ children: ReactNode }> = ({ children }) 
 ```
 
 This completes the detailed UI component design!
+{% endraw %}
