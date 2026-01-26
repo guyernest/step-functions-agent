@@ -179,6 +179,7 @@ address,postcode,exchange_station,download_speed,upload_speed,screenshot_url,_st
 **Root Cause**: The Load Tools state doesn't properly pass tools to the next state after we removed the Output override.
 
 **Fix Required**: Update the Load Tools state to use Assign instead of Output:
+{% raw %}
 ```json
 "Load Tools": {
   "Type": "Map",
@@ -188,6 +189,7 @@ address,postcode,exchange_station,download_speed,upload_speed,screenshot_url,_st
   "Next": "Call Unified LLM"
 }
 ```
+{% endraw %}
 
 ### Issue 2: Tool Use ID Mismatch
 **Problem**: The monitor_batch_execution tool returns `tool_use_id: "1"` instead of the actual ID
