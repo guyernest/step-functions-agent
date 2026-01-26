@@ -76,10 +76,11 @@ MultiToolConstruct(
 ```
 
 #### 3. Runtime Tool Discovery
+{% raw %}
 ```python
 # Step Functions loads tools dynamically from DynamoDB
 "Load Tool Definitions": {
-    "Type": "Map", 
+    "Type": "Map",
     "Items": "{% $parse($agent_config.tools.S) %}",
     "ItemProcessor": {
         "StartAt": "Get Tool Details",
@@ -98,6 +99,7 @@ MultiToolConstruct(
     }
 }
 ```
+{% endraw %}
 
 ## Benefits of Modular Architecture
 
@@ -255,6 +257,7 @@ class TestAgentStack(ModularBaseAgentStack):
 ```
 
 ### 3. **Tool Capability Matching**
+{% raw %}
 ```python
 # Automatic tool selection based on capabilities
 "Select Best Tool": {
@@ -271,5 +274,6 @@ class TestAgentStack(ModularBaseAgentStack):
     ]
 }
 ```
+{% endraw %}
 
 This modular architecture provides the foundation for truly independent tool and agent development while maintaining the flexibility and power of the approval workflow system.

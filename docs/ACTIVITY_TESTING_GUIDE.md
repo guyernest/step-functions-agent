@@ -134,6 +134,7 @@ python test_approval_agents.py test
 The approval workflows generate these Step Functions states:
 
 #### Human Approval Pattern
+{% raw %}
 ```json
 {
   "Request Approval execute_sql_query": {
@@ -149,6 +150,7 @@ The approval workflows generate these Step Functions states:
   }
 }
 ```
+{% endraw %}
 
 #### Remote Execution Pattern
 ```json
