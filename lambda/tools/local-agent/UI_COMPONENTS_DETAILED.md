@@ -1,3 +1,7 @@
+---
+render_with_liquid: false
+---
+
 # Detailed UI Component Design for Local Agent
 
 ## 1. Monitor Screen Component
