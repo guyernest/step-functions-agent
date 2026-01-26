@@ -101,7 +101,7 @@ function Get-FileVersion {
 
     # Try to extract version from file (look for version comments or patterns)
     $content = Get-Content $FilePath -Raw -ErrorAction SilentlyContinue
-    if ($content -match 'VERSION\s*=\s*["\']([^"\']+)["\']') {
+    if ($content -match "VERSION\s*=\s*[`"']([^`"']+)[`"']") {
         return $matches[1]
     }
 
