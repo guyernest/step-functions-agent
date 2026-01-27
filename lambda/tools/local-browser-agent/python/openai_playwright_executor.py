@@ -128,8 +128,9 @@ class OpenAIPlaywrightExecutor:
         user_data_dir: Optional[Path] = None,
         navigation_timeout: int = 60000,
     ):
-        self.llm_provider = llm_provider.lower()
-        self.llm_model = llm_model
+        # Handle None values with defaults
+        self.llm_provider = (llm_provider or "openai").lower()
+        self.llm_model = llm_model or "gpt-4o-mini"
         self.llm_api_key = llm_api_key
         self.s3_bucket = s3_bucket
         self.aws_profile = aws_profile
