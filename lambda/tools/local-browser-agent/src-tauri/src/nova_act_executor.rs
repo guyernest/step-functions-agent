@@ -381,11 +381,15 @@ impl NovaActExecutor {
         // Always set AWS profile
         cmd.env("AWS_PROFILE", &self.config.aws_profile);
 
-        // Set Nova Act API key if using nova_act engine (optional for computer_agent)
+        // Set Nova Act API key if using nova_act engine and key is available
+        // Not required for setup_login/validate_profile which don't use LLM
         if self.config.browser_engine == "nova_act" {
-            let nova_act_api_key = self.config.get_nova_act_api_key()
-                .context("Failed to get Nova Act API key")?;
-            cmd.env("NOVA_ACT_API_KEY", nova_act_api_key);
+            match self.config.get_nova_act_api_key() {
+                Ok(key) => { cmd.env("NOVA_ACT_API_KEY", key); },
+                Err(_) => {
+                    log::warn!("Nova Act API key not found - commands requiring LLM will fail");
+                }
+            }
         }
 
         // Set OpenAI configuration if using computer_agent engine

@@ -26,13 +26,111 @@ use nova_act_executor::NovaActExecutor;
 use paths::AppPaths;
 use session_manager::SessionManager;
 
+/// Initialize logging with both console (stderr) and file output.
+///
+/// On Windows release builds, the app runs as a GUI subsystem process
+/// with no console attached, so file logging is essential for diagnostics.
+/// Log files are written to the platform-specific logs directory:
+///   - Windows: %LOCALAPPDATA%\Local Browser Agent\logs\
+///   - macOS:   ~/Library/Application Support/Local Browser Agent/logs/
+///   - Linux:   ~/.local/share/local-browser-agent/logs/
+fn init_logging() -> Result<PathBuf> {
+    let paths = AppPaths::new()
+        .context("Failed to initialize application paths for logging")?;
+
+    let logs_dir = paths.logs_dir();
+    std::fs::create_dir_all(&logs_dir)
+        .context(format!("Failed to create logs directory: {}", logs_dir.display()))?;
+
+    // Daily log file: local-browser-agent_YYYY-MM-DD.log
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let log_file_path = logs_dir.join(format!("local-browser-agent_{}.log", today));
+
+    let log_file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_file_path)
+        .context(format!("Failed to open log file: {}", log_file_path.display()))?;
+
+    // Determine log level from RUST_LOG env var, default to info
+    let log_level = std::env::var("RUST_LOG")
+        .ok()
+        .and_then(|s| s.parse::<log::LevelFilter>().ok())
+        .unwrap_or(log::LevelFilter::Info);
+
+    fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "{} [{}] [{}] {}",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
+                record.level(),
+                record.target(),
+                message
+            ))
+        })
+        .level(log_level)
+        // Reduce noise from internal libraries
+        .level_for("hyper", log::LevelFilter::Warn)
+        .level_for("rustls", log::LevelFilter::Warn)
+        .level_for("tungstenite", log::LevelFilter::Warn)
+        .chain(std::io::stderr())
+        .chain(log_file)
+        .apply()
+        .context("Failed to initialize logging")?;
+
+    // Clean up old log files (keep last 7 days)
+    cleanup_old_logs(&logs_dir, 7);
+
+    Ok(log_file_path)
+}
+
+/// Remove log files older than `keep_days` days
+fn cleanup_old_logs(logs_dir: &std::path::Path, keep_days: i64) {
+    let cutoff = chrono::Local::now() - chrono::Duration::days(keep_days);
+
+    if let Ok(entries) = std::fs::read_dir(logs_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                // Match files like local-browser-agent_2025-01-20.log
+                if name.starts_with("local-browser-agent_") && name.ends_with(".log") {
+                    let date_str = name
+                        .trim_start_matches("local-browser-agent_")
+                        .trim_end_matches(".log");
+                    if let Ok(file_date) = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+                        if file_date < cutoff.date_naive() {
+                            if let Err(e) = std::fs::remove_file(&path) {
+                                eprintln!("Failed to remove old log file {}: {}", path.display(), e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize logging
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-        .init();
+    // Initialize logging to both console and file
+    let log_file_path = match init_logging() {
+        Ok(path) => {
+            info!("Logging to file: {}", path.display());
+            Some(path)
+        }
+        Err(e) => {
+            // Fall back to console-only logging if file logging fails
+            env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+                .init();
+            warn!("File logging unavailable ({}), using console only", e);
+            None
+        }
+    };
 
     info!("Starting Local Browser Agent...");
+    if let Some(ref path) = log_file_path {
+        info!("Log file: {}", path.display());
+    }
 
     // Parse command line arguments
     let args: Vec<String> = std::env::args().collect();

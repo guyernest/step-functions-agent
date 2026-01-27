@@ -1510,6 +1510,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fern"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4316185f709b23713e41e3195f90edef7fb00c3ed4adc79769cf09cc762a3b29"
+dependencies = [
+ "log",
+]
+
+[[package]]
 name = "ff"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2791,6 +2800,7 @@ dependencies = [
  "chrono",
  "dirs",
  "env_logger",
+ "fern",
  "jsonschema",
  "lazy_static",
  "log",
