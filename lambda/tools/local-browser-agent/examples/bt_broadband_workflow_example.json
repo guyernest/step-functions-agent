@@ -1,0 +1,766 @@
+{
+  "name": "BT Broadband Availability Checker - Example",
+  "description": "Ready-to-run example for checking broadband availability. Uses the Bt_broadband profile with saved credentials.",
+  "starting_page": "https://bbactotl.btwholesale.com/bbac-ui/totl/totlSearch/#/ADSL/AddressHome",
+  "llm_provider": "openai",
+  "llm_model": "gpt-4o-mini",
+  "abort_on_error": false,
+  "default_delay": 300,
+  "screenshot_config": {
+    "s3_prefix": "verification",
+    "upload_mode": "marked_only"
+  },
+  "session": {
+    "profile_name": "Bt_broadband",
+    "required_tags": ["bt.com", "authenticated"],
+    "allow_temp_profile": false,
+    "clone_for_parallel": false
+  },
+  "variables": {
+    "username": "your_username_here",
+    "postcode": "DN12 1RH",
+    "building_number": "1",
+    "street": "Church View",
+    "full_address": "1 Church View, DN12 1RH"
+  },
+  "steps": [
+    {
+      "action": "wait_for_load_state",
+      "description": "Wait for initial page load",
+      "state": "networkidle"
+    },
+    {
+      "action": "screenshot",
+      "description": "Initial page state",
+      "save_to": "01_initial.png"
+    },
+    {
+      "type": "if",
+      "name": "CheckAuthenticationStatus",
+      "description": "Detect if login required or already authenticated",
+      "condition": {
+        "type": "or",
+        "conditions": [
+          {
+            "type": "element_visible",
+            "selector": "input[type='password'], input[type='text'][name*='user']",
+            "timeout": 3000
+          },
+          {
+            "type": "js_eval",
+            "expression": "document.title.toLowerCase().includes('secure authentication') || document.title.toLowerCase().includes('login')"
+          }
+        ]
+      },
+      "then": {
+        "goto": "PerformLogin"
+      },
+      "else": {
+        "goto": "PerformSearch"
+      }
+    },
+    {
+      "type": "sequence",
+      "name": "PerformLogin",
+      "description": "Complete login flow with password manager support",
+      "steps": [
+        {
+          "type": "try",
+          "name": "FillUsername",
+          "strategies": [
+            {
+              "name": "Strategy 1: By name attribute",
+              "steps": [
+                {
+                  "action": "fill",
+                  "locator": {
+                    "strategy": "selector",
+                    "value": "input[type='text'][name*='user'], input[type='email']"
+                  },
+                  "value": "{{username}}"
+                }
+              ]
+            },
+            {
+              "name": "Strategy 2: First text input",
+              "steps": [
+                {
+                  "action": "fill",
+                  "locator": {
+                    "strategy": "selector",
+                    "value": "input[type='text']:first-of-type"
+                  },
+                  "value": "{{username}}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "try",
+          "name": "ClickNextAfterUsername",
+          "strategies": [
+            {
+              "name": "Strategy 1: Submit button",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {
+                    "strategy": "selector",
+                    "value": "button[type='submit']"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Strategy 2: Next button",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {
+                    "strategy": "text",
+                    "value": "Next"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "action": "wait_for_load_state",
+          "state": "networkidle"
+        },
+        {
+          "type": "if",
+          "name": "CheckPasswordPage",
+          "description": "Wait for password page to load (SPA may take time to render)",
+          "condition": {
+            "type": "element_visible",
+            "selector": "input[type='password']",
+            "timeout": 60000
+          },
+          "then": {
+            "type": "sequence",
+            "steps": [
+              {
+                "action": "wait",
+                "description": "Wait for password manager autofill",
+                "duration": 4000
+              },
+              {
+                "action": "screenshot",
+                "description": "Debug: password field state",
+                "save_to": "02a_password_field.png"
+              },
+              {
+                "type": "if",
+                "name": "CheckPasswordAutofilled",
+                "condition": {
+                  "type": "js_eval",
+                  "expression": "document.querySelector('input[type=\"password\"]')?.value?.length > 0"
+                },
+                "then": {
+                  "continue": true
+                },
+                "else": {
+                  "type": "try",
+                  "name": "FillPasswordWithPasswordManager",
+                  "strategies": [
+                    {
+                      "name": "Strategy 1: Tab + Enter",
+                      "steps": [
+                        {
+                          "action": "click",
+                          "locator": {
+                            "strategy": "selector",
+                            "value": "input[type='password']"
+                          },
+                          "trigger_autofill": true
+                        },
+                        {
+                          "action": "wait",
+                          "duration": 1500
+                        },
+                        {
+                          "action": "press",
+                          "key": "Tab",
+                          "delay": 300
+                        },
+                        {
+                          "action": "press",
+                          "key": "Enter",
+                          "delay": 300
+                        },
+                        {
+                          "action": "wait",
+                          "duration": 1000
+                        }
+                      ],
+                      "verify": {
+                        "type": "js_eval",
+                        "expression": "document.querySelector('input[type=\"password\"]')?.value?.length > 0"
+                      }
+                    },
+                    {
+                      "name": "Strategy 2: Vision LLM",
+                      "escalate": {
+                        "type": "vision_llm",
+                        "prompt": "A password manager dropdown has appeared. Click on the first saved password entry in the dropdown to select it and fill the password.",
+                        "timeout": 25000,
+                        "max_actions": 5
+                      },
+                      "verify": {
+                        "type": "js_eval",
+                        "expression": "document.querySelector('input[type=\"password\"]')?.value?.length > 0"
+                      }
+                    },
+                    {
+                      "name": "Strategy 3: Manual",
+                      "steps": [
+                        {
+                          "action": "click",
+                          "locator": {
+                            "strategy": "selector",
+                            "value": "input[type='password']"
+                          },
+                          "trigger_autofill": true
+                        },
+                        {
+                          "action": "wait",
+                          "description": "Wait for manual password selection",
+                          "duration": 30000
+                        }
+                      ],
+                      "verify": {
+                        "type": "js_eval",
+                        "expression": "document.querySelector('input[type=\"password\"]')?.value?.length > 0"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "action": "wait",
+                "description": "Brief pause before clicking submit",
+                "duration": 1000
+              },
+              {
+                "type": "try",
+                "name": "ClickNextAfterPassword",
+                "strategies": [
+                  {
+                    "name": "Strategy 1: Next button by ID",
+                    "steps": [
+                      {
+                        "action": "click",
+                        "locator": {
+                          "strategy": "selector",
+                          "value": "button#next"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "name": "Strategy 2: Submit button",
+                    "steps": [
+                      {
+                        "action": "click",
+                        "locator": {
+                          "strategy": "selector",
+                          "value": "button[type='submit']"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "name": "Strategy 3: Sign In button by text",
+                    "steps": [
+                      {
+                        "action": "click",
+                        "locator": {
+                          "strategy": "text",
+                          "value": "Sign In"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "name": "Strategy 4: Login button by text",
+                    "steps": [
+                      {
+                        "action": "click",
+                        "locator": {
+                          "strategy": "text",
+                          "value": "Login"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "action": "screenshot",
+                "description": "Debug: after clicking submit",
+                "save_to": "02b_after_submit_click.png"
+              }
+            ]
+          }
+        },
+        {
+          "action": "wait_for_load_state",
+          "description": "Wait for SSO redirect",
+          "state": "networkidle"
+        },
+        {
+          "action": "wait",
+          "duration": 2000
+        },
+        {
+          "action": "wait_for_load_state",
+          "state": "networkidle"
+        },
+        {
+          "action": "screenshot",
+          "save_to": "02_after_login.png"
+        },
+        {
+          "type": "if",
+          "name": "VerifyLoginSuccess",
+          "condition": {
+            "type": "js_eval",
+            "expression": "!document.querySelector('input[type=\"password\"]') && (window.location.href.includes('btwholesale') || window.location.href.includes('bbactotl'))"
+          },
+          "then": {
+            "continue": true
+          },
+          "else": {
+            "action": "error",
+            "message": "Login failed - still on authentication page"
+          }
+        }
+      ],
+      "next": "PerformSearch"
+    },
+    {
+      "type": "sequence",
+      "name": "PerformSearch",
+      "description": "Search for broadband availability",
+      "steps": [
+        {
+          "action": "screenshot",
+          "save_to": "03_before_navigation.png"
+        },
+        {
+          "type": "if",
+          "name": "CheckIfOnAddressHomePage",
+          "description": "Check if we're on the correct AddressHome page, if not navigate there",
+          "condition": {
+            "type": "or",
+            "conditions": [
+              {
+                "type": "element_visible",
+                "selector": "input[name='PostCode'], input[name='postcode'], input[id*='postcode' i]",
+                "timeout": 3000
+              },
+              {
+                "type": "url_contains",
+                "pattern": "AddressHome"
+              }
+            ]
+          },
+          "then": {
+            "continue": true
+          },
+          "else": {
+            "type": "sequence",
+            "description": "Navigate to AddressHome page",
+            "steps": [
+              {
+                "type": "try",
+                "name": "NavigateToAddressHome",
+                "description": "Try clicking tab first, then direct navigation",
+                "strategies": [
+                  {
+                    "name": "Strategy 1: Click Address Checker link by ID",
+                    "steps": [
+                      {
+                        "action": "click",
+                        "locator": {
+                          "strategy": "selector",
+                          "value": "a#addressNav"
+                        }
+                      },
+                      {
+                        "action": "wait_for_load_state",
+                        "state": "networkidle"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "Strategy 2: Direct navigation to AddressHome",
+                    "steps": [
+                      {
+                        "action": "navigate",
+                        "url": "https://bbactotl.btwholesale.com/bbac-ui/totl/totlSearch/#/ADSL/AddressHome"
+                      },
+                      {
+                        "action": "wait_for_load_state",
+                        "state": "networkidle"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "action": "wait",
+          "description": "Wait for Angular app to stabilize",
+          "duration": 1000
+        },
+        {
+          "action": "screenshot",
+          "save_to": "03_search_page.png"
+        },
+        {
+          "type": "if",
+          "name": "VerifySearchPageLoaded",
+          "condition": {
+            "type": "element_visible",
+            "selector": "input[name='PostCode'], input[name='postcode'], input[id*='postcode' i]",
+            "timeout": 5000
+          },
+          "then": {
+            "continue": true
+          },
+          "else": {
+            "action": "error",
+            "message": "Postcode field not found on search page after navigation attempts"
+          }
+        },
+        {
+          "type": "try",
+          "name": "FillPostcode",
+          "description": "Fill postcode field - uses smart form_field strategy for Angular Material forms",
+          "strategies": [
+            {
+              "name": "Strategy 1: Smart form_field (handles Angular Material, MUI, etc.)",
+              "steps": [
+                {
+                  "action": "fill",
+                  "locator": {
+                    "strategy": "form_field",
+                    "label": "PostCode",
+                    "field_type": "input"
+                  },
+                  "value": "{{postcode}}"
+                }
+              ]
+            },
+            {
+              "name": "Strategy 2: By ID #postCode",
+              "steps": [
+                {
+                  "action": "fill",
+                  "locator": {
+                    "strategy": "selector",
+                    "value": "#postCode"
+                  },
+                  "value": "{{postcode}}"
+                }
+              ]
+            },
+            {
+              "name": "Strategy 3: By name attribute",
+              "steps": [
+                {
+                  "action": "fill",
+                  "locator": {
+                    "strategy": "selector",
+                    "value": "input[name='postCode']"
+                  },
+                  "value": "{{postcode}}"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "try",
+          "name": "ClickSearch",
+          "description": "Click search button - includes retry for temporary 'service unavailable' errors",
+          "strategies": [
+            {
+              "name": "Strategy 1: Submit button with retry",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {
+                    "strategy": "selector",
+                    "value": "button[type='submit']"
+                  },
+                  "delay": 500,
+                  "retry": {
+                    "attempts": 3,
+                    "delay_ms": 1000,
+                    "retry_if": {
+                      "text_visible": "service unavailable"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Strategy 2: Text search with retry",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {
+                    "strategy": "text",
+                    "value": "Search"
+                  },
+                  "delay": 500,
+                  "retry": {
+                    "attempts": 3,
+                    "delay_ms": 1000,
+                    "retry_if": {
+                      "text_visible": "service unavailable"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "action": "wait_for_load_state",
+          "state": "networkidle"
+        },
+        {
+          "action": "screenshot",
+          "save_to": "04_after_search.png"
+        }
+      ],
+      "next": "SelectAddress"
+    },
+    {
+      "type": "sequence",
+      "name": "SelectAddress",
+      "description": "Select address from list if present",
+      "steps": [
+        {
+          "action": "screenshot",
+          "save_to": "04b_before_address_selection.png"
+        },
+        {
+          "type": "try",
+          "name": "SelectAddressFromList",
+          "description": "Progressive address matching: regex -> fuzzy -> vision with scroll",
+          "strategies": [
+            {
+              "name": "Strategy 1: Regex - building + first word only",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {
+                    "strategy": "selector",
+                    "value": "text=/^\\s*{{building_number}}\\s+\\w+/i",
+                    "nth": 0
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Strategy 2: Regex - building + street flexible",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {
+                    "strategy": "selector",
+                    "value": "text=/{{building_number}}[\\s,]+{{street}}/i",
+                    "nth": 0
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Strategy 3: Regex - street anywhere after building",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {
+                    "strategy": "selector",
+                    "value": "text=/{{building_number}}.*{{street}}/i",
+                    "nth": 0
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Strategy 4: Exact text match",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {
+                    "strategy": "text",
+                    "value": "{{building_number}} {{street}}"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Strategy 5: Vision LLM with scroll capability",
+              "escalate": {
+                "type": "vision_llm",
+                "prompt": "Find and click the address matching '{{full_address}}' in the address list. CRITICAL INSTRUCTIONS:\n\n1. FIRST SEARCH: Look carefully at ALL visible addresses for one containing:\n   - Building number: '{{building_number}}'\n   - Street name: '{{street}}'\n   - Format may vary (case, commas, word order)\n\n2. IF FOUND: Click it immediately\n\n3. IF NOT VISIBLE:\n   a) The list is likely SCROLLABLE - look for:\n      - A dropdown/select element that can be scrolled\n      - Scroll arrows (up/down)\n      - A scrollbar on the address list\n   b) SCROLL DOWN within the list (not the whole page)\n   c) After scrolling, SEARCH AGAIN for the address\n   d) Repeat: scroll -> search -> scroll -> search (up to 3 scroll attempts)\n\n4. MATCHING RULES:\n   - Accept variations: '{{building_number}} {{street}}', '{{building_number}}, {{street}}', '{{building_number}} {{street}}, City'\n   - Case-insensitive matching\n   - Must have BOTH building number AND street name\n\n5. MAX ACTIONS: 8 actions total (including scrolls and clicks)\n\n6. IF STILL NOT FOUND: Report failure.",
+                "timeout": 30000,
+                "max_actions": 8
+              }
+            }
+          ]
+        },
+        {
+          "action": "wait",
+          "description": "Wait before clicking submit to avoid bot detection",
+          "duration": 500
+        },
+        {
+          "type": "try",
+          "name": "ClickContinueAfterAddress",
+          "description": "Click submit with retry for 'service unavailable' errors",
+          "strategies": [
+            {
+              "name": "Strategy 1: Submit button with retry",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {
+                    "strategy": "selector",
+                    "value": "button[type='submit']"
+                  },
+                  "delay": 300,
+                  "retry": {
+                    "attempts": 5,
+                    "delay_ms": 3000,
+                    "retry_if": {
+                      "text_visible": "service unavailable"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Strategy 2: Continue button with retry",
+              "steps": [
+                {
+                  "action": "click",
+                  "locator": {
+                    "strategy": "text",
+                    "value": "Continue"
+                  },
+                  "delay": 300,
+                  "retry": {
+                    "attempts": 5,
+                    "delay_ms": 3000,
+                    "retry_if": {
+                      "text_visible": "service unavailable"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "action": "wait_for_load_state",
+          "state": "networkidle"
+        },
+        {
+          "action": "wait",
+          "description": "Wait for results page to fully render",
+          "duration": 5000
+        },
+        {
+          "action": "wait_for_load_state",
+          "state": "networkidle"
+        },
+        {
+          "action": "screenshot",
+          "save_to": "05_packages.png"
+        }
+      ],
+      "next": "ExtractResults"
+    },
+    {
+      "type": "sequence",
+      "name": "ExtractResults",
+      "description": "Capture verification screenshot and extract broadband availability data",
+      "steps": [
+        {
+          "action": "screenshot",
+          "save_to": "06_extraction_page.png",
+          "upload_to_s3": true,
+          "include_in_result": true,
+          "description": "Capture page for extraction verification"
+        },
+        {
+          "action": "extract",
+          "method": "vision",
+          "prompt": "You are a BT Broadband Availability Checker assistant that uses browser automation to check broadband availability for UK addresses. You can see and read the contents of images provided in the message. Use the screenshot image as if it were the rendered web page. Strictly follow and execute the following steps and output ONLY the JSON object. Step1: ALWAYS capture the  'Exchange Code'– This is the field 'exchange_code'.  This is required and should be captured at all times. Step 2: Then check  the first table with first column called 'FEATURED PRODUCTS': Search for a row containing the value 'WBC FTTP'.  if not fund, skip to steo 3. If found:, capture the field  'Downstream Line Rate' (this is the SOADSL DSL speed in Mbps) in the same row. Then set fttp_avail = true.  Navigate to the table that has the first column named 'OTHER OFFERINGS': Check if ANY row has the value 'VDSL Multicast' and 'Service Availability' column = 'Enabled'. If found, set sogea_avail = true, otherwise set sogea_avail = false. Then search for a table titled ONT DETAILS.  If it exists then from the row with 'Status' column = 'Working',  capture: 'Reference' column (this is ont_reference)   - Capture: 'ONT Serial Number' column (this is ont_serial_no)    - Capture: 'Port Service ID' column (this is port_service_id). Skip to step 5 . Steo 3: If no line with value 'WBC FTTP' is found in the first table that has 'FEATURED PRODUCS' as its first heading, then check if there is a table whose first column is named 'SOADSL Products'. If there is none, then skip to step 4. If there is then find the row with value 'SOADSL WBC' and column 'WBC SOADSL Availability' = 'Enabled'.  From this row capture the numeric value of the field 'Downstream Line Rate' (this is the SOADSL DSL speed in Mbps). Then set fttp_avail = false - Leave all other fields blank (sogea_avail, ont_reference, ont_serial_no, port_service_id). Skip to step 5. Step 4: Check if there is a table with a column named 'WBC SOGEA AVAILABILITY' and with value 'Enabled' or 'Exception'.  if thre is then from the same table, capture the value of the column of the first line under the  heading 'Downstream Line Rate (Mbps)' – sub heading  'Low'. (this is the SOADSL DSL speed in Mbps). Then check if there is a second table with a column 'Featured Products' under the first one, with a line 'WBC FTTP'.  If there is and the value of the column 'Service Availability' = 'Enabled' then set fttp_avail = true, otherwise set fttp_avail = false. Then check if there is a table 'ONT Details.  If yes then from the row with 'Status' field = 'Working',  Capture: 'Reference' field (this is ont_reference)   - Capture: 'ONT Serial Number' field (this is ont_serial_no)    - Capture: 'Port Service ID' field (this is port_service_id). Step 5. Navigate to the table titled 'PREMISE ENVIRONMENT.   Capture the value of 'Recommended Minimum SVR NLP' field (this is install_type) - Valid values are typically 'Standard', 'Premium', or 'Advanced'. IMPORTANT: At all times, ignore other tables not listed above.",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "exchange_code": {
+                "type": "string",
+                "description": "Exchange Code (e.g., LCBOL, or SLCBR)."
+              },
+              "fttp_avail": {
+                "type": "boolean",
+                "description": "Whether WBC FTTP is found in the Featured Products section"
+              },
+              "install_type": {
+                "type": "string",
+                "enum": [
+                  "Standard",
+                  "Premium",
+                  "Advanced",
+                  "N/A"
+                ],
+                "description": "Value from Premise Environment -> Recommended Minimum SVR NLP (only if WBC FTTP found)"
+              },
+              "sogea_avail": {
+                "type": "boolean",
+                "description": "Whether Other Offerings has Service Availability = Enabled (only if WBC FTTP found)"
+              },
+              "soadsl_dsl_speed": {
+                "type": "number",
+                "description": "Downstream Line Rate from WBC FTTP row in Mbps (only if WBC FTTP found)"
+              },
+              "ont_reference": {
+                "type": "string",
+                "description": "Reference field from last row of ONT Details section (only if WBC FTTP found)"
+              },
+              "ont_serial_no": {
+                "type": "string",
+                "description": "ONT Serial Number from last row of ONT Details section (only if WBC FTTP found)"
+              },
+              "port_service_id": {
+                "type": "string",
+                "description": "Port Service ID from last row of ONT Details section (only if WBC FTTP found)"
+              }
+            },
+            "required": [
+              "fttp_avail"
+            ]
+          }
+        },
+        {
+          "action": "screenshot",
+          "save_to": "07_final.png"
+        }
+      ],
+      "end": true
+    }
+  ]
+}
