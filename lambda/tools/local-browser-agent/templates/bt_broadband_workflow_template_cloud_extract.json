@@ -1,6 +1,6 @@
 {
-  "name": "BT Wholesale Broadband Availability - Improved Workflow",
-  "description": "Production-ready workflow with element-based waiting (WaitForResults), DOM extraction for ONT values, progressive escalation, and robust error handling. Test address: 1 Church View, DN12 1RH.",
+  "name": "BT Broadband Availability Checker - Cloud Extract Only",
+  "description": "Browser navigation template for BT Wholesale broadband availability. Captures screenshot for cloud-based extraction only (no local DOM extraction). Use {{username}}, {{postcode}}, {{building_number}}, {{street}}, and {{full_address}} variables.",
   "starting_page": "https://bbactotl.btwholesale.com/bbac-ui/totl/totlSearch/#/ADSL/AddressHome",
   "llm_provider": "openai",
   "llm_model": "gpt-4o-mini",
@@ -65,7 +65,7 @@
                     "strategy": "selector",
                     "value": "input[type='text'][name*='user'], input[type='email']"
                   },
-                  "value": "nterizakis"
+                  "value": "{{username}}"
                 }
               ]
             },
@@ -78,7 +78,7 @@
                     "strategy": "selector",
                     "value": "input[type='text']:first-of-type"
                   },
-                  "value": "nterizakis"
+                  "value": "{{username}}"
                 }
               ]
             }
@@ -420,7 +420,7 @@
                     "label": "PostCode",
                     "field_type": "input"
                   },
-                  "value": "DN12 1RH"
+                  "value": "{{postcode}}"
                 }
               ]
             },
@@ -433,7 +433,7 @@
                     "strategy": "selector",
                     "value": "#postCode"
                   },
-                  "value": "DN12 1RH"
+                  "value": "{{postcode}}"
                 }
               ]
             },
@@ -446,7 +446,7 @@
                     "strategy": "selector",
                     "value": "input[name='postCode']"
                   },
-                  "value": "DN12 1RH"
+                  "value": "{{postcode}}"
                 }
               ]
             }
@@ -523,7 +523,7 @@
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/^\\s*1\\s+\\w+/i",
+                    "value": "text=/^\\s*{{building_number}}\\s+\\w+/i",
                     "nth": 0
                   }
                 }
@@ -536,7 +536,7 @@
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/1[\\s,]+Church View/i",
+                    "value": "text=/{{building_number}}[\\s,]+{{street}}/i",
                     "nth": 0
                   }
                 }
@@ -549,7 +549,7 @@
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/1.*Church View/i",
+                    "value": "text=/{{building_number}}.*{{street}}/i",
                     "nth": 0
                   }
                 }
@@ -562,7 +562,7 @@
                   "action": "click",
                   "locator": {
                     "strategy": "text",
-                    "value": "1 Church View"
+                    "value": "{{building_number}} {{street}}"
                   }
                 }
               ]
@@ -571,7 +571,7 @@
               "name": "Strategy 5: Vision LLM with scroll capability",
               "escalate": {
                 "type": "vision_llm",
-                "prompt": "Find and click the address matching '1 Church View, DN12 1RH' in the address list. CRITICAL INSTRUCTIONS:\n\n1. FIRST SEARCH: Look carefully at ALL visible addresses for one containing:\n   - Building number: '1'\n   - Street name: 'Church View'\n   - Format may vary (case, commas, word order)\n\n2. IF FOUND: Click it immediately\n\n3. IF NOT VISIBLE:\n   a) The list is likely SCROLLABLE - look for:\n      - A dropdown/select element that can be scrolled\n      - Scroll arrows (up/down)\n      - A scrollbar on the address list\n   b) SCROLL DOWN within the list (not the whole page)\n   c) After scrolling, SEARCH AGAIN for the address\n   d) Repeat: scroll -> search -> scroll -> search (up to 3 scroll attempts)\n\n4. MATCHING RULES:\n   - Accept variations: '1 Church View', '1, Church View', '1 Church View, City'\n   - Case-insensitive matching\n   - Must have BOTH building number AND street name\n\n5. MAX ACTIONS: 8 actions total (including scrolls and clicks)\n\n6. IF STILL NOT FOUND: Report failure.",
+                "prompt": "Find and click the address matching '{{full_address}}' in the address list. CRITICAL INSTRUCTIONS:\n\n1. FIRST SEARCH: Look carefully at ALL visible addresses for one containing:\n   - Building number: '{{building_number}}'\n   - Street name: '{{street}}'\n   - Format may vary (case, commas, word order)\n\n2. IF FOUND: Click it immediately\n\n3. IF NOT VISIBLE:\n   a) The list is likely SCROLLABLE - look for:\n      - A dropdown/select element that can be scrolled\n      - Scroll arrows (up/down)\n      - A scrollbar on the address list\n   b) SCROLL DOWN within the list (not the whole page)\n   c) After scrolling, SEARCH AGAIN for the address\n   d) Repeat: scroll -> search -> scroll -> search (up to 3 scroll attempts)\n\n4. MATCHING RULES:\n   - Accept variations: '{{building_number}} {{street}}', '{{building_number}}, {{street}}', '{{building_number}} {{street}}, City'\n   - Case-insensitive matching\n   - Must have BOTH building number AND street name\n\n5. MAX ACTIONS: 8 actions total (including scrolls and clicks)\n\n6. IF STILL NOT FOUND: Report failure.",
                 "timeout": 30000,
                 "max_actions": 8
               }
@@ -701,45 +701,19 @@
           "duration": 2000
         }
       ],
-      "next": "ExtractResults"
+      "next": "CaptureResults"
     },
     {
       "type": "sequence",
-      "name": "ExtractResults",
-      "description": "Capture screenshot and extract key values from DOM",
+      "name": "CaptureResults",
+      "description": "Capture screenshot for cloud-based extraction (no local DOM extraction)",
       "steps": [
         {
           "action": "screenshot",
           "save_to": "address_details.png",
           "upload_to_s3": true,
           "include_in_result": true,
-          "description": "Capture address details page for cloud extraction"
-        },
-        {
-          "action": "extract_dom",
-          "description": "Extract Exchange Code and ONT Details from page HTML",
-          "extractions": [
-            {
-              "name": "exchange_code",
-              "selector": "text=/Exchange Code/i/../following-sibling::*",
-              "fallback_js": "(() => { const el = [...document.querySelectorAll('*')].find(e => e.textContent.includes('Exchange Code')); return el ? el.textContent.match(/Exchange Code[:\\s]*([A-Z0-9]+)/i)?.[1] : null; })()"
-            },
-            {
-              "name": "ont_reference",
-              "selector": "table:has(th:text-matches('ONT', 'i')) tr:has(td:text-matches('Working', 'i')) td:nth-child(2)",
-              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { if (t.textContent.includes('ONT')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[1]?.textContent?.trim(); } } } } return null; })()"
-            },
-            {
-              "name": "ont_serial_no",
-              "selector": "table:has(th:text-matches('ONT', 'i')) tr:has(td:text-matches('Working', 'i')) td:nth-child(3)",
-              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { if (t.textContent.includes('ONT')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[2]?.textContent?.trim(); } } } } return null; })()"
-            },
-            {
-              "name": "port_service_id",
-              "selector": "table:has(th:text-matches('ONT', 'i')) tr:has(td:text-matches('Working', 'i')) td:nth-child(4)",
-              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { if (t.textContent.includes('ONT')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[3]?.textContent?.trim(); } } } } return null; })()"
-            }
-          ]
+          "description": "Capture address details page - data will be extracted by cloud LLM"
         }
       ],
       "end": true
