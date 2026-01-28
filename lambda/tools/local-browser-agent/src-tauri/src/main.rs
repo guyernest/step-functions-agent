@@ -154,6 +154,7 @@ async fn main() -> Result<()> {
         let config = Arc::new(cfg);
         let session_manager = Arc::new(RwLock::new(SessionManager::new()));
 
+        info!("Creating ActivityPoller...");
         let poller = Arc::new(
             ActivityPoller::new(
                 Arc::clone(&config),
@@ -163,6 +164,7 @@ async fn main() -> Result<()> {
         );
 
         // Don't auto-start polling - let user control via UI
+        info!("ActivityPoller created successfully");
         info!("Activity poller initialized - use UI to start listening");
 
         (config, Some(poller), Some(session_manager))
@@ -176,17 +178,22 @@ async fn main() -> Result<()> {
     };
 
     // Start Tauri application
+    info!("Initializing Tauri application...");
     let mut builder = tauri::Builder::default();
 
     if let Some(p) = poller {
+        info!("Registering ActivityPoller with Tauri");
         builder = builder.manage(p);
     }
     if let Some(sm) = session_manager {
+        info!("Registering SessionManager with Tauri");
         builder = builder.manage(sm);
     }
     // Always manage config (even if it's a default minimal one)
+    info!("Registering Config with Tauri");
     builder = builder.manage(config);
 
+    info!("Configuring Tauri invoke handlers...");
     builder
         .invoke_handler(tauri::generate_handler![
             commands::get_poller_status,
