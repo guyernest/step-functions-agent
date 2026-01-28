@@ -38,18 +38,25 @@ impl ActivityPoller {
         session_manager: Arc<RwLock<SessionManager>>,
     ) -> Result<Self> {
         // Load AWS config
+        info!("Loading AWS config for profile: {}", config.aws_profile);
         let aws_config = aws_config::from_env()
             .profile_name(&config.aws_profile)
             .load()
             .await;
+        info!("AWS config loaded successfully");
 
+        info!("Creating SFN client...");
         let sfn_client = SfnClient::new(&aws_config);
+        info!("SFN client created");
 
         // Create unified script executor (respects browser_engine config)
+        info!("Creating ScriptExecutor...");
         let script_executor = ScriptExecutor::new(Arc::clone(&config))?;
+        info!("ScriptExecutor created successfully");
 
         info!("Activity poller initialized for ARN: {}", config.activity_arn);
         info!("Using browser engine: {}", config.browser_engine);
+        info!("Building ActivityPoller struct...");
 
         Ok(Self {
             config,
