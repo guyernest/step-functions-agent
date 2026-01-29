@@ -11,10 +11,18 @@ export const useStepFunctions = () => {
   const [isPolling, setIsPolling] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const getClient = async () => {
+  const getClient = async (resourceArn?: string) => {
     const session = await fetchAuthSession()
-    const region = localStorage.getItem('awsRegion') || 'us-west-2'
-    
+
+    // Extract region from the resource ARN if provided, otherwise fall back to settings
+    let region = localStorage.getItem('awsRegion') || 'us-west-2'
+    if (resourceArn) {
+      const arnParts = resourceArn.split(':')
+      if (arnParts.length >= 4 && arnParts[3]) {
+        region = arnParts[3]
+      }
+    }
+
     if (!session.credentials) {
       throw new Error('No AWS credentials available')
     }
@@ -27,7 +35,7 @@ export const useStepFunctions = () => {
 
   const pollActivityTask = useCallback(async (activityArn: string): Promise<ActivityTask | null> => {
     try {
-      const client = await getClient()
+      const client = await getClient(activityArn)
       
       const command = new GetActivityTaskCommand({
         activityArn,
@@ -63,10 +71,11 @@ export const useStepFunctions = () => {
 
   const sendTaskSuccess = useCallback(async (
     taskToken: string,
-    output: Record<string, any>
+    output: Record<string, any>,
+    activityArn?: string
   ): Promise<void> => {
     try {
-      const client = await getClient()
+      const client = await getClient(activityArn)
       
       const command = new SendTaskSuccessCommand({
         taskToken,
@@ -84,10 +93,11 @@ export const useStepFunctions = () => {
   const sendTaskFailure = useCallback(async (
     taskToken: string,
     error: string,
-    cause: string
+    cause: string,
+    activityArn?: string
   ): Promise<void> => {
     try {
-      const client = await getClient()
+      const client = await getClient(activityArn)
       
       const command = new SendTaskFailureCommand({
         taskToken,

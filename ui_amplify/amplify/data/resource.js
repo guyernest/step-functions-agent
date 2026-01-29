@@ -475,15 +475,6 @@ const schema = a.schema({
         .returns(a.json())
         .handler(a.handler.function(updateProviderAPIKey))
         .authorization((allow) => [allow.authenticated()]),
-    listToolSecrets: a
-        .query()
-        .arguments({})
-        .returns(a.json())
-        .handler(a.handler.custom({
-        dataSource: 'ToolSecretsDataSource',
-        entry: './listToolSecrets.js',
-    }))
-        .authorization((allow) => [allow.authenticated()]),
     getToolSecretValues: a
         .query()
         .arguments({})

@@ -18,13 +18,6 @@ import '@aws-amplify/ui-react/styles.css';
 
 const client = generateClient();
 
-interface ToolSecret {
-  tool_name: string;
-  secret_keys: string[];
-  description?: string;
-  registered_at?: string;
-}
-
 interface SecretValues {
   [toolName: string]: {
     [key: string]: string;
@@ -32,7 +25,6 @@ interface SecretValues {
 }
 
 const ToolSecrets: React.FC = () => {
-  const [toolSecrets, setToolSecrets] = useState<ToolSecret[]>([]);
   const [secretValues, setSecretValues] = useState<SecretValues>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -48,23 +40,9 @@ const ToolSecrets: React.FC = () => {
   const loadToolSecrets = async () => {
     setLoading(true);
     try {
-      // Load tool registry from GraphQL API
-      const toolsResult = await client.graphql({
-        query: `
-          query ListToolSecrets {
-            listToolSecrets
-          }
-        `
-      }) as any;
-      
-      const toolsData = toolsResult.data?.listToolSecrets;
-      // The AppSync resolver returns an array directly as a JSON string
-      if (toolsData) {
-        const tools = typeof toolsData === 'string' ? JSON.parse(toolsData) : toolsData;
-        setToolSecrets(Array.isArray(tools) ? tools : []);
-      }
-      
-      // Load current secret values from GraphQL API
+      // Load tool secrets directly from Secrets Manager via GraphQL API
+      // The consolidated secret at /ai-agent/tool-secrets/{env} contains all tools
+      // as top-level keys, so we don't need a separate registry
       const valuesResult = await client.graphql({
         query: `
           query GetToolSecretValues {
@@ -72,9 +50,8 @@ const ToolSecrets: React.FC = () => {
           }
         `
       }) as any;
-      
+
       const valuesData = valuesResult.data?.getToolSecretValues;
-      // Parse the response if it's a string
       const parsedData = typeof valuesData === 'string' ? JSON.parse(valuesData) : valuesData;
       if (parsedData?.success && parsedData?.values) {
         // Filter out the placeholder entry
@@ -84,7 +61,7 @@ const ToolSecrets: React.FC = () => {
           }
           return acc;
         }, {} as any);
-        
+
         setSecretValues(filteredValues);
         // Don't populate tempValues with masked values - start empty for editing
         setTempValues({});
@@ -226,31 +203,24 @@ const ToolSecrets: React.FC = () => {
         </Card>
 
         <Collection
-          items={toolSecrets}
+          items={Object.keys(secretValues).sort()}
           type="list"
           direction="column"
           gap="1rem"
         >
-          {(tool) => (
-            <Card key={tool.tool_name} variation="outlined">
+          {(toolName) => (
+            <Card key={toolName} variation="outlined">
               <Flex direction="column" gap="1rem">
                 <Flex justifyContent="space-between" alignItems="center">
-                  <Flex direction="column" gap="0.25rem">
-                    <Heading level={4}>{tool.tool_name}</Heading>
-                    {tool.description && (
-                      <Text variation="secondary" fontSize="small">
-                        {tool.description}
-                      </Text>
-                    )}
-                  </Flex>
-                  {!editMode[tool.tool_name] ? (
-                    <Button onClick={() => handleEdit(tool.tool_name)} size="small">
+                  <Heading level={4}>{toolName}</Heading>
+                  {!editMode[toolName] ? (
+                    <Button onClick={() => handleEdit(toolName)} size="small">
                       Edit Secrets
                     </Button>
                   ) : (
                     <Flex gap="0.5rem">
                       <Button
-                        onClick={() => handleSave(tool.tool_name)}
+                        onClick={() => handleSave(toolName)}
                         variation="primary"
                         size="small"
                         isLoading={saving}
@@ -258,7 +228,7 @@ const ToolSecrets: React.FC = () => {
                         Save
                       </Button>
                       <Button
-                        onClick={() => handleCancel(tool.tool_name)}
+                        onClick={() => handleCancel(toolName)}
                         size="small"
                         isDisabled={saving}
                       >
@@ -272,40 +242,28 @@ const ToolSecrets: React.FC = () => {
 
                 <Flex direction="column" gap="0.75rem">
                   {(() => {
-                    // Merge registered keys with discovered keys from actual secret values
-                    // This enables dynamic discovery for tools like graphql-interface
-                    const registeredKeys = tool.secret_keys || [];
-                    const discoveredKeys = Object.keys(secretValues[tool.tool_name] || {});
-                    const allKeys = [...new Set([...registeredKeys, ...discoveredKeys])].sort();
+                    const keys = Object.keys(secretValues[toolName] || {}).sort();
 
-                    if (allKeys.length === 0) {
+                    if (keys.length === 0) {
                       return (
                         <Text variation="secondary" fontStyle="italic">
-                          No secrets configured. Use the AWS Console to add endpoint configurations.
+                          No secrets configured for this tool.
                         </Text>
                       );
                     }
 
-                    return allKeys.map((key) => {
-                      const isEditing = editMode[tool.tool_name];
+                    return keys.map((key) => {
+                      const isEditing = editMode[toolName];
                       const currentValue = isEditing
-                        ? (tempValues[tool.tool_name]?.[key] || '') // Empty for new input when editing
-                        : (secretValues[tool.tool_name]?.[key] || ''); // Masked value when viewing
+                        ? (tempValues[toolName]?.[key] || '') // Empty for new input when editing
+                        : (secretValues[toolName]?.[key] || ''); // Masked value when viewing
                       const isPlaceholder = currentValue && currentValue.startsWith('PLACEHOLDER_');
-                      const isDynamicallyDiscovered = !registeredKeys.includes(key);
-                      const fieldKey = `${tool.tool_name}-${key}`;
+                      const fieldKey = `${toolName}-${key}`;
 
                       return (
                         <Flex key={key} direction="column" gap="0.25rem">
                           <Flex justifyContent="space-between" alignItems="center">
-                            <Flex alignItems="center" gap="0.5rem">
-                              <Text fontWeight="bold">{key}</Text>
-                              {isDynamicallyDiscovered && (
-                                <Badge variation="info" size="small">
-                                  Discovered
-                                </Badge>
-                              )}
-                            </Flex>
+                            <Text fontWeight="bold">{key}</Text>
                             {isPlaceholder && (
                               <Badge variation="warning" size="small">
                                 Not Configured
@@ -313,12 +271,12 @@ const ToolSecrets: React.FC = () => {
                             )}
                           </Flex>
 
-                          {editMode[tool.tool_name] ? (
+                          {editMode[toolName] ? (
                             <Flex alignItems="center" gap="0.5rem">
                               <TextField
                                 label=""
                                 value={currentValue}
-                                onChange={(e) => handleSecretChange(tool.tool_name, key, e.target.value)}
+                                onChange={(e) => handleSecretChange(toolName, key, e.target.value)}
                                 type={showPasswords[fieldKey] ? "text" : "password"}
                                 placeholder={`Enter new ${key} (leave empty to keep current)`}
                                 width="100%"
@@ -346,12 +304,6 @@ const ToolSecrets: React.FC = () => {
                     });
                   })()}
                 </Flex>
-
-                {tool.registered_at && (
-                  <Text fontSize="small" variation="secondary">
-                    Registered: {new Date(tool.registered_at).toLocaleString()}
-                  </Text>
-                )}
               </Flex>
             </Card>
           )}

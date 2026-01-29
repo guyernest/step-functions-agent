@@ -633,13 +633,6 @@ export type ListStepFunctionExecutionsQuery = {
   listStepFunctionExecutions?: string | null,
 };
 
-export type ListToolSecretsQueryVariables = {
-};
-
-export type ListToolSecretsQuery = {
-  listToolSecrets?: string | null,
-};
-
 export type ListToolsFromRegistryQueryVariables = {
 };
 
