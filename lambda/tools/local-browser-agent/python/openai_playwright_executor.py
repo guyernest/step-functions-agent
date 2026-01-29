@@ -1407,8 +1407,12 @@ class OpenAIPlaywrightExecutor:
                 "locator": locator_config,
             }
         else:
-            # Simple timeout
-            duration = step.get("duration", 1000)
+            # Simple timeout - supports fixed duration or random range
+            if "duration_range" in step:
+                min_ms, max_ms = step["duration_range"]
+                duration = random.randint(min_ms, max_ms)
+            else:
+                duration = step.get("duration", 1000)
             await asyncio.sleep(duration / 1000)
 
             return {

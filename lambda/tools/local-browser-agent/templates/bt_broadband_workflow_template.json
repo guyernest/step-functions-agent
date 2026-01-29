@@ -453,6 +453,11 @@
           ]
         },
         {
+          "action": "wait",
+          "description": "Random delay before search to avoid bot detection",
+          "duration_range": [1500, 3500]
+        },
+        {
           "type": "try",
           "name": "ClickSearch",
           "description": "Click search button - includes retry for temporary 'service unavailable' errors",
@@ -580,8 +585,8 @@
         },
         {
           "action": "wait",
-          "description": "Wait before clicking submit to avoid bot detection",
-          "duration": 500
+          "description": "Random delay before submit to avoid bot detection",
+          "duration_range": [1500, 3500]
         },
         {
           "type": "try",
@@ -658,7 +663,7 @@
                 {
                   "action": "wait_for_selector",
                   "selector": ".ExhangeCodeSetup",
-                  "timeout": 15000
+                  "timeout": 30000
                 }
               ]
             },
@@ -676,7 +681,7 @@
                 {
                   "action": "wait_for_selector",
                   "selector": "th:has-text('Featured Products')",
-                  "timeout": 20000
+                  "timeout": 30000
                 }
               ]
             },
@@ -714,6 +719,38 @@
           "upload_to_s3": true,
           "include_in_result": true,
           "description": "Capture address details page for cloud extraction"
+        },
+        {
+          "type": "if",
+          "name": "VerifyOnAddressDetailsPage",
+          "description": "Check we're on the address details page before extraction",
+          "condition": {
+            "type": "or",
+            "conditions": [
+              {
+                "type": "element_visible",
+                "selector": ".ExhangeCodeSetup",
+                "timeout": 2000
+              },
+              {
+                "type": "element_visible",
+                "selector": "th:has-text('Featured Products')",
+                "timeout": 2000
+              },
+              {
+                "type": "element_visible",
+                "selector": ".AddressSearchListTitle",
+                "timeout": 2000
+              }
+            ]
+          },
+          "then": {
+            "continue": true
+          },
+          "else": {
+            "action": "error",
+            "message": "Not on address details page - cannot extract results. Check screenshot for current page state."
+          }
         },
         {
           "action": "extract_dom",
