@@ -194,7 +194,6 @@ console.log(`    Strategy: ${importFromCoreCDK ? 'Remote build - import all tabl
 let agentRegistryTable: aws_dynamodb.ITable;
 let toolRegistryTable: aws_dynamodb.ITable;
 let mcpRegistryTable: aws_dynamodb.ITable;
-let toolSecretsTable: aws_dynamodb.ITable;
 let testEventsTable: aws_dynamodb.ITable;
 let testResultsTable: aws_dynamodb.ITable;
 let templateRegistryTable: aws_dynamodb.ITable;
@@ -220,12 +219,6 @@ if (importFromCoreCDK) {
     externalDataSourcesStack,
     'MCPRegistryTable',
     Fn.importValue(`MCPRegistryTableArn-${coreEnv}`)
-  );
-
-  toolSecretsTable = aws_dynamodb.Table.fromTableName(
-    externalDataSourcesStack,
-    'ToolSecretsTable',
-    Fn.importValue(`ToolSecretsTableName-${coreEnv}`)
   );
 
   templateRegistryTable = aws_dynamodb.Table.fromTableArn(
@@ -269,12 +262,6 @@ if (importFromCoreCDK) {
     externalDataSourcesStack,
     'MCPRegistryTable',
     `MCPServerRegistry-${coreEnv}`
-  );
-
-  toolSecretsTable = aws_dynamodb.Table.fromTableName(
-    externalDataSourcesStack,
-    'ToolSecretsTable',
-    `ToolSecrets-${coreEnv}`
   );
 
   templateRegistryTable = aws_dynamodb.Table.fromTableName(
@@ -428,11 +415,6 @@ backend.data.addDynamoDbDataSource(
 backend.data.addDynamoDbDataSource(
   'LLMModelsDataSource',
   llmModelsTable
-);
-
-backend.data.addDynamoDbDataSource(
-  'ToolSecretsDataSource',
-  toolSecretsTable
 );
 
 backend.data.addDynamoDbDataSource(

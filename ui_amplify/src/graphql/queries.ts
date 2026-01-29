@@ -252,13 +252,6 @@ export const listStepFunctionExecutions = /* GraphQL */ `query ListStepFunctionE
   APITypes.ListStepFunctionExecutionsQueryVariables,
   APITypes.ListStepFunctionExecutionsQuery
 >;
-export const listToolSecrets = /* GraphQL */ `query ListToolSecrets {
-  listToolSecrets
-}
-` as GeneratedQuery<
-  APITypes.ListToolSecretsQueryVariables,
-  APITypes.ListToolSecretsQuery
->;
 export const listToolsFromRegistry = /* GraphQL */ `query ListToolsFromRegistry {
   listToolsFromRegistry {
     createdAt

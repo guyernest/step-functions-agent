@@ -110,14 +110,15 @@ const ApprovalDashboard: React.FC = () => {
           input: modifiedInput
         }
         
-        await sendTaskSuccess(task.taskToken, output)
+        await sendTaskSuccess(task.taskToken, output, activityArn || undefined)
         setMessage('Task approved successfully')
       } else {
         const toolName = task.input.tool_name || task.input.name || 'tool'
         await sendTaskFailure(
           task.taskToken,
           'NotApproved',
-          `Human rejected the ${toolName} execution`
+          `Human rejected the ${toolName} execution`,
+          activityArn || undefined
         )
         setMessage('Task rejected successfully')
       }
