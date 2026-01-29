@@ -1,6 +1,6 @@
 {
-  "name": "BT Broadband Availability Checker - Ready to Run",
-  "description": "Ready-to-run example for checking broadband availability at 1 Church View, DN12 1RH. Uses the Bt_broadband profile with saved credentials.",
+  "name": "BT Broadband - Peacehaven BN10 8LA",
+  "description": "Test BT Broadband availability check for 217 South Coast Road, Peacehaven. Expected: Exchange SDPCHVN, L2SID BAANTY",
   "starting_page": "https://bbactotl.btwholesale.com/bbac-ui/totl/totlSearch/#/ADSL/AddressHome",
   "llm_provider": "openai",
   "llm_model": "gpt-4o-mini",
@@ -12,7 +12,10 @@
   },
   "session": {
     "profile_name": "Bt_broadband",
-    "required_tags": ["bt.com", "authenticated"],
+    "required_tags": [
+      "bt.com",
+      "authenticated"
+    ],
     "allow_temp_profile": false,
     "clone_for_parallel": false
   },
@@ -65,7 +68,7 @@
                     "strategy": "selector",
                     "value": "input[type='text'][name*='user'], input[type='email']"
                   },
-                  "value": "nterizakis"
+                  "value": "{{username}}"
                 }
               ]
             },
@@ -78,7 +81,7 @@
                     "strategy": "selector",
                     "value": "input[type='text']:first-of-type"
                   },
-                  "value": "nterizakis"
+                  "value": "{{username}}"
                 }
               ]
             }
@@ -420,7 +423,7 @@
                     "label": "PostCode",
                     "field_type": "input"
                   },
-                  "value": "DN12 1RH"
+                  "value": "BN10 8LA"
                 }
               ]
             },
@@ -433,7 +436,7 @@
                     "strategy": "selector",
                     "value": "#postCode"
                   },
-                  "value": "DN12 1RH"
+                  "value": "BN10 8LA"
                 }
               ]
             },
@@ -446,7 +449,7 @@
                     "strategy": "selector",
                     "value": "input[name='postCode']"
                   },
-                  "value": "DN12 1RH"
+                  "value": "BN10 8LA"
                 }
               ]
             }
@@ -523,7 +526,7 @@
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/^\\s*1\\s+\\w+/i",
+                    "value": "text=/^\\s*217\\s+\\w+/i",
                     "nth": 0
                   }
                 }
@@ -536,7 +539,7 @@
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/1[\\s,]+Church View/i",
+                    "value": "text=/217[\\s,]+South Coast Road/i",
                     "nth": 0
                   }
                 }
@@ -549,7 +552,7 @@
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/1.*Church View/i",
+                    "value": "text=/217.*South Coast Road/i",
                     "nth": 0
                   }
                 }
@@ -562,7 +565,7 @@
                   "action": "click",
                   "locator": {
                     "strategy": "text",
-                    "value": "1 Church View"
+                    "value": "217 South Coast Road"
                   }
                 }
               ]
@@ -571,7 +574,7 @@
               "name": "Strategy 5: Vision LLM with scroll capability",
               "escalate": {
                 "type": "vision_llm",
-                "prompt": "Find and click the address matching '1 Church View, DN12 1RH' in the address list. CRITICAL INSTRUCTIONS:\n\n1. FIRST SEARCH: Look carefully at ALL visible addresses for one containing:\n   - Building number: '1'\n   - Street name: 'Church View'\n   - Format may vary (case, commas, word order)\n\n2. IF FOUND: Click it immediately\n\n3. IF NOT VISIBLE:\n   a) The list is likely SCROLLABLE - look for:\n      - A dropdown/select element that can be scrolled\n      - Scroll arrows (up/down)\n      - A scrollbar on the address list\n   b) SCROLL DOWN within the list (not the whole page)\n   c) After scrolling, SEARCH AGAIN for the address\n   d) Repeat: scroll -> search -> scroll -> search (up to 3 scroll attempts)\n\n4. MATCHING RULES:\n   - Accept variations: '1 Church View', '1, Church View', '1 Church View, City'\n   - Case-insensitive matching\n   - Must have BOTH building number AND street name\n\n5. MAX ACTIONS: 8 actions total (including scrolls and clicks)\n\n6. IF STILL NOT FOUND: Report failure.",
+                "prompt": "Find and click the address matching '217 South Coast Road, Peacehaven BN10 8LA' in the address list. CRITICAL INSTRUCTIONS:\n\n1. FIRST SEARCH: Look carefully at ALL visible addresses for one containing:\n   - Building number: '217'\n   - Street name: 'South Coast Road'\n   - Format may vary (case, commas, word order)\n\n2. IF FOUND: Click it immediately\n\n3. IF NOT VISIBLE:\n   a) The list is likely SCROLLABLE - look for:\n      - A dropdown/select element that can be scrolled\n      - Scroll arrows (up/down)\n      - A scrollbar on the address list\n   b) SCROLL DOWN within the list (not the whole page)\n   c) After scrolling, SEARCH AGAIN for the address\n   d) Repeat: scroll -> search -> scroll -> search (up to 3 scroll attempts)\n\n4. MATCHING RULES:\n   - Accept variations: '217 South Coast Road', '217, South Coast Road', '217 South Coast Road, City'\n   - Case-insensitive matching\n   - Must have BOTH building number AND street name\n\n5. MAX ACTIONS: 8 actions total (including scrolls and clicks)\n\n6. IF STILL NOT FOUND: Report failure.",
                 "timeout": 30000,
                 "max_actions": 8
               }
@@ -653,21 +656,21 @@
           "description": "Wait for address details page elements with retry",
           "strategies": [
             {
-              "name": "Strategy 1: Wait for Exchange Code element",
+              "name": "Strategy 1: Wait for Exchange Code container class",
               "steps": [
                 {
                   "action": "wait_for_selector",
-                  "selector": "text=/Exchange Code/i, text=/FEATURED PRODUCTS/i, text=/SOADSL/i",
+                  "selector": ".ExhangeCodeSetup",
                   "timeout": 15000
                 }
               ]
             },
             {
-              "name": "Strategy 2: Extended wait and retry",
+              "name": "Strategy 2: Wait for Featured Products table header",
               "steps": [
                 {
                   "action": "wait",
-                  "duration": 5000
+                  "duration": 3000
                 },
                 {
                   "action": "wait_for_load_state",
@@ -675,7 +678,7 @@
                 },
                 {
                   "action": "wait_for_selector",
-                  "selector": "text=/Exchange Code/i, text=/FEATURED PRODUCTS/i, text=/WBC/i",
+                  "selector": "th:has-text('Featured Products')",
                   "timeout": 20000
                 }
               ]
@@ -717,27 +720,52 @@
         },
         {
           "action": "extract_dom",
-          "description": "Extract Exchange Code and ONT Details from page HTML",
+          "description": "Extract Exchange Code, L2SID, and ONT Details from page HTML",
           "extractions": [
             {
               "name": "exchange_code",
-              "selector": "text=/Exchange Code/i/../following-sibling::*",
-              "fallback_js": "(() => { const el = [...document.querySelectorAll('*')].find(e => e.textContent.includes('Exchange Code')); return el ? el.textContent.match(/Exchange Code[:\\s]*([A-Z0-9]+)/i)?.[1] : null; })()"
+              "selector": ".ExhangeCodeSetup > span:last-child",
+              "fallback_js": "(() => { const wrapper = document.querySelector('.ExhangeCodeSetup'); if (wrapper) { const spans = wrapper.querySelectorAll('span'); for (const s of spans) { if (!s.classList.contains('ExhangeCodeSetupTwo') && s.textContent.trim() && !s.textContent.includes('Exchange Code')) { return s.textContent.trim(); } } } return null; })()"
+            },
+            {
+              "name": "l2sid_new_ont",
+              "selector": "tr:has(th:has-text('L2SID (New ONT)')) td",
+              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('L2SID (New ONT)')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
+            },
+            {
+              "name": "fttp_existing_ont",
+              "selector": "tr:has(th:has-text('FTTP Existing ONT Available')) td",
+              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('FTTP Existing ONT Available')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
+            },
+            {
+              "name": "fttp_new_ont",
+              "selector": "tr:has(th:has-text('FTTP New ONT Available')) td",
+              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('FTTP New ONT Available')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
             },
             {
               "name": "ont_reference",
-              "selector": "table:has(th:text-matches('ONT', 'i')) tr:has(td:text-matches('Working', 'i')) td:nth-child(2)",
-              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { if (t.textContent.includes('ONT')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[1]?.textContent?.trim(); } } } } return null; })()"
+              "selector": "table:has(th:has-text('ONT Details')) tr:has(td:has-text('Working')) td:nth-child(2)",
+              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { const header = t.querySelector('th'); if (header && header.textContent.includes('ONT Details')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[1]?.textContent?.trim() || null; } } } } return null; })()"
             },
             {
               "name": "ont_serial_no",
-              "selector": "table:has(th:text-matches('ONT', 'i')) tr:has(td:text-matches('Working', 'i')) td:nth-child(3)",
-              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { if (t.textContent.includes('ONT')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[2]?.textContent?.trim(); } } } } return null; })()"
+              "selector": "table:has(th:has-text('ONT Details')) tr:has(td:has-text('Working')) td:nth-child(3)",
+              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { const header = t.querySelector('th'); if (header && header.textContent.includes('ONT Details')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[2]?.textContent?.trim() || null; } } } } return null; })()"
             },
             {
               "name": "port_service_id",
-              "selector": "table:has(th:text-matches('ONT', 'i')) tr:has(td:text-matches('Working', 'i')) td:nth-child(4)",
-              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { if (t.textContent.includes('ONT')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[3]?.textContent?.trim(); } } } } return null; })()"
+              "selector": "table:has(th:has-text('ONT Details')) tr:has(td:has-text('Working')) td:nth-child(4)",
+              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { const header = t.querySelector('th'); if (header && header.textContent.includes('ONT Details')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[3]?.textContent?.trim() || null; } } } } return null; })()"
+            },
+            {
+              "name": "wbc_fttp_rag",
+              "selector": "tr:has(th:has-text('WBC FTTP')) td:first-of-type",
+              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('WBC FTTP')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
+            },
+            {
+              "name": "premise_type",
+              "selector": "tr:has(th:has-text('Premise Type')) td",
+              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('Premise Type')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
             }
           ]
         }

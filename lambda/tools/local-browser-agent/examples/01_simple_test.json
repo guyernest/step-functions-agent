@@ -1,0 +1,39 @@
+{
+  "name": "Simple Connectivity Test",
+  "description": "Basic test to verify browser automation is working. No LLM required - uses only Playwright actions.",
+  "starting_page": "https://example.com",
+  "abort_on_error": false,
+  "steps": [
+    {
+      "action": "wait_for_load_state",
+      "description": "Wait for page to fully load",
+      "state": "networkidle"
+    },
+    {
+      "action": "screenshot",
+      "description": "Take screenshot of the page",
+      "save_to": "example_page.png"
+    },
+    {
+      "action": "extract_dom",
+      "description": "Extract page title and heading",
+      "extractions": [
+        {
+          "name": "page_title",
+          "selector": "title",
+          "fallback_js": "document.title"
+        },
+        {
+          "name": "main_heading",
+          "selector": "h1",
+          "fallback_js": "document.querySelector('h1')?.textContent?.trim() || null"
+        },
+        {
+          "name": "paragraph_text",
+          "selector": "p",
+          "fallback_js": "document.querySelector('p')?.textContent?.trim() || null"
+        }
+      ]
+    }
+  ]
+}

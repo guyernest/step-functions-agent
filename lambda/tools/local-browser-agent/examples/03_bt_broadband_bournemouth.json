@@ -1,6 +1,6 @@
 {
-  "name": "BT Broadband Availability Checker - Example",
-  "description": "Ready-to-run example for checking broadband availability. Uses the Bt_broadband profile with saved credentials.",
+  "name": "BT Broadband - Bournemouth BH6 3EN",
+  "description": "Test BT Broadband availability check for 143 Belle Vue Road, Bournemouth. Expected: Exchange STSTHBN, L2SID BAAOEA",
   "starting_page": "https://bbactotl.btwholesale.com/bbac-ui/totl/totlSearch/#/ADSL/AddressHome",
   "llm_provider": "openai",
   "llm_model": "gpt-4o-mini",
@@ -12,27 +12,18 @@
   },
   "session": {
     "profile_name": "Bt_broadband",
-    "required_tags": ["bt.com", "authenticated"],
+    "required_tags": [
+      "bt.com",
+      "authenticated"
+    ],
     "allow_temp_profile": false,
     "clone_for_parallel": false
-  },
-  "variables": {
-    "username": "your_username_here",
-    "postcode": "DN12 1RH",
-    "building_number": "1",
-    "street": "Church View",
-    "full_address": "1 Church View, DN12 1RH"
   },
   "steps": [
     {
       "action": "wait_for_load_state",
       "description": "Wait for initial page load",
       "state": "networkidle"
-    },
-    {
-      "action": "screenshot",
-      "description": "Initial page state",
-      "save_to": "01_initial.png"
     },
     {
       "type": "if",
@@ -146,11 +137,6 @@
                 "action": "wait",
                 "description": "Wait for password manager autofill",
                 "duration": 4000
-              },
-              {
-                "action": "screenshot",
-                "description": "Debug: password field state",
-                "save_to": "02a_password_field.png"
               },
               {
                 "type": "if",
@@ -297,11 +283,6 @@
                     ]
                   }
                 ]
-              },
-              {
-                "action": "screenshot",
-                "description": "Debug: after clicking submit",
-                "save_to": "02b_after_submit_click.png"
               }
             ]
           }
@@ -318,10 +299,6 @@
         {
           "action": "wait_for_load_state",
           "state": "networkidle"
-        },
-        {
-          "action": "screenshot",
-          "save_to": "02_after_login.png"
         },
         {
           "type": "if",
@@ -346,10 +323,6 @@
       "name": "PerformSearch",
       "description": "Search for broadband availability",
       "steps": [
-        {
-          "action": "screenshot",
-          "save_to": "03_before_navigation.png"
-        },
         {
           "type": "if",
           "name": "CheckIfOnAddressHomePage",
@@ -420,10 +393,6 @@
           "duration": 1000
         },
         {
-          "action": "screenshot",
-          "save_to": "03_search_page.png"
-        },
-        {
           "type": "if",
           "name": "VerifySearchPageLoaded",
           "condition": {
@@ -454,7 +423,7 @@
                     "label": "PostCode",
                     "field_type": "input"
                   },
-                  "value": "{{postcode}}"
+                  "value": "BH6 3EN"
                 }
               ]
             },
@@ -467,7 +436,7 @@
                     "strategy": "selector",
                     "value": "#postCode"
                   },
-                  "value": "{{postcode}}"
+                  "value": "BH6 3EN"
                 }
               ]
             },
@@ -480,7 +449,7 @@
                     "strategy": "selector",
                     "value": "input[name='postCode']"
                   },
-                  "value": "{{postcode}}"
+                  "value": "BH6 3EN"
                 }
               ]
             }
@@ -536,10 +505,6 @@
         {
           "action": "wait_for_load_state",
           "state": "networkidle"
-        },
-        {
-          "action": "screenshot",
-          "save_to": "04_after_search.png"
         }
       ],
       "next": "SelectAddress"
@@ -549,10 +514,6 @@
       "name": "SelectAddress",
       "description": "Select address from list if present",
       "steps": [
-        {
-          "action": "screenshot",
-          "save_to": "04b_before_address_selection.png"
-        },
         {
           "type": "try",
           "name": "SelectAddressFromList",
@@ -565,7 +526,7 @@
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/^\\s*{{building_number}}\\s+\\w+/i",
+                    "value": "text=/^\\s*143\\s+\\w+/i",
                     "nth": 0
                   }
                 }
@@ -578,7 +539,7 @@
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/{{building_number}}[\\s,]+{{street}}/i",
+                    "value": "text=/143[\\s,]+Belle Vue Road/i",
                     "nth": 0
                   }
                 }
@@ -591,7 +552,7 @@
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/{{building_number}}.*{{street}}/i",
+                    "value": "text=/143.*Belle Vue Road/i",
                     "nth": 0
                   }
                 }
@@ -604,7 +565,7 @@
                   "action": "click",
                   "locator": {
                     "strategy": "text",
-                    "value": "{{building_number}} {{street}}"
+                    "value": "143 Belle Vue Road"
                   }
                 }
               ]
@@ -613,7 +574,7 @@
               "name": "Strategy 5: Vision LLM with scroll capability",
               "escalate": {
                 "type": "vision_llm",
-                "prompt": "Find and click the address matching '{{full_address}}' in the address list. CRITICAL INSTRUCTIONS:\n\n1. FIRST SEARCH: Look carefully at ALL visible addresses for one containing:\n   - Building number: '{{building_number}}'\n   - Street name: '{{street}}'\n   - Format may vary (case, commas, word order)\n\n2. IF FOUND: Click it immediately\n\n3. IF NOT VISIBLE:\n   a) The list is likely SCROLLABLE - look for:\n      - A dropdown/select element that can be scrolled\n      - Scroll arrows (up/down)\n      - A scrollbar on the address list\n   b) SCROLL DOWN within the list (not the whole page)\n   c) After scrolling, SEARCH AGAIN for the address\n   d) Repeat: scroll -> search -> scroll -> search (up to 3 scroll attempts)\n\n4. MATCHING RULES:\n   - Accept variations: '{{building_number}} {{street}}', '{{building_number}}, {{street}}', '{{building_number}} {{street}}, City'\n   - Case-insensitive matching\n   - Must have BOTH building number AND street name\n\n5. MAX ACTIONS: 8 actions total (including scrolls and clicks)\n\n6. IF STILL NOT FOUND: Report failure.",
+                "prompt": "Find and click the address matching '143 Belle Vue Road, Bournemouth BH6 3EN' in the address list. CRITICAL INSTRUCTIONS:\n\n1. FIRST SEARCH: Look carefully at ALL visible addresses for one containing:\n   - Building number: '143'\n   - Street name: 'Belle Vue Road'\n   - Format may vary (case, commas, word order)\n\n2. IF FOUND: Click it immediately\n\n3. IF NOT VISIBLE:\n   a) The list is likely SCROLLABLE - look for:\n      - A dropdown/select element that can be scrolled\n      - Scroll arrows (up/down)\n      - A scrollbar on the address list\n   b) SCROLL DOWN within the list (not the whole page)\n   c) After scrolling, SEARCH AGAIN for the address\n   d) Repeat: scroll -> search -> scroll -> search (up to 3 scroll attempts)\n\n4. MATCHING RULES:\n   - Accept variations: '143 Belle Vue Road', '143, Belle Vue Road', '143 Belle Vue Road, City'\n   - Case-insensitive matching\n   - Must have BOTH building number AND street name\n\n5. MAX ACTIONS: 8 actions total (including scrolls and clicks)\n\n6. IF STILL NOT FOUND: Report failure.",
                 "timeout": 30000,
                 "max_actions": 8
               }
@@ -671,23 +632,76 @@
               ]
             }
           ]
-        },
+        }
+      ],
+      "next": "WaitForResults"
+    },
+    {
+      "type": "sequence",
+      "name": "WaitForResults",
+      "description": "Wait for address details page to fully load with retries",
+      "steps": [
         {
           "action": "wait_for_load_state",
           "state": "networkidle"
         },
         {
           "action": "wait",
-          "description": "Wait for results page to fully render",
-          "duration": 5000
+          "description": "Initial wait for page transition",
+          "duration": 3000
         },
         {
-          "action": "wait_for_load_state",
-          "state": "networkidle"
+          "type": "try",
+          "name": "WaitForAddressDetailsPage",
+          "description": "Wait for address details page elements with retry",
+          "strategies": [
+            {
+              "name": "Strategy 1: Wait for Exchange Code container class",
+              "steps": [
+                {
+                  "action": "wait_for_selector",
+                  "selector": ".ExhangeCodeSetup",
+                  "timeout": 15000
+                }
+              ]
+            },
+            {
+              "name": "Strategy 2: Wait for Featured Products table header",
+              "steps": [
+                {
+                  "action": "wait",
+                  "duration": 3000
+                },
+                {
+                  "action": "wait_for_load_state",
+                  "state": "networkidle"
+                },
+                {
+                  "action": "wait_for_selector",
+                  "selector": "th:has-text('Featured Products')",
+                  "timeout": 20000
+                }
+              ]
+            },
+            {
+              "name": "Strategy 3: Maximum wait for slow pages",
+              "steps": [
+                {
+                  "action": "wait",
+                  "duration": 10000
+                },
+                {
+                  "action": "wait_for_load_state",
+                  "state": "networkidle"
+                }
+              ]
+            }
+          ]
         },
         {
-          "action": "screenshot",
-          "save_to": "05_packages.png"
+          "action": "wait",
+          "description": "Final stabilization wait",
+          "duration": 2000
         }
       ],
       "next": "ExtractResults"
@@ -695,69 +709,65 @@
     {
       "type": "sequence",
       "name": "ExtractResults",
-      "description": "Capture verification screenshot and extract broadband availability data",
+      "description": "Capture screenshot and extract key values from DOM",
       "steps": [
         {
           "action": "screenshot",
-          "save_to": "06_extraction_page.png",
+          "save_to": "address_details.png",
           "upload_to_s3": true,
           "include_in_result": true,
-          "description": "Capture page for extraction verification"
+          "description": "Capture address details page for cloud extraction"
         },
         {
-          "action": "extract",
-          "method": "vision",
-          "prompt": "You are a BT Broadband Availability Checker assistant that uses browser automation to check broadband availability for UK addresses. You can see and read the contents of images provided in the message. Use the screenshot image as if it were the rendered web page. Strictly follow and execute the following steps and output ONLY the JSON object. Step1: ALWAYS capture the  'Exchange Code'– This is the field 'exchange_code'.  This is required and should be captured at all times. Step 2: Then check  the first table with first column called 'FEATURED PRODUCTS': Search for a row containing the value 'WBC FTTP'.  if not fund, skip to steo 3. If found:, capture the field  'Downstream Line Rate' (this is the SOADSL DSL speed in Mbps) in the same row. Then set fttp_avail = true.  Navigate to the table that has the first column named 'OTHER OFFERINGS': Check if ANY row has the value 'VDSL Multicast' and 'Service Availability' column = 'Enabled'. If found, set sogea_avail = true, otherwise set sogea_avail = false. Then search for a table titled ONT DETAILS.  If it exists then from the row with 'Status' column = 'Working',  capture: 'Reference' column (this is ont_reference)   - Capture: 'ONT Serial Number' column (this is ont_serial_no)    - Capture: 'Port Service ID' column (this is port_service_id). Skip to step 5 . Steo 3: If no line with value 'WBC FTTP' is found in the first table that has 'FEATURED PRODUCS' as its first heading, then check if there is a table whose first column is named 'SOADSL Products'. If there is none, then skip to step 4. If there is then find the row with value 'SOADSL WBC' and column 'WBC SOADSL Availability' = 'Enabled'.  From this row capture the numeric value of the field 'Downstream Line Rate' (this is the SOADSL DSL speed in Mbps). Then set fttp_avail = false - Leave all other fields blank (sogea_avail, ont_reference, ont_serial_no, port_service_id). Skip to step 5. Step 4: Check if there is a table with a column named 'WBC SOGEA AVAILABILITY' and with value 'Enabled' or 'Exception'.  if thre is then from the same table, capture the value of the column of the first line under the  heading 'Downstream Line Rate (Mbps)' – sub heading  'Low'. (this is the SOADSL DSL speed in Mbps). Then check if there is a second table with a column 'Featured Products' under the first one, with a line 'WBC FTTP'.  If there is and the value of the column 'Service Availability' = 'Enabled' then set fttp_avail = true, otherwise set fttp_avail = false. Then check if there is a table 'ONT Details.  If yes then from the row with 'Status' field = 'Working',  Capture: 'Reference' field (this is ont_reference)   - Capture: 'ONT Serial Number' field (this is ont_serial_no)    - Capture: 'Port Service ID' field (this is port_service_id). Step 5. Navigate to the table titled 'PREMISE ENVIRONMENT.   Capture the value of 'Recommended Minimum SVR NLP' field (this is install_type) - Valid values are typically 'Standard', 'Premium', or 'Advanced'. IMPORTANT: At all times, ignore other tables not listed above.",
-          "schema": {
-            "type": "object",
-            "properties": {
-              "exchange_code": {
-                "type": "string",
-                "description": "Exchange Code (e.g., LCBOL, or SLCBR)."
-              },
-              "fttp_avail": {
-                "type": "boolean",
-                "description": "Whether WBC FTTP is found in the Featured Products section"
-              },
-              "install_type": {
-                "type": "string",
-                "enum": [
-                  "Standard",
-                  "Premium",
-                  "Advanced",
-                  "N/A"
-                ],
-                "description": "Value from Premise Environment -> Recommended Minimum SVR NLP (only if WBC FTTP found)"
-              },
-              "sogea_avail": {
-                "type": "boolean",
-                "description": "Whether Other Offerings has Service Availability = Enabled (only if WBC FTTP found)"
-              },
-              "soadsl_dsl_speed": {
-                "type": "number",
-                "description": "Downstream Line Rate from WBC FTTP row in Mbps (only if WBC FTTP found)"
-              },
-              "ont_reference": {
-                "type": "string",
-                "description": "Reference field from last row of ONT Details section (only if WBC FTTP found)"
-              },
-              "ont_serial_no": {
-                "type": "string",
-                "description": "ONT Serial Number from last row of ONT Details section (only if WBC FTTP found)"
-              },
-              "port_service_id": {
-                "type": "string",
-                "description": "Port Service ID from last row of ONT Details section (only if WBC FTTP found)"
-              }
+          "action": "extract_dom",
+          "description": "Extract Exchange Code, L2SID, and ONT Details from page HTML",
+          "extractions": [
+            {
+              "name": "exchange_code",
+              "selector": ".ExhangeCodeSetup > span:last-child",
+              "fallback_js": "(() => { const wrapper = document.querySelector('.ExhangeCodeSetup'); if (wrapper) { const spans = wrapper.querySelectorAll('span'); for (const s of spans) { if (!s.classList.contains('ExhangeCodeSetupTwo') && s.textContent.trim() && !s.textContent.includes('Exchange Code')) { return s.textContent.trim(); } } } return null; })()"
             },
-            "required": [
-              "fttp_avail"
-            ]
-          }
-        },
-        {
-          "action": "screenshot",
-          "save_to": "07_final.png"
+            {
+              "name": "l2sid_new_ont",
+              "selector": "tr:has(th:has-text('L2SID (New ONT)')) td",
+              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('L2SID (New ONT)')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
+            },
+            {
+              "name": "fttp_existing_ont",
+              "selector": "tr:has(th:has-text('FTTP Existing ONT Available')) td",
+              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('FTTP Existing ONT Available')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
+            },
+            {
+              "name": "fttp_new_ont",
+              "selector": "tr:has(th:has-text('FTTP New ONT Available')) td",
+              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('FTTP New ONT Available')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
+            },
+            {
+              "name": "ont_reference",
+              "selector": "table:has(th:has-text('ONT Details')) tr:has(td:has-text('Working')) td:nth-child(2)",
+              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { const header = t.querySelector('th'); if (header && header.textContent.includes('ONT Details')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[1]?.textContent?.trim() || null; } } } } return null; })()"
+            },
+            {
+              "name": "ont_serial_no",
+              "selector": "table:has(th:has-text('ONT Details')) tr:has(td:has-text('Working')) td:nth-child(3)",
+              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { const header = t.querySelector('th'); if (header && header.textContent.includes('ONT Details')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[2]?.textContent?.trim() || null; } } } } return null; })()"
+            },
+            {
+              "name": "port_service_id",
+              "selector": "table:has(th:has-text('ONT Details')) tr:has(td:has-text('Working')) td:nth-child(4)",
+              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { const header = t.querySelector('th'); if (header && header.textContent.includes('ONT Details')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[3]?.textContent?.trim() || null; } } } } return null; })()"
+            },
+            {
+              "name": "wbc_fttp_rag",
+              "selector": "tr:has(th:has-text('WBC FTTP')) td:first-of-type",
+              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('WBC FTTP')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
+            },
+            {
+              "name": "premise_type",
+              "selector": "tr:has(th:has-text('Premise Type')) td",
+              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('Premise Type')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
+            }
+          ]
         }
       ],
       "end": true

@@ -1,0 +1,100 @@
+{
+  "name": "Form Filling Test",
+  "description": "Test form filling with Playwright actions. No LLM required - uses httpbin.org test form.",
+  "starting_page": "https://httpbin.org/forms/post",
+  "abort_on_error": false,
+  "steps": [
+    {
+      "action": "wait_for_load_state",
+      "description": "Wait for form page to load",
+      "state": "networkidle"
+    },
+    {
+      "action": "fill",
+      "description": "Fill customer name",
+      "locator": {
+        "strategy": "selector",
+        "value": "input[name='custname']"
+      },
+      "value": "John Doe"
+    },
+    {
+      "action": "fill",
+      "description": "Fill telephone number",
+      "locator": {
+        "strategy": "selector",
+        "value": "input[name='custtel']"
+      },
+      "value": "555-0123"
+    },
+    {
+      "action": "fill",
+      "description": "Fill email address",
+      "locator": {
+        "strategy": "selector",
+        "value": "input[name='custemail']"
+      },
+      "value": "john.doe@example.com"
+    },
+    {
+      "action": "click",
+      "description": "Select medium pizza size",
+      "locator": {
+        "strategy": "selector",
+        "value": "input[name='size'][value='medium']"
+      }
+    },
+    {
+      "action": "click",
+      "description": "Select bacon topping",
+      "locator": {
+        "strategy": "selector",
+        "value": "input[name='topping'][value='bacon']"
+      }
+    },
+    {
+      "action": "fill",
+      "description": "Fill delivery time",
+      "locator": {
+        "strategy": "selector",
+        "value": "input[name='delivery']"
+      },
+      "value": "19:00"
+    },
+    {
+      "action": "fill",
+      "description": "Fill delivery instructions",
+      "locator": {
+        "strategy": "selector",
+        "value": "textarea[name='comments']"
+      },
+      "value": "Please ring doorbell twice and leave at door"
+    },
+    {
+      "action": "screenshot",
+      "description": "Screenshot of filled form",
+      "save_to": "form_filled.png"
+    },
+    {
+      "action": "extract_dom",
+      "description": "Verify form field values",
+      "extractions": [
+        {
+          "name": "customer_name",
+          "selector": "input[name='custname']",
+          "fallback_js": "document.querySelector('input[name=\"custname\"]')?.value || null"
+        },
+        {
+          "name": "customer_email",
+          "selector": "input[name='custemail']",
+          "fallback_js": "document.querySelector('input[name=\"custemail\"]')?.value || null"
+        },
+        {
+          "name": "delivery_instructions",
+          "selector": "textarea[name='comments']",
+          "fallback_js": "document.querySelector('textarea[name=\"comments\"]')?.value || null"
+        }
+      ]
+    }
+  ]
+}

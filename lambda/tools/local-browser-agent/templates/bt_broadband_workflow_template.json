@@ -653,21 +653,21 @@
           "description": "Wait for address details page elements with retry",
           "strategies": [
             {
-              "name": "Strategy 1: Wait for Exchange Code element",
+              "name": "Strategy 1: Wait for Exchange Code container class",
               "steps": [
                 {
                   "action": "wait_for_selector",
-                  "selector": "text=/Exchange Code/i, text=/FEATURED PRODUCTS/i, text=/SOADSL/i",
+                  "selector": ".ExhangeCodeSetup",
                   "timeout": 15000
                 }
               ]
             },
             {
-              "name": "Strategy 2: Extended wait and retry",
+              "name": "Strategy 2: Wait for Featured Products table header",
               "steps": [
                 {
                   "action": "wait",
-                  "duration": 5000
+                  "duration": 3000
                 },
                 {
                   "action": "wait_for_load_state",
@@ -675,7 +675,7 @@
                 },
                 {
                   "action": "wait_for_selector",
-                  "selector": "text=/Exchange Code/i, text=/FEATURED PRODUCTS/i, text=/WBC/i",
+                  "selector": "th:has-text('Featured Products')",
                   "timeout": 20000
                 }
               ]
@@ -717,27 +717,52 @@
         },
         {
           "action": "extract_dom",
-          "description": "Extract Exchange Code and ONT Details from page HTML",
+          "description": "Extract Exchange Code, L2SID, and ONT Details from page HTML",
           "extractions": [
             {
               "name": "exchange_code",
-              "selector": "text=/Exchange Code/i/../following-sibling::*",
-              "fallback_js": "(() => { const el = [...document.querySelectorAll('*')].find(e => e.textContent.includes('Exchange Code')); return el ? el.textContent.match(/Exchange Code[:\\s]*([A-Z0-9]+)/i)?.[1] : null; })()"
+              "selector": ".ExhangeCodeSetup > span:last-child",
+              "fallback_js": "(() => { const wrapper = document.querySelector('.ExhangeCodeSetup'); if (wrapper) { const spans = wrapper.querySelectorAll('span'); for (const s of spans) { if (!s.classList.contains('ExhangeCodeSetupTwo') && s.textContent.trim() && !s.textContent.includes('Exchange Code')) { return s.textContent.trim(); } } } return null; })()"
+            },
+            {
+              "name": "l2sid_new_ont",
+              "selector": "tr:has(th:has-text('L2SID (New ONT)')) td",
+              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('L2SID (New ONT)')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
+            },
+            {
+              "name": "fttp_existing_ont",
+              "selector": "tr:has(th:has-text('FTTP Existing ONT Available')) td",
+              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('FTTP Existing ONT Available')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
+            },
+            {
+              "name": "fttp_new_ont",
+              "selector": "tr:has(th:has-text('FTTP New ONT Available')) td",
+              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('FTTP New ONT Available')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
             },
             {
               "name": "ont_reference",
-              "selector": "table:has(th:text-matches('ONT', 'i')) tr:has(td:text-matches('Working', 'i')) td:nth-child(2)",
-              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { if (t.textContent.includes('ONT')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[1]?.textContent?.trim(); } } } } return null; })()"
+              "selector": "table:has(th:has-text('ONT Details')) tr:has(td:has-text('Working')) td:nth-child(2)",
+              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { const header = t.querySelector('th'); if (header && header.textContent.includes('ONT Details')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[1]?.textContent?.trim() || null; } } } } return null; })()"
             },
             {
               "name": "ont_serial_no",
-              "selector": "table:has(th:text-matches('ONT', 'i')) tr:has(td:text-matches('Working', 'i')) td:nth-child(3)",
-              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { if (t.textContent.includes('ONT')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[2]?.textContent?.trim(); } } } } return null; })()"
+              "selector": "table:has(th:has-text('ONT Details')) tr:has(td:has-text('Working')) td:nth-child(3)",
+              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { const header = t.querySelector('th'); if (header && header.textContent.includes('ONT Details')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[2]?.textContent?.trim() || null; } } } } return null; })()"
             },
             {
               "name": "port_service_id",
-              "selector": "table:has(th:text-matches('ONT', 'i')) tr:has(td:text-matches('Working', 'i')) td:nth-child(4)",
-              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { if (t.textContent.includes('ONT')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[3]?.textContent?.trim(); } } } } return null; })()"
+              "selector": "table:has(th:has-text('ONT Details')) tr:has(td:has-text('Working')) td:nth-child(4)",
+              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { const header = t.querySelector('th'); if (header && header.textContent.includes('ONT Details')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[3]?.textContent?.trim() || null; } } } } return null; })()"
+            },
+            {
+              "name": "wbc_fttp_rag",
+              "selector": "tr:has(th:has-text('WBC FTTP')) td:first-of-type",
+              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('WBC FTTP')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
+            },
+            {
+              "name": "premise_type",
+              "selector": "tr:has(th:has-text('Premise Type')) td",
+              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('Premise Type')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
             }
           ]
         }
