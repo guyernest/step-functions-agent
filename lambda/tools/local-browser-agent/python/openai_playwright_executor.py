@@ -982,15 +982,13 @@ class OpenAIPlaywrightExecutor:
         Public interface for WorkflowExecutor to execute individual steps.
 
         Returns the result dict so WorkflowExecutor can collect step results and screenshots.
+        Failed steps return result with success=False — the WorkflowExecutor collects the
+        result first, then raises if needed.
         """
         # Delegate to the internal execute method
         result = await self._execute_step(step, step_num=0)
 
-        # Raise exception if step failed (WorkflowExecutor handles failures)
-        if not result.get("success"):
-            raise Exception(result.get("error", "Step execution failed"))
-
-        # Return result for WorkflowExecutor to collect
+        # Always return the result — let _dispatch_step collect it before raising
         return result
 
     async def _execute_step(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
@@ -1710,15 +1708,18 @@ class OpenAIPlaywrightExecutor:
                 "error": "extract_dom requires 'extractions' array"
             }
 
+        print(f"  Extracting {len(extractions)} fields from DOM...", file=sys.stderr)
+
         results = {}
         errors = []
 
         for extraction in extractions:
-            field = extraction.get("field")
+            # Accept both "field" and "name" as the extraction identifier
+            field = extraction.get("field") or extraction.get("name")
             strategy = extraction.get("strategy", "css")
 
             if not field:
-                errors.append("Extraction missing 'field' name")
+                errors.append("Extraction missing 'field'/'name' identifier")
                 continue
 
             try:
@@ -1836,6 +1837,16 @@ class OpenAIPlaywrightExecutor:
                     errors.append(f"{field}: Unknown strategy '{strategy}'")
                     continue
 
+                # If primary strategy didn't find a value, try fallback_js
+                if not value and extraction.get("fallback_js"):
+                    try:
+                        print(f"  ⚠ Primary selector missed {field}, trying fallback_js...", file=sys.stderr)
+                        value = await self.page.evaluate(extraction["fallback_js"])
+                        if value and isinstance(value, str):
+                            value = value.strip()
+                    except Exception as e:
+                        print(f"  ⚠ fallback_js failed for {field}: {e}", file=sys.stderr)
+
                 # Store result
                 if value:
                     results[field] = value
@@ -1847,13 +1858,20 @@ class OpenAIPlaywrightExecutor:
                 errors.append(f"{field}: {str(e)}")
                 print(f"  ✗ Error extracting {field}: {e}", file=sys.stderr)
 
+        # Include page URL for debugging — helps cloud agent know what page we're on
+        try:
+            page_url = self.page.url
+        except Exception:
+            page_url = None
+
         return {
-            "success": len(results) > 0,
+            "success": True,
             "action": "extract_dom",
             "data": results,
             "fields_found": len(results),
             "fields_requested": len(extractions),
             "errors": errors if errors else None,
+            "page_url": page_url,
         }
 
     async def _execute_extracted_action(self, extracted_data: Dict[str, Any]) -> Dict[str, Any]:
