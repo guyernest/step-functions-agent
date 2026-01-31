@@ -840,11 +840,56 @@ class OpenAIPlaywrightExecutor:
                     # Signal readiness
                     print(json.dumps({"status": "ready"}), flush=True)
 
-                # Execute the script with browser lifecycle skipped
-                result = await self.execute_script(script, skip_browser_lifecycle=True)
+                # Check browser health before executing. If the page/context
+                # has died (e.g. crash, navigation error), try to recover.
+                try:
+                    if self.page and not self.page.is_closed():
+                        # Quick health check - evaluate a trivial expression
+                        await self.page.evaluate("1")
+                    else:
+                        raise Exception("Page is closed")
+                except Exception as health_err:
+                    print(f"  ⚠ Browser health check failed: {health_err}", file=sys.stderr)
+                    print(f"  ⚠ Attempting browser recovery...", file=sys.stderr)
+                    try:
+                        await self._cleanup_browser()
+                        await self._init_browser()
+                        print(f"  ✓ Browser recovered successfully", file=sys.stderr)
+                    except Exception as recovery_err:
+                        print(f"  ✗ Browser recovery failed: {recovery_err}", file=sys.stderr)
+                        traceback.print_exc(file=sys.stderr)
+                        result = {"success": False, "error": f"Browser recovery failed: {recovery_err}"}
+                        try:
+                            print(json.dumps(result, default=str), flush=True)
+                        except Exception:
+                            print(json.dumps({"success": False, "error": "Browser dead, recovery failed"}), flush=True)
+                        continue
 
-                # Write result as single JSON line to stdout
-                print(json.dumps(result), flush=True)
+                # Execute the script with browser lifecycle skipped.
+                # Wrap in try/except to prevent any unhandled error from killing
+                # the persistent server process. The loop must continue.
+                try:
+                    result = await self.execute_script(script, skip_browser_lifecycle=True)
+                except Exception as e:
+                    print(f"\n✗ Unhandled error during script execution: {e}", file=sys.stderr)
+                    traceback.print_exc(file=sys.stderr)
+                    result = {
+                        "success": False,
+                        "error": f"Unhandled execution error: {e}",
+                        "script_name": script.get("name", "Unknown"),
+                    }
+
+                # Write result as single JSON line to stdout.
+                # Use default=str to handle any non-serializable objects
+                # (Playwright elements, Path objects, etc.) that may leak
+                # into the result dict from step execution.
+                try:
+                    print(json.dumps(result, default=str), flush=True)
+                except Exception as e:
+                    print(f"\n✗ Failed to serialize result: {e}", file=sys.stderr)
+                    traceback.print_exc(file=sys.stderr)
+                    fallback = {"success": False, "error": f"Result serialization error: {e}"}
+                    print(json.dumps(fallback), flush=True)
 
         except KeyboardInterrupt:
             print(f"Server mode interrupted by user", file=sys.stderr)
@@ -1099,6 +1144,7 @@ class OpenAIPlaywrightExecutor:
             "extract_dom": self._step_extract_dom,
             "execute_js": self._step_execute_js,
             "press": self._step_press,
+            "select_by_llm": self._step_select_by_llm,
             "error": self._step_error,
         }
 
@@ -2079,6 +2125,173 @@ class OpenAIPlaywrightExecutor:
             "action": "press",
             "keys": keys,
             "delay_ms": delay_ms,
+        }
+
+    async def _step_select_by_llm(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
+        """
+        Select an option from a <select> element using LLM text matching.
+
+        Extracts all option texts from the DOM, sends them to the LLM as text
+        (no vision/screenshots), asks it to pick the best match, then uses
+        Playwright's select_option() to properly trigger the change event.
+
+        Template usage:
+        {
+          "action": "select_by_llm",
+          "select_selector": "select.custom-select",
+          "target": "{{full_address}}",
+          "context_hint": "Building: {{building_number}}, Street: {{street}}"
+        }
+        """
+        select_selector = step.get("select_selector", "select")
+        target = self._substitute_variables(step.get("target", ""))
+        context_hint = self._substitute_variables(step.get("context_hint", ""))
+
+        # Step 1: Extract all options from the <select> element via JavaScript
+        options_data = await self.page.evaluate("""(selector) => {
+            const select = document.querySelector(selector);
+            if (!select) return null;
+            const options = [];
+            for (let i = 0; i < select.options.length; i++) {
+                const opt = select.options[i];
+                // Skip placeholder/header options
+                if (opt.value === '' || opt.value === 'undefined' || opt.textContent.includes('Please select'))
+                    continue;
+                options.push({
+                    index: i,
+                    value: opt.value,
+                    text: opt.textContent.trim().replace(/\\s+/g, ' ')
+                });
+            }
+            return options;
+        }""", select_selector)
+
+        if not options_data:
+            return {
+                "success": False,
+                "action": "select_by_llm",
+                "error": f"No <select> element found with selector: {select_selector}",
+            }
+
+        if len(options_data) == 0:
+            return {
+                "success": False,
+                "action": "select_by_llm",
+                "error": "Select element has no options (excluding placeholder)",
+            }
+
+        print(f"  Found {len(options_data)} options in <select>", file=sys.stderr)
+
+        # Step 2: Build numbered list for LLM
+        options_text = "\n".join(
+            f"  [{opt['index']}] {opt['text']}"
+            for opt in options_data
+        )
+
+        prompt = (
+            f"You are selecting an address from a dropdown list.\n\n"
+            f"TARGET ADDRESS: {target}\n"
+        )
+        if context_hint:
+            prompt += f"ADDITIONAL CONTEXT: {context_hint}\n"
+        prompt += (
+            f"\nAVAILABLE OPTIONS:\n{options_text}\n\n"
+            f"INSTRUCTIONS:\n"
+            f"- Find the option that best matches the TARGET ADDRESS.\n"
+            f"- Match by building number and street name. Flat/unit number must also match if specified.\n"
+            f"- Ignore trailing codes, IDs, and business names — focus on the address part.\n"
+            f"- Prefer options with 'SD' over 'XX' when both match (SD = active, XX = inactive).\n"
+            f"- If no option matches well, set index to -1.\n\n"
+            f"Respond with ONLY a JSON object:\n"
+            f'{{"index": <option_index>, "confidence": <0.0-1.0>, "matched_text": "<the option text>"}}'
+        )
+
+        # Step 3: Call LLM (text-only, no vision)
+        llm_client = self._ensure_llm_client()
+
+        print(f"  Calling LLM for address matching ({len(options_data)} options)...", file=sys.stderr)
+
+        try:
+            if self.llm_provider == "openai":
+                response = llm_client.chat.completions.create(
+                    model=self.llm_model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=200,
+                    temperature=0,
+                    response_format={"type": "json_object"},
+                )
+                content = response.choices[0].message.content
+            elif self.llm_provider == "claude":
+                response = llm_client.messages.create(
+                    model=self.llm_model,
+                    max_tokens=200,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                content = response.content[0].text
+            else:
+                return {
+                    "success": False,
+                    "action": "select_by_llm",
+                    "error": f"Unsupported LLM provider for select_by_llm: {self.llm_provider}",
+                }
+
+            result = json.loads(content)
+            chosen_index = result.get("index", -1)
+            confidence = result.get("confidence", 0)
+            matched_text = result.get("matched_text", "")
+
+        except Exception as e:
+            return {
+                "success": False,
+                "action": "select_by_llm",
+                "error": f"LLM call failed: {e}",
+            }
+
+        if chosen_index < 0 or confidence < 0.3:
+            print(f"  ✗ LLM could not find a match (index={chosen_index}, confidence={confidence})", file=sys.stderr)
+            return {
+                "success": False,
+                "action": "select_by_llm",
+                "error": f"No matching address found (confidence={confidence})",
+                "llm_response": result,
+            }
+
+        # Step 4: Find the matching option's value and use select_option()
+        matched_option = next((opt for opt in options_data if opt["index"] == chosen_index), None)
+        if not matched_option:
+            return {
+                "success": False,
+                "action": "select_by_llm",
+                "error": f"LLM returned index {chosen_index} which doesn't exist in options",
+            }
+
+        print(f"  ✓ LLM matched: [{chosen_index}] {matched_option['text'][:80]}... (confidence={confidence})", file=sys.stderr)
+
+        # Use select_option with the value attribute — this fires the native
+        # 'change' event, which Angular detects and updates form state properly.
+        try:
+            await self.page.select_option(select_selector, value=matched_option["value"])
+        except Exception as e:
+            # Fallback: try selecting by index
+            print(f"  ⚠ select_option by value failed: {e}, trying by index...", file=sys.stderr)
+            try:
+                await self.page.select_option(select_selector, index=chosen_index)
+            except Exception as e2:
+                return {
+                    "success": False,
+                    "action": "select_by_llm",
+                    "error": f"Failed to select option: {e2}",
+                }
+
+        return {
+            "success": True,
+            "action": "select_by_llm",
+            "selected_index": chosen_index,
+            "selected_value": matched_option["value"],
+            "selected_text": matched_option["text"],
+            "confidence": confidence,
+            "total_options": len(options_data),
+            "method": "llm_text_match",
         }
 
     def _get_locator(self, locator_config: Dict[str, Any]):

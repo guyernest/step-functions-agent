@@ -550,7 +550,7 @@
           "description": "Progressive address matching: regex -> fuzzy -> vision with scroll",
           "strategies": [
             {
-              "name": "Strategy 1: Regex - building (with range) + first word only",
+              "name": "Strategy 1: Regex - building number + first word",
               "steps": [
                 {
                   "action": "click",
@@ -563,45 +563,19 @@
               ]
             },
             {
-              "name": "Strategy 2: Regex - building (with range) + street flexible",
+              "name": "Strategy 2: DOM extract + LLM text matching",
               "steps": [
                 {
-                  "action": "click",
-                  "locator": {
-                    "strategy": "selector",
-                    "value": "text=/(?:\\d+-)?34(?:-\\d+)?[A-Za-z]?[\\s,]+Market Street/i",
-                    "nth": 0
-                  }
+                  "action": "select_by_llm",
+                  "description": "Extract all options from address dropdown, send to LLM for text matching, use select_option() to properly trigger Angular change event",
+                  "select_selector": "select.custom-select",
+                  "target": "34-40 Market Street, Westhoughton, Bolton BL5 3AN",
+                  "context_hint": "Building number: 34, Street: Market Street, Postcode: BL5 3AN"
                 }
               ]
             },
             {
-              "name": "Strategy 3: Regex - building (with range) + street anywhere",
-              "steps": [
-                {
-                  "action": "click",
-                  "locator": {
-                    "strategy": "selector",
-                    "value": "text=/(?:\\d+-)?34(?:-\\d+)?[A-Za-z]?.*Market Street/i",
-                    "nth": 0
-                  }
-                }
-              ]
-            },
-            {
-              "name": "Strategy 4: Exact text match",
-              "steps": [
-                {
-                  "action": "click",
-                  "locator": {
-                    "strategy": "text",
-                    "value": "34 Market Street"
-                  }
-                }
-              ]
-            },
-            {
-              "name": "Strategy 5: Vision LLM with scroll capability",
+              "name": "Strategy 3: Vision LLM with scroll capability (fallback)",
               "escalate": {
                 "type": "vision_llm",
                 "prompt": "Find and click the address matching '34-40 Market Street, Westhoughton, Bolton BL5 3AN' in the address list. CRITICAL INSTRUCTIONS:\n\n1. FIRST SEARCH: Look carefully at ALL visible addresses for one containing:\n   - Building number: '34'\n   - Street name: 'Market Street'\n   - Format may vary (case, commas, word order)\n\n2. IF FOUND: Click it immediately\n\n3. IF NOT VISIBLE:\n   a) The list is likely SCROLLABLE - look for:\n      - A dropdown/select element that can be scrolled\n      - Scroll arrows (up/down)\n      - A scrollbar on the address list\n   b) SCROLL DOWN within the list (not the whole page)\n   c) After scrolling, SEARCH AGAIN for the address\n   d) Repeat: scroll -> search -> scroll -> search (up to 3 scroll attempts)\n\n4. MATCHING RULES:\n   - Accept variations: '34 Market Street', '34, Market Street', '34 Market Street, City'\n   - Case-insensitive matching\n   - Must have BOTH building number AND street name\n\n5. MAX ACTIONS: 8 actions total (including scrolls and clicks)\n\n6. IF STILL NOT FOUND: Report failure.",
