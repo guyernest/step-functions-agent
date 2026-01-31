@@ -129,6 +129,7 @@ pub async fn load_config_from_file(path: String) -> Result<ConfigData, String> {
         openai_model: config.openai_model,
         enable_replanning: config.enable_replanning,
         max_replans: config.max_replans,
+        persistent_browser_session: config.persistent_browser_session,
     })
 }
 
@@ -500,6 +501,8 @@ pub struct ConfigData {
     pub openai_model: String,
     pub enable_replanning: bool,
     pub max_replans: u32,
+    #[serde(default)]
+    pub persistent_browser_session: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1278,6 +1281,7 @@ mod tests {
             openai_model: "gpt-4o-mini".to_string(),
             enable_replanning: false,
             max_replans: 2,
+            persistent_browser_session: false,
         };
 
         // Convert to ConfigData - this will fail to compile if fields don't match
@@ -1297,6 +1301,7 @@ mod tests {
             openai_model: config.openai_model.clone(),
             enable_replanning: config.enable_replanning,
             max_replans: config.max_replans,
+            persistent_browser_session: config.persistent_browser_session,
         };
 
         // Verify all fields are transferred correctly
@@ -1329,6 +1334,7 @@ mod tests {
             openai_model: "gpt-4o".to_string(),
             enable_replanning: true,
             max_replans: 3,
+            persistent_browser_session: false,
         };
 
         // Serialize to YAML
