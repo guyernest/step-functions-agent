@@ -467,8 +467,14 @@ impl PersistentScriptExecutor {
         let mut stdout_lines = BufReader::new(stdout).lines();
 
         // Send the first script to trigger browser init
+        // IMPORTANT: Compact the JSON to a single line for the NDJSON protocol.
+        // The script content may be pretty-printed (multi-line), but Python's
+        // readline() reads only one line, so we must ensure it's a single line.
         let mut stdin_writer = stdin;
-        let first_script_line = format!("{}\n", exec_config.script_content);
+        let compact_script = serde_json::from_str::<serde_json::Value>(&exec_config.script_content)
+            .and_then(|v| serde_json::to_string(&v))
+            .unwrap_or_else(|_| exec_config.script_content.replace('\n', " "));
+        let first_script_line = format!("{}\n", compact_script);
         stdin_writer
             .write_all(first_script_line.as_bytes())
             .await
@@ -537,8 +543,11 @@ impl PersistentScriptExecutor {
         let stdin = self.stdin.as_mut().context("Persistent session not started or already stopped")?;
         let stdout_lines = self.stdout_lines.as_mut().context("Persistent session not started or already stopped")?;
 
-        // Write script as single JSON line
-        let line = format!("{}\n", script_json.trim());
+        // Compact the JSON to a single line for NDJSON protocol
+        let compact = serde_json::from_str::<serde_json::Value>(script_json)
+            .and_then(|v| serde_json::to_string(&v))
+            .unwrap_or_else(|_| script_json.trim().replace('\n', " "));
+        let line = format!("{}\n", compact);
         stdin
             .write_all(line.as_bytes())
             .await

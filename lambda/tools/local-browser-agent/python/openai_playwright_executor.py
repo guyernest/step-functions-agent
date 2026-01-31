@@ -781,6 +781,13 @@ class OpenAIPlaywrightExecutor:
         - Logs/progress go to stderr (unchanged)
         - EOF on stdin = shutdown signal → close browser and exit
         """
+        # On Windows, ensure stdin/stdout use UTF-8 encoding for NDJSON protocol.
+        # Without this, cp1252 encoding causes OSError on pipe writes.
+        if sys.platform == 'win32':
+            import io
+            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', newline='\n')
+            sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8', newline='\n')
+
         print(f"\n{'='*60}", file=sys.stderr)
         print(f"Server Mode Starting", file=sys.stderr)
         print(f"{'='*60}", file=sys.stderr)
