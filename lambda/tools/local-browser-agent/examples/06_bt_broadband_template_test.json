@@ -1,6 +1,6 @@
 {
-  "name": "BT Broadband - Peacehaven BN10 8LA",
-  "description": "Test BT Broadband availability check for 282 South Coast Road, Peacehaven. Expected: Exchange LWPEA, L2SID BAANGA",
+  "name": "BT Broadband - Template Test (BH8 8BN)",
+  "description": "Template test for BT Broadband availability check for 93 Wimborne Road, Bournemouth BH8 8BN. Tests checker unavailable detection, extract_dom, and full pipeline. Expected: Exchange STSTHBN",
   "starting_page": "https://bbactotl.btwholesale.com/bbac-ui/totl/totlSearch/#/ADSL/AddressHome",
   "llm_provider": "openai",
   "llm_model": "gpt-4o-mini",
@@ -423,7 +423,7 @@
                     "label": "PostCode",
                     "field_type": "input"
                   },
-                  "value": "BN10 8LA"
+                  "value": "BH8 8BN"
                 }
               ]
             },
@@ -436,7 +436,7 @@
                     "strategy": "selector",
                     "value": "#postCode"
                   },
-                  "value": "BN10 8LA"
+                  "value": "BH8 8BN"
                 }
               ]
             },
@@ -449,7 +449,7 @@
                     "strategy": "selector",
                     "value": "input[name='postCode']"
                   },
-                  "value": "BN10 8LA"
+                  "value": "BH8 8BN"
                 }
               ]
             }
@@ -556,7 +556,7 @@
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/^\\s*(?:\\d+-)?282(?:-\\d+)?[A-Za-z]?\\s+\\w+/i",
+                    "value": "text=/^\\s*(?:\\d+-)?396(?:-\\d+)?[A-Za-z]?\\s+\\w+/i",
                     "nth": 0
                   }
                 }
@@ -569,7 +569,7 @@
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/(?:\\d+-)?282(?:-\\d+)?[A-Za-z]?[\\s,]+South Coast Road/i",
+                    "value": "text=/(?:\\d+-)?396(?:-\\d+)?[A-Za-z]?[\\s,]+Wimborne Road/i",
                     "nth": 0
                   }
                 }
@@ -582,7 +582,7 @@
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/(?:\\d+-)?282(?:-\\d+)?[A-Za-z]?.*South Coast Road/i",
+                    "value": "text=/(?:\\d+-)?396(?:-\\d+)?[A-Za-z]?.*Wimborne Road/i",
                     "nth": 0
                   }
                 }
@@ -595,7 +595,7 @@
                   "action": "click",
                   "locator": {
                     "strategy": "text",
-                    "value": "282 South Coast Road"
+                    "value": "93 Wimborne Road"
                   }
                 }
               ]
@@ -604,7 +604,7 @@
               "name": "Strategy 5: Vision LLM with scroll capability",
               "escalate": {
                 "type": "vision_llm",
-                "prompt": "Find and click the address matching '282 South Coast Road, Peacehaven BN10 8LA' in the address list. CRITICAL INSTRUCTIONS:\n\n1. FIRST SEARCH: Look carefully at ALL visible addresses for one containing:\n   - Building number: '282'\n   - Street name: 'South Coast Road'\n   - Format may vary (case, commas, word order)\n\n2. IF FOUND: Click it immediately\n\n3. IF NOT VISIBLE:\n   a) The list is likely SCROLLABLE - look for:\n      - A dropdown/select element that can be scrolled\n      - Scroll arrows (up/down)\n      - A scrollbar on the address list\n   b) SCROLL DOWN within the list (not the whole page)\n   c) After scrolling, SEARCH AGAIN for the address\n   d) Repeat: scroll -> search -> scroll -> search (up to 3 scroll attempts)\n\n4. MATCHING RULES:\n   - Accept variations: '282 South Coast Road', '282, South Coast Road', '282 South Coast Road, City'\n   - Case-insensitive matching\n   - Must have BOTH building number AND street name\n\n5. MAX ACTIONS: 8 actions total (including scrolls and clicks)\n\n6. IF STILL NOT FOUND: Report failure.",
+                "prompt": "Find and click the address matching '93 Wimborne Road, Bournemouth BH8 8BN' in the address list. CRITICAL INSTRUCTIONS:\n\n1. FIRST SEARCH: Look carefully at ALL visible addresses for one containing:\n   - Building number: '93'\n   - Street name: 'Wimborne Road'\n   - Format may vary (case, commas, word order)\n\n2. IF FOUND: Click it immediately\n\n3. IF NOT VISIBLE:\n   a) The list is likely SCROLLABLE - look for:\n      - A dropdown/select element that can be scrolled\n      - Scroll arrows (up/down)\n      - A scrollbar on the address list\n   b) SCROLL DOWN within the list (not the whole page)\n   c) After scrolling, SEARCH AGAIN for the address\n   d) Repeat: scroll -> search -> scroll -> search (up to 3 scroll attempts)\n\n4. MATCHING RULES:\n   - Accept variations: '93 Wimborne Road', '93, Wimborne Road', '93 Wimborne Road, City'\n   - Case-insensitive matching\n   - Must have BOTH building number AND street name\n\n5. MAX ACTIONS: 8 actions total (including scrolls and clicks)\n\n6. IF STILL NOT FOUND: Report failure.",
                 "timeout": 30000,
                 "max_actions": 8
               }

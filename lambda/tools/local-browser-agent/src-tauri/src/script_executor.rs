@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
+use tokio::task::JoinHandle;
 
 use crate::config::Config;
 use crate::paths::AppPaths;
@@ -378,6 +380,251 @@ impl ScriptExecutor {
         }
 
         anyhow::bail!("Could not find {} in any expected location", script_name);
+    }
+}
+
+/// Persistent script executor that keeps the browser alive between workflow runs.
+///
+/// Uses NDJSON protocol over stdin/stdout to communicate with the Python server mode:
+/// - Writes one JSON line to stdin = one workflow request
+/// - Reads one JSON line from stdout = result
+/// - Stderr is streamed in real-time via a background task
+/// - EOF on stdin (drop) = shutdown signal
+pub struct PersistentScriptExecutor {
+    child: Option<tokio::process::Child>,
+    stdin: Option<tokio::process::ChildStdin>,
+    stdout_lines: Option<tokio::io::Lines<BufReader<tokio::process::ChildStdout>>>,
+    stderr_handle: Option<JoinHandle<()>>,
+}
+
+impl PersistentScriptExecutor {
+    /// Start a persistent Python session in server mode.
+    ///
+    /// Spawns the Python process with `--server-mode`, sends the first script
+    /// to initialize the browser, and waits for the `{"status": "ready"}` signal.
+    ///
+    /// Returns the executor and the result of the first script execution.
+    pub async fn start(
+        config: Arc<Config>,
+        exec_config: ScriptExecutionConfig,
+    ) -> Result<(Self, ExecutionResult)> {
+        // Configure environment (same as ScriptExecutor)
+        ScriptExecutor::configure_environment(&config)?;
+
+        let python_path = ScriptExecutor::find_python_executable()
+            .context("Failed to find Python executable")?;
+        let script_executor_path = ScriptExecutor::find_script_executor()
+            .context("Failed to find script_executor.py")?;
+
+        // Build command with --server-mode
+        let mut cmd = Command::new(&python_path);
+        cmd.arg(&script_executor_path);
+        cmd.arg("--server-mode");
+        cmd.arg("--aws-profile").arg(&exec_config.aws_profile);
+        cmd.arg("--navigation-timeout").arg(exec_config.navigation_timeout.to_string());
+
+        if exec_config.headless {
+            cmd.arg("--headless");
+        }
+
+        if let Some(ref bucket) = exec_config.s3_bucket {
+            cmd.arg("--s3-bucket").arg(bucket);
+        }
+
+        if let Some(ref channel) = exec_config.browser_channel {
+            cmd.arg("--browser-channel").arg(channel);
+        }
+
+        if let Some(ref user_data_dir) = exec_config.user_data_dir {
+            cmd.arg("--user-data-dir").arg(user_data_dir);
+        }
+
+        log::info!("Starting persistent Python session in server mode...");
+        log::info!("  Python: {}", python_path.display());
+        log::info!("  Script: {}", script_executor_path.display());
+
+        let mut child = cmd
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("Failed to spawn Python subprocess in server mode")?;
+
+        log::info!("✓ Persistent process spawned with PID: {}", child.id().unwrap_or(0));
+
+        let stdin = child.stdin.take().context("Failed to get stdin")?;
+        let stdout = child.stdout.take().context("Failed to get stdout")?;
+        let stderr = child.stderr.take().context("Failed to get stderr")?;
+
+        // Background task to stream stderr
+        let stderr_handle = tokio::spawn(async move {
+            let mut reader = BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = reader.next_line().await {
+                log::info!("[Persistent Python stderr] {}", line);
+            }
+        });
+
+        let mut stdout_lines = BufReader::new(stdout).lines();
+
+        // Send the first script to trigger browser init
+        let mut stdin_writer = stdin;
+        let first_script_line = format!("{}\n", exec_config.script_content);
+        stdin_writer
+            .write_all(first_script_line.as_bytes())
+            .await
+            .context("Failed to write first script to stdin")?;
+        stdin_writer.flush().await.context("Failed to flush stdin")?;
+
+        // Wait for {"status": "ready"} signal
+        log::info!("Waiting for ready signal from Python server...");
+        let ready_line = stdout_lines
+            .next_line()
+            .await
+            .context("Failed to read ready signal")?
+            .context("Python process exited before sending ready signal")?;
+
+        // Parse and validate the ready signal
+        let ready_msg: serde_json::Value = serde_json::from_str(&ready_line)
+            .context(format!("Failed to parse ready signal: {}", ready_line))?;
+
+        if ready_msg.get("status").and_then(|s| s.as_str()) != Some("ready") {
+            anyhow::bail!(
+                "Expected {{\"status\": \"ready\"}} but got: {}",
+                ready_line
+            );
+        }
+
+        log::info!("✓ Persistent Python session is ready");
+
+        // Now read the first script's result
+        let first_result_line = stdout_lines
+            .next_line()
+            .await
+            .context("Failed to read first script result")?
+            .context("Python process exited before sending first result")?;
+
+        log::info!("First script result received ({}B)", first_result_line.len());
+
+        // Parse the first result
+        let first_result_json: serde_json::Value = serde_json::from_str(&first_result_line)
+            .context("Failed to parse first script result")?;
+        let first_success = first_result_json.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+        let first_result = ExecutionResult {
+            success: first_success,
+            output: Some(first_result_line),
+            error: if !first_success {
+                first_result_json.get("error").and_then(|e| e.as_str()).map(String::from)
+            } else {
+                None
+            },
+        };
+
+        let executor = Self {
+            child: Some(child),
+            stdin: Some(stdin_writer),
+            stdout_lines: Some(stdout_lines),
+            stderr_handle: Some(stderr_handle),
+        };
+
+        Ok((executor, first_result))
+    }
+
+    /// Execute a script on the persistent browser session.
+    ///
+    /// Writes the script JSON as a single line to stdin, reads the result
+    /// JSON line from stdout.
+    pub async fn execute(&mut self, script_json: &str) -> Result<ExecutionResult> {
+        let stdin = self.stdin.as_mut().context("Persistent session not started or already stopped")?;
+        let stdout_lines = self.stdout_lines.as_mut().context("Persistent session not started or already stopped")?;
+
+        // Write script as single JSON line
+        let line = format!("{}\n", script_json.trim());
+        stdin
+            .write_all(line.as_bytes())
+            .await
+            .context("Failed to write script to persistent session")?;
+        stdin.flush().await.context("Failed to flush stdin")?;
+
+        log::info!("Sent script to persistent session, waiting for result...");
+
+        // Read result line
+        let result_line = stdout_lines
+            .next_line()
+            .await
+            .context("Failed to read result from persistent session")?
+            .context("Python process exited unexpectedly")?;
+
+        log::info!("Received result from persistent session ({}B)", result_line.len());
+
+        // Parse the result
+        let result: serde_json::Value = serde_json::from_str(&result_line)
+            .context(format!("Failed to parse result JSON: {}", &result_line[..result_line.len().min(200)]))?;
+
+        let success = result.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+
+        Ok(ExecutionResult {
+            success,
+            output: Some(result_line),
+            error: if !success {
+                result.get("error").and_then(|e| e.as_str()).map(String::from)
+            } else {
+                None
+            },
+        })
+    }
+
+    /// Stop the persistent session.
+    ///
+    /// Drops stdin (sends EOF to Python), waits for the process to exit.
+    pub async fn stop(&mut self) -> Result<()> {
+        log::info!("Stopping persistent Python session...");
+
+        // Drop stdin to signal EOF
+        self.stdin.take();
+        self.stdout_lines.take();
+
+        // Wait for process to exit
+        if let Some(mut child) = self.child.take() {
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(30),
+                child.wait(),
+            )
+            .await
+            {
+                Ok(Ok(status)) => {
+                    log::info!("Persistent Python process exited with status: {:?}", status);
+                }
+                Ok(Err(e)) => {
+                    log::error!("Error waiting for persistent Python process: {}", e);
+                }
+                Err(_) => {
+                    log::warn!("Persistent Python process did not exit within 30s, killing...");
+                    let _ = child.kill().await;
+                }
+            }
+        }
+
+        // Wait for stderr reader to finish
+        if let Some(handle) = self.stderr_handle.take() {
+            let _ = handle.await;
+        }
+
+        log::info!("✓ Persistent session stopped");
+        Ok(())
+    }
+
+    /// Check if the persistent session is still running.
+    pub fn is_running(&mut self) -> bool {
+        if let Some(ref mut child) = self.child {
+            // try_wait returns Ok(Some(status)) if exited, Ok(None) if still running
+            match child.try_wait() {
+                Ok(Some(_)) => false,
+                Ok(None) => true,
+                Err(_) => false,
+            }
+        } else {
+            false
+        }
     }
 }
 

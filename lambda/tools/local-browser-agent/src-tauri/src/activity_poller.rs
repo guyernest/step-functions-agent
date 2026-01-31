@@ -8,7 +8,7 @@ use tokio::time::{interval, Duration};
 use chrono::Utc;
 
 use crate::config::Config;
-use crate::script_executor::{ScriptExecutor, ScriptExecutionConfig};
+use crate::script_executor::{PersistentScriptExecutor, ScriptExecutor, ScriptExecutionConfig};
 use crate::session_manager::SessionManager;
 
 /// Status of the activity poller
@@ -29,6 +29,8 @@ pub struct ActivityPoller {
     session_manager: Arc<RwLock<SessionManager>>,
     status: Arc<RwLock<PollerStatus>>,
     current_task: Arc<RwLock<Option<String>>>,
+    /// Persistent browser session (initialized lazily on first task when enabled)
+    persistent_executor: tokio::sync::Mutex<Option<PersistentScriptExecutor>>,
 }
 
 impl ActivityPoller {
@@ -65,6 +67,7 @@ impl ActivityPoller {
             session_manager,
             status: Arc::new(RwLock::new(PollerStatus::Idle)),
             current_task: Arc::new(RwLock::new(None)),
+            persistent_executor: tokio::sync::Mutex::new(None),
         })
     }
 
@@ -232,18 +235,21 @@ impl ActivityPoller {
         let script_content = serde_json::to_string(&tool_params)
             .context("Failed to serialize script")?;
 
-        // Execute using unified ScriptExecutor (respects browser_engine config)
-        let exec_config = ScriptExecutionConfig {
-            script_content,
-            aws_profile: self.config.aws_profile.clone(),
-            s3_bucket: Some(self.config.s3_bucket.clone()),
-            headless: self.config.headless, // Respect config setting for headless mode
-            browser_channel: self.config.browser_channel.clone(),
-            navigation_timeout: 60000, // 60 second default for server tasks
-            user_data_dir: None, // Server tasks don't use profiles by default
+        // Execute using persistent or one-shot executor based on config
+        let result = if self.config.persistent_browser_session {
+            self.execute_with_persistent_session(&script_content).await
+        } else {
+            let exec_config = ScriptExecutionConfig {
+                script_content,
+                aws_profile: self.config.aws_profile.clone(),
+                s3_bucket: Some(self.config.s3_bucket.clone()),
+                headless: self.config.headless,
+                browser_channel: self.config.browser_channel.clone(),
+                navigation_timeout: 60000,
+                user_data_dir: None,
+            };
+            self.script_executor.execute(exec_config).await
         };
-
-        let result = self.script_executor.execute(exec_config).await;
 
         // Cancel heartbeat
         heartbeat_handle.abort();
@@ -294,6 +300,61 @@ impl ActivityPoller {
         }
 
         Ok(())
+    }
+
+    /// Execute a script using the persistent browser session.
+    ///
+    /// Lazily starts the persistent executor on the first call.
+    /// If the persistent executor has died, restarts it.
+    async fn execute_with_persistent_session(
+        &self,
+        script_content: &str,
+    ) -> Result<crate::script_executor::ExecutionResult> {
+        let mut guard = self.persistent_executor.lock().await;
+
+        // Check if we need to start or restart the persistent session
+        let needs_start = match guard.as_mut() {
+            None => true,
+            Some(executor) => !executor.is_running(),
+        };
+
+        if needs_start {
+            if guard.is_some() {
+                info!("Persistent session died, restarting...");
+                // Try to clean up the dead session
+                if let Some(mut old) = guard.take() {
+                    let _ = old.stop().await;
+                }
+            } else {
+                info!("Starting persistent browser session for first task...");
+            }
+
+            let exec_config = ScriptExecutionConfig {
+                script_content: script_content.to_string(),
+                aws_profile: self.config.aws_profile.clone(),
+                s3_bucket: Some(self.config.s3_bucket.clone()),
+                headless: self.config.headless,
+                browser_channel: self.config.browser_channel.clone(),
+                navigation_timeout: 60000,
+                user_data_dir: None,
+            };
+
+            let (executor, first_result) = PersistentScriptExecutor::start(
+                Arc::clone(&self.config),
+                exec_config,
+            )
+            .await
+            .context("Failed to start persistent browser session")?;
+
+            *guard = Some(executor);
+
+            // Return the result of the first script execution
+            return Ok(first_result);
+        }
+
+        // Use existing persistent session
+        let executor = guard.as_mut().unwrap();
+        executor.execute(script_content).await
     }
 
     /// Start heartbeat task
