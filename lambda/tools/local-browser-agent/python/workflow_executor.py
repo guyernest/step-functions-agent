@@ -235,7 +235,7 @@ class WorkflowExecutor:
             print(f"  [DISPATCH] Calling execute_step for action: {step.get('action')}", file=sys.stderr)
             step_result = await self.executor.execute_step(step)
             print(f"  [DISPATCH] execute_step returned: type={type(step_result)}, is_none={step_result is None}", file=sys.stderr)
-            # Collect results for final output
+            # Always collect results — even failed steps provide useful data
             if step_result:
                 print(f"  → Collecting step result: {step_result.get('action', 'unknown')}, success={step_result.get('success')}", file=sys.stderr)
                 self.step_results.append(step_result)
@@ -245,6 +245,9 @@ class WorkflowExecutor:
                 # Log extracted data if present
                 if "data" in step_result:
                     print(f"  → Extracted data collected: {list(step_result['data'].keys())}", file=sys.stderr)
+                # Raise on failure so workflow control flow can handle it
+                if not step_result.get("success"):
+                    raise Exception(step_result.get("error", "Step execution failed"))
             else:
                 print(f"  [DISPATCH] WARNING: execute_step returned None or empty!", file=sys.stderr)
         else:

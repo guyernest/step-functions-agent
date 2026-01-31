@@ -1,6 +1,6 @@
 {
   "name": "BT Broadband - Bolton BL5 3AN",
-  "description": "Test BT Broadband availability check for 34-40 Market Street, Bolton. Expected: Exchange LCBOL, L2SID BAAMUH",
+  "description": "Test BT Broadband availability check for 34-40 Market Street, Westhoughton, Bolton. Expected: Exchange LCBOL, L2SID BAAMUH",
   "starting_page": "https://bbactotl.btwholesale.com/bbac-ui/totl/totlSearch/#/ADSL/AddressHome",
   "llm_provider": "openai",
   "llm_model": "gpt-4o-mini",
@@ -68,7 +68,7 @@
                     "strategy": "selector",
                     "value": "input[type='text'][name*='user'], input[type='email']"
                   },
-                  "value": "{{username}}"
+                  "value": "nterizakis"
                 }
               ]
             },
@@ -81,7 +81,7 @@
                     "strategy": "selector",
                     "value": "input[type='text']:first-of-type"
                   },
-                  "value": "{{username}}"
+                  "value": "nterizakis"
                 }
               ]
             }
@@ -456,9 +456,17 @@
           ]
         },
         {
+          "action": "wait",
+          "description": "Random delay before search to avoid bot detection",
+          "duration_range": [
+            1500,
+            3500
+          ]
+        },
+        {
           "type": "try",
           "name": "ClickSearch",
-          "description": "Click search button - includes retry for temporary 'service unavailable' errors",
+          "description": "Click search button - includes retry for temporary 'checker is unavailable' errors",
           "strategies": [
             {
               "name": "Strategy 1: Submit button with retry",
@@ -471,10 +479,10 @@
                   },
                   "delay": 500,
                   "retry": {
-                    "attempts": 3,
-                    "delay_ms": 1000,
+                    "attempts": 5,
+                    "delay_ms": 5000,
                     "retry_if": {
-                      "text_visible": "service unavailable"
+                      "text_visible": "checker is unavailable"
                     }
                   }
                 }
@@ -491,10 +499,10 @@
                   },
                   "delay": 500,
                   "retry": {
-                    "attempts": 3,
-                    "delay_ms": 1000,
+                    "attempts": 5,
+                    "delay_ms": 5000,
                     "retry_if": {
-                      "text_visible": "service unavailable"
+                      "text_visible": "checker is unavailable"
                     }
                   }
                 }
@@ -505,6 +513,28 @@
         {
           "action": "wait_for_load_state",
           "state": "networkidle"
+        },
+        {
+          "action": "wait",
+          "description": "Wait for search results or error message to appear",
+          "duration": 2000
+        },
+        {
+          "type": "if",
+          "name": "CheckSearchServiceAvailable",
+          "description": "Detect if BT checker returned 'unavailable' error after search submit",
+          "condition": {
+            "type": "element_visible",
+            "selector": "text=checker is unavailable",
+            "timeout": 1000
+          },
+          "then": {
+            "action": "error",
+            "message": "BT Checker service unavailable - the checker returned: 'We are sorry but the checker is unavailable at the moment. Please try again later.'"
+          },
+          "else": {
+            "continue": true
+          }
         }
       ],
       "next": "SelectAddress"
@@ -520,39 +550,39 @@
           "description": "Progressive address matching: regex -> fuzzy -> vision with scroll",
           "strategies": [
             {
-              "name": "Strategy 1: Regex - building + first word only",
+              "name": "Strategy 1: Regex - building (with range) + first word only",
               "steps": [
                 {
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/^\\s*34-40\\s+\\w+/i",
+                    "value": "text=/^\\s*(?:\\d+-)?34(?:-\\d+)?[A-Za-z]?\\s+\\w+/i",
                     "nth": 0
                   }
                 }
               ]
             },
             {
-              "name": "Strategy 2: Regex - building + street flexible",
+              "name": "Strategy 2: Regex - building (with range) + street flexible",
               "steps": [
                 {
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/34-40[\\s,]+Market Street/i",
+                    "value": "text=/(?:\\d+-)?34(?:-\\d+)?[A-Za-z]?[\\s,]+Market Street/i",
                     "nth": 0
                   }
                 }
               ]
             },
             {
-              "name": "Strategy 3: Regex - street anywhere after building",
+              "name": "Strategy 3: Regex - building (with range) + street anywhere",
               "steps": [
                 {
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/34-40.*Market Street/i",
+                    "value": "text=/(?:\\d+-)?34(?:-\\d+)?[A-Za-z]?.*Market Street/i",
                     "nth": 0
                   }
                 }
@@ -565,7 +595,7 @@
                   "action": "click",
                   "locator": {
                     "strategy": "text",
-                    "value": "34-40 Market Street"
+                    "value": "34 Market Street"
                   }
                 }
               ]
@@ -574,7 +604,7 @@
               "name": "Strategy 5: Vision LLM with scroll capability",
               "escalate": {
                 "type": "vision_llm",
-                "prompt": "Find and click the address matching '34-40 Market Street, Westhoughton, Bolton BL5 3AN' in the address list. CRITICAL INSTRUCTIONS:\n\n1. FIRST SEARCH: Look carefully at ALL visible addresses for one containing:\n   - Building number: '34-40'\n   - Street name: 'Market Street'\n   - Format may vary (case, commas, word order)\n\n2. IF FOUND: Click it immediately\n\n3. IF NOT VISIBLE:\n   a) The list is likely SCROLLABLE - look for:\n      - A dropdown/select element that can be scrolled\n      - Scroll arrows (up/down)\n      - A scrollbar on the address list\n   b) SCROLL DOWN within the list (not the whole page)\n   c) After scrolling, SEARCH AGAIN for the address\n   d) Repeat: scroll -> search -> scroll -> search (up to 3 scroll attempts)\n\n4. MATCHING RULES:\n   - Accept variations: '34-40 Market Street', '34-40, Market Street', '34-40 Market Street, City'\n   - Case-insensitive matching\n   - Must have BOTH building number AND street name\n\n5. MAX ACTIONS: 8 actions total (including scrolls and clicks)\n\n6. IF STILL NOT FOUND: Report failure.",
+                "prompt": "Find and click the address matching '34-40 Market Street, Westhoughton, Bolton BL5 3AN' in the address list. CRITICAL INSTRUCTIONS:\n\n1. FIRST SEARCH: Look carefully at ALL visible addresses for one containing:\n   - Building number: '34'\n   - Street name: 'Market Street'\n   - Format may vary (case, commas, word order)\n\n2. IF FOUND: Click it immediately\n\n3. IF NOT VISIBLE:\n   a) The list is likely SCROLLABLE - look for:\n      - A dropdown/select element that can be scrolled\n      - Scroll arrows (up/down)\n      - A scrollbar on the address list\n   b) SCROLL DOWN within the list (not the whole page)\n   c) After scrolling, SEARCH AGAIN for the address\n   d) Repeat: scroll -> search -> scroll -> search (up to 3 scroll attempts)\n\n4. MATCHING RULES:\n   - Accept variations: '34 Market Street', '34, Market Street', '34 Market Street, City'\n   - Case-insensitive matching\n   - Must have BOTH building number AND street name\n\n5. MAX ACTIONS: 8 actions total (including scrolls and clicks)\n\n6. IF STILL NOT FOUND: Report failure.",
                 "timeout": 30000,
                 "max_actions": 8
               }
@@ -583,13 +613,16 @@
         },
         {
           "action": "wait",
-          "description": "Wait before clicking submit to avoid bot detection",
-          "duration": 500
+          "description": "Random delay before submit to avoid bot detection",
+          "duration_range": [
+            1500,
+            3500
+          ]
         },
         {
           "type": "try",
           "name": "ClickContinueAfterAddress",
-          "description": "Click submit with retry for 'service unavailable' errors",
+          "description": "Click submit with retry for 'checker is unavailable' errors",
           "strategies": [
             {
               "name": "Strategy 1: Submit button with retry",
@@ -603,9 +636,9 @@
                   "delay": 300,
                   "retry": {
                     "attempts": 5,
-                    "delay_ms": 3000,
+                    "delay_ms": 5000,
                     "retry_if": {
-                      "text_visible": "service unavailable"
+                      "text_visible": "checker is unavailable"
                     }
                   }
                 }
@@ -623,9 +656,9 @@
                   "delay": 300,
                   "retry": {
                     "attempts": 5,
-                    "delay_ms": 3000,
+                    "delay_ms": 5000,
                     "retry_if": {
-                      "text_visible": "service unavailable"
+                      "text_visible": "checker is unavailable"
                     }
                   }
                 }
@@ -661,7 +694,7 @@
                 {
                   "action": "wait_for_selector",
                   "selector": ".ExhangeCodeSetup",
-                  "timeout": 15000
+                  "timeout": 30000
                 }
               ]
             },
@@ -679,7 +712,7 @@
                 {
                   "action": "wait_for_selector",
                   "selector": "th:has-text('Featured Products')",
-                  "timeout": 20000
+                  "timeout": 30000
                 }
               ]
             },
@@ -768,6 +801,15 @@
               "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('Premise Type')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
             }
           ]
+        },
+        {
+          "action": "navigate",
+          "url": "https://bbactotl.btwholesale.com/bbac-ui/totl/totlSearch/#/ADSL/AddressHome",
+          "description": "Navigate back to search page for next run"
+        },
+        {
+          "action": "wait_for_load_state",
+          "state": "networkidle"
         }
       ],
       "end": true

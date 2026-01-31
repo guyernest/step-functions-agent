@@ -25,6 +25,7 @@ interface ConfigData {
   headless: boolean
   heartbeat_interval: number
   browser_channel: string | null
+  persistent_browser_session: boolean
 }
 
 interface ChromeProfile {
@@ -85,6 +86,7 @@ function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
     headless: false,
     heartbeat_interval: 60,
     browser_channel: null,
+    persistent_browser_session: false,
   })
 
   const [awsProfiles, setAwsProfiles] = useState<string[]>([])
@@ -561,6 +563,18 @@ function ConfigScreen({ onConfigSaved }: ConfigScreenProps) {
               <span>Run browser in headless mode</span>
             </label>
             <span className="form-hint">Not recommended for bot detection avoidance</span>
+          </div>
+
+          <div className="form-group checkbox-group">
+            <label>
+              <input
+                type="checkbox"
+                checked={config.persistent_browser_session}
+                onChange={(e) => setConfig({ ...config, persistent_browser_session: e.target.checked })}
+              />
+              <span>Keep browser alive between workflow runs</span>
+            </label>
+            <span className="form-hint">Persistent session mode: avoids repeated logins and reduces bot detection. Browser stays open and is reused across polling tasks.</span>
           </div>
         </section>
 

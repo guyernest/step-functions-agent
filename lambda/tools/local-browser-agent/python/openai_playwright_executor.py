@@ -638,12 +638,14 @@ class OpenAIPlaywrightExecutor:
         else:
             raise ValueError(f"Unsupported LLM provider: {self.llm_provider}")
 
-    async def execute_script(self, script: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute_script(self, script: Dict[str, Any], skip_browser_lifecycle: bool = False) -> Dict[str, Any]:
         """
         Execute a browser automation script
 
         Args:
             script: Script dictionary with steps
+            skip_browser_lifecycle: If True, skip _init_browser(), _resolve_profile_from_script(),
+                and _cleanup_browser(). Used in server mode where the browser persists across runs.
 
         Returns:
             Execution result with step outputs
@@ -689,6 +691,8 @@ class OpenAIPlaywrightExecutor:
         print(f"Starting Page: {starting_page}", file=sys.stderr)
         print(f"Total Steps: {len(steps)}", file=sys.stderr)
         print(f"Execution ID: {self.execution_id}", file=sys.stderr)
+        if skip_browser_lifecycle:
+            print(f"Mode: persistent (browser reused)", file=sys.stderr)
         if self.s3_bucket:
             print(f"Screenshots: s3://{self.s3_bucket}/{self.s3_prefix}/{self.execution_id}/", file=sys.stderr)
         print(f"{'='*60}\n", file=sys.stderr)
@@ -705,15 +709,18 @@ class OpenAIPlaywrightExecutor:
         }
 
         try:
-            # Resolve browser profile from script session config
-            # This sets self.user_data_dir based on profile_name or required_tags
-            resolved_user_data_dir = self._resolve_profile_from_script(script)
-            if resolved_user_data_dir:
-                self.user_data_dir = resolved_user_data_dir
-                result["profile_used"] = self._resolved_profile_name or str(resolved_user_data_dir)
+            if not skip_browser_lifecycle:
+                # Resolve browser profile from script session config
+                # This sets self.user_data_dir based on profile_name or required_tags
+                resolved_user_data_dir = self._resolve_profile_from_script(script)
+                if resolved_user_data_dir:
+                    self.user_data_dir = resolved_user_data_dir
+                    result["profile_used"] = self._resolved_profile_name or str(resolved_user_data_dir)
 
-            # Initialize Playwright with resolved profile
-            await self._init_browser()
+                # Initialize Playwright with resolved profile
+                await self._init_browser()
+            else:
+                result["profile_used"] = self._resolved_profile_name or (str(self.user_data_dir) if self.user_data_dir else None)
 
             # Navigate to starting page
             if starting_page:
@@ -757,10 +764,87 @@ class OpenAIPlaywrightExecutor:
             result["success"] = False
             result["error"] = str(e)
         finally:
-            # Cleanup
-            await self._cleanup_browser()
+            if not skip_browser_lifecycle:
+                # Cleanup
+                await self._cleanup_browser()
 
         return result
+
+    async def run_server_mode(self):
+        """
+        Run in server mode: keep the browser alive and accept multiple scripts via stdin/stdout.
+
+        Protocol (NDJSON):
+        - Read one JSON line from stdin = one workflow request
+        - Execute the workflow
+        - Write one JSON line to stdout = result
+        - Logs/progress go to stderr (unchanged)
+        - EOF on stdin = shutdown signal → close browser and exit
+        """
+        print(f"\n{'='*60}", file=sys.stderr)
+        print(f"Server Mode Starting", file=sys.stderr)
+        print(f"{'='*60}", file=sys.stderr)
+        print(f"Waiting for first script to resolve profile and init browser...", file=sys.stderr)
+
+        loop = asyncio.get_event_loop()
+        first_script = True
+        run_count = 0
+
+        try:
+            while True:
+                # Read one JSON line from stdin (blocking read in executor)
+                line = await loop.run_in_executor(None, sys.stdin.readline)
+                if not line:
+                    # EOF - shutdown
+                    print(f"EOF on stdin - shutting down server mode", file=sys.stderr)
+                    break
+
+                line = line.strip()
+                if not line:
+                    continue
+
+                # Parse the script
+                try:
+                    script = json.loads(line)
+                except json.JSONDecodeError as e:
+                    error_result = {"success": False, "error": f"Invalid JSON: {e}"}
+                    print(json.dumps(error_result), flush=True)
+                    continue
+
+                run_count += 1
+                print(f"\n{'─'*40}", file=sys.stderr)
+                print(f"Server mode: executing script #{run_count}: {script.get('name', 'Unnamed')}", file=sys.stderr)
+                print(f"{'─'*40}", file=sys.stderr)
+
+                if first_script:
+                    # Resolve profile and init browser from the first script
+                    try:
+                        resolved_user_data_dir = self._resolve_profile_from_script(script)
+                        if resolved_user_data_dir:
+                            self.user_data_dir = resolved_user_data_dir
+                        await self._init_browser()
+                    except Exception as e:
+                        error_result = {"success": False, "error": f"Browser init failed: {e}"}
+                        print(json.dumps(error_result), flush=True)
+                        traceback.print_exc(file=sys.stderr)
+                        break
+
+                    first_script = False
+                    # Signal readiness
+                    print(json.dumps({"status": "ready"}), flush=True)
+
+                # Execute the script with browser lifecycle skipped
+                result = await self.execute_script(script, skip_browser_lifecycle=True)
+
+                # Write result as single JSON line to stdout
+                print(json.dumps(result), flush=True)
+
+        except KeyboardInterrupt:
+            print(f"Server mode interrupted by user", file=sys.stderr)
+        finally:
+            print(f"Server mode: cleaning up browser...", file=sys.stderr)
+            await self._cleanup_browser()
+            print(f"Server mode: shutdown complete (executed {run_count} scripts)", file=sys.stderr)
 
     async def _execute_linear_steps(self, steps: List[Dict[str, Any]], result: Dict[str, Any], abort_on_error: bool, name: str):
         """Execute steps linearly without workflow control flow (backward compatible)."""
@@ -2182,6 +2266,8 @@ Examples:
     parser.add_argument("--user-data-dir", help="User data directory path (overrides all profile resolution)")
     parser.add_argument("--profile", help="Browser profile name (resolved via ProfileManager)")
     parser.add_argument("--list-profiles", action="store_true", help="List available profiles and exit")
+    parser.add_argument("--server-mode", action="store_true", help="Run in server mode: keep browser alive, accept NDJSON scripts on stdin, write results to stdout")
+    parser.add_argument("--navigation-timeout", type=int, default=60000, help="Navigation timeout in milliseconds")
 
     args = parser.parse_args()
 
@@ -2204,14 +2290,6 @@ Examples:
                 print(f"    Last used: {last_used}")
         print(f"\n{'='*60}\n")
         sys.exit(0)
-
-    # Require --script for execution
-    if not args.script:
-        parser.error("--script is required (unless using --list-profiles)")
-
-    # Load script
-    with open(args.script, 'r') as f:
-        script = json.load(f)
 
     # Resolve user_data_dir from various sources
     user_data_dir = None
@@ -2239,6 +2317,31 @@ Examples:
 
     # Priority 3-5: Let execute_script handle via script session config
 
+    # Handle server mode
+    if args.server_mode:
+        executor = OpenAIPlaywrightExecutor(
+            llm_provider=args.llm_provider,
+            llm_model=args.llm_model,
+            s3_bucket=args.s3_bucket,
+            aws_profile=args.aws_profile,
+            headless=args.headless,
+            browser_channel=args.browser_channel,
+            user_data_dir=user_data_dir,
+            navigation_timeout=args.navigation_timeout,
+        )
+        if args.local_screenshots:
+            executor.local_screenshot_dir = args.local_screenshots
+        await executor.run_server_mode()
+        sys.exit(0)
+
+    # Require --script for single execution mode
+    if not args.script:
+        parser.error("--script is required (unless using --list-profiles or --server-mode)")
+
+    # Load script
+    with open(args.script, 'r') as f:
+        script = json.load(f)
+
     # Create executor
     executor = OpenAIPlaywrightExecutor(
         llm_provider=args.llm_provider,
@@ -2248,6 +2351,7 @@ Examples:
         headless=args.headless,
         browser_channel=args.browser_channel,
         user_data_dir=user_data_dir,
+        navigation_timeout=args.navigation_timeout,
     )
 
     # Set local screenshot directory for testing

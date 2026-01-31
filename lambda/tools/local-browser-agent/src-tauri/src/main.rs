@@ -222,6 +222,10 @@ async fn main() -> Result<()> {
             profile_commands::update_profile_tags,
             profile_commands::setup_profile_login,
             profile_commands::validate_profile,
+            commands::start_persistent_session,
+            commands::execute_persistent_script,
+            commands::stop_persistent_session,
+            commands::is_persistent_session_active,
         ])
         .setup(|_app| {
             info!("Tauri application started");

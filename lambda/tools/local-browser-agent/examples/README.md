@@ -39,6 +39,7 @@ Run in order:
 - `03_bt_broadband_bournemouth.json` - Tests BH6 3EN
 - `04_bt_broadband_bolton.json` - Tests BL5 3AN
 - `05_bt_broadband_peacehaven.json` - Tests BN10 8LA
+- `06_bt_broadband_template_test.json` - Tests BH8 8BN (template pipeline test)
 
 **Expected output for each:**
 
@@ -47,6 +48,9 @@ Run in order:
 | Bournemouth | STSTHBN | BAAOEA |
 | Bolton | LCBOL | BAAMUH |
 | Peacehaven | SDPCHVN | BAANTY |
+| Template Test | STSTHBN | BAAOEA |
+
+**Error handling:** If the BT checker is temporarily unavailable, the workflow will retry up to 5 times with 5-second delays, then report a clear `BT Checker service unavailable` error.
 
 ---
 
@@ -131,6 +135,7 @@ No special configuration needed. These tests work with:
 | `03_bt_broadband_bournemouth.json` | BT test - BH6 3EN | Profile + LLM |
 | `04_bt_broadband_bolton.json` | BT test - BL5 3AN | Profile + LLM |
 | `05_bt_broadband_peacehaven.json` | BT test - BN10 8LA | Profile + LLM |
+| `06_bt_broadband_template_test.json` | BT template pipeline test - BH6 3EN | Profile + LLM |
 
 ---
 

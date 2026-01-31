@@ -460,7 +460,7 @@
         {
           "type": "try",
           "name": "ClickSearch",
-          "description": "Click search button - includes retry for temporary 'service unavailable' errors",
+          "description": "Click search button - includes retry for temporary 'checker is unavailable' errors",
           "strategies": [
             {
               "name": "Strategy 1: Submit button with retry",
@@ -473,10 +473,10 @@
                   },
                   "delay": 500,
                   "retry": {
-                    "attempts": 3,
-                    "delay_ms": 1000,
+                    "attempts": 5,
+                    "delay_ms": 5000,
                     "retry_if": {
-                      "text_visible": "service unavailable"
+                      "text_visible": "checker is unavailable"
                     }
                   }
                 }
@@ -493,10 +493,10 @@
                   },
                   "delay": 500,
                   "retry": {
-                    "attempts": 3,
-                    "delay_ms": 1000,
+                    "attempts": 5,
+                    "delay_ms": 5000,
                     "retry_if": {
-                      "text_visible": "service unavailable"
+                      "text_visible": "checker is unavailable"
                     }
                   }
                 }
@@ -507,6 +507,28 @@
         {
           "action": "wait_for_load_state",
           "state": "networkidle"
+        },
+        {
+          "action": "wait",
+          "description": "Wait for search results or error message to appear",
+          "duration": 2000
+        },
+        {
+          "type": "if",
+          "name": "CheckSearchServiceAvailable",
+          "description": "Detect if BT checker returned 'unavailable' error after search submit",
+          "condition": {
+            "type": "element_visible",
+            "selector": "text=checker is unavailable",
+            "timeout": 1000
+          },
+          "then": {
+            "action": "error",
+            "message": "BT Checker service unavailable - the checker returned: 'We are sorry but the checker is unavailable at the moment. Please try again later.'"
+          },
+          "else": {
+            "continue": true
+          }
         }
       ],
       "next": "SelectAddress"
@@ -522,39 +544,39 @@
           "description": "Progressive address matching: regex -> fuzzy -> vision with scroll",
           "strategies": [
             {
-              "name": "Strategy 1: Regex - building + first word only",
+              "name": "Strategy 1: Regex - building (with range) + first word only",
               "steps": [
                 {
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/^\\s*{{building_number}}\\s+\\w+/i",
+                    "value": "text=/^\\s*(?:\\d+-)?{{building_number}}(?:-\\d+)?[A-Za-z]?\\s+\\w+/i",
                     "nth": 0
                   }
                 }
               ]
             },
             {
-              "name": "Strategy 2: Regex - building + street flexible",
+              "name": "Strategy 2: Regex - building (with range) + street flexible",
               "steps": [
                 {
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/{{building_number}}[\\s,]+{{street}}/i",
+                    "value": "text=/(?:\\d+-)?{{building_number}}(?:-\\d+)?[A-Za-z]?[\\s,]+{{street}}/i",
                     "nth": 0
                   }
                 }
               ]
             },
             {
-              "name": "Strategy 3: Regex - street anywhere after building",
+              "name": "Strategy 3: Regex - building (with range) + street anywhere",
               "steps": [
                 {
                   "action": "click",
                   "locator": {
                     "strategy": "selector",
-                    "value": "text=/{{building_number}}.*{{street}}/i",
+                    "value": "text=/(?:\\d+-)?{{building_number}}(?:-\\d+)?[A-Za-z]?.*{{street}}/i",
                     "nth": 0
                   }
                 }
@@ -591,7 +613,7 @@
         {
           "type": "try",
           "name": "ClickContinueAfterAddress",
-          "description": "Click submit with retry for 'service unavailable' errors",
+          "description": "Click submit with retry for 'checker is unavailable' errors",
           "strategies": [
             {
               "name": "Strategy 1: Submit button with retry",
@@ -605,9 +627,9 @@
                   "delay": 300,
                   "retry": {
                     "attempts": 5,
-                    "delay_ms": 3000,
+                    "delay_ms": 5000,
                     "retry_if": {
-                      "text_visible": "service unavailable"
+                      "text_visible": "checker is unavailable"
                     }
                   }
                 }
@@ -625,9 +647,9 @@
                   "delay": 300,
                   "retry": {
                     "attempts": 5,
-                    "delay_ms": 3000,
+                    "delay_ms": 5000,
                     "retry_if": {
-                      "text_visible": "service unavailable"
+                      "text_visible": "checker is unavailable"
                     }
                   }
                 }
@@ -721,38 +743,6 @@
           "description": "Capture address details page for cloud extraction"
         },
         {
-          "type": "if",
-          "name": "VerifyOnAddressDetailsPage",
-          "description": "Check we're on the address details page before extraction",
-          "condition": {
-            "type": "or",
-            "conditions": [
-              {
-                "type": "element_visible",
-                "selector": ".ExhangeCodeSetup",
-                "timeout": 2000
-              },
-              {
-                "type": "element_visible",
-                "selector": "th:has-text('Featured Products')",
-                "timeout": 2000
-              },
-              {
-                "type": "element_visible",
-                "selector": ".AddressSearchListTitle",
-                "timeout": 2000
-              }
-            ]
-          },
-          "then": {
-            "continue": true
-          },
-          "else": {
-            "action": "error",
-            "message": "Not on address details page - cannot extract results. Check screenshot for current page state."
-          }
-        },
-        {
           "action": "extract_dom",
           "description": "Extract Exchange Code, L2SID, and ONT Details from page HTML",
           "extractions": [
@@ -802,6 +792,15 @@
               "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('Premise Type')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
             }
           ]
+        },
+        {
+          "action": "navigate",
+          "url": "https://bbactotl.btwholesale.com/bbac-ui/totl/totlSearch/#/ADSL/AddressHome",
+          "description": "Navigate back to search page for next run"
+        },
+        {
+          "action": "wait_for_load_state",
+          "state": "networkidle"
         }
       ],
       "end": true

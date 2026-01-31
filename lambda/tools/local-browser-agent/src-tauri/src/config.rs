@@ -59,6 +59,10 @@ pub struct Config {
     /// Browser channel: "msedge", "chrome", "chromium", or null for platform default
     #[serde(default = "default_browser_channel")]
     pub browser_channel: Option<String>,
+
+    /// Keep browser alive between workflow runs (persistent session mode)
+    #[serde(default)]
+    pub persistent_browser_session: bool,
 }
 
 fn default_ui_port() -> u16 {
@@ -182,6 +186,7 @@ impl Config {
             heartbeat_interval: default_heartbeat_interval(),
             aws_region: None,
             browser_channel: default_browser_channel(),
+            persistent_browser_session: false,
         }
     }
 
