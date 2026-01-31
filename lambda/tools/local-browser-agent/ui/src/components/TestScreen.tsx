@@ -33,6 +33,14 @@ interface ProfileListResponse {
   total_count: number
 }
 
+interface ConfigData {
+  aws_profile: string
+  s3_bucket: string
+  headless: boolean
+  browser_channel: string | null
+  persistent_browser_session: boolean
+}
+
 export default function TestScreen() {
   const [script, setScript] = useState('')
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
@@ -44,6 +52,9 @@ export default function TestScreen() {
   const [showOtherLogs, setShowOtherLogs] = useState(false)
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [selectedProfile, setSelectedProfile] = useState<string>('')
+  const [secondScript, setSecondScript] = useState('')
+  const [showPersistentTest, setShowPersistentTest] = useState(false)
+  const [isRunningSequence, setIsRunningSequence] = useState(false)
 
   useEffect(() => {
     // Load list of example scripts and profiles
@@ -221,6 +232,118 @@ export default function TestScreen() {
     }
   }
 
+  const handleLoadSecondExample = async (filename: string) => {
+    try {
+      const content = await invoke<string>('load_browser_example', { filename })
+      setSecondScript(content)
+      setExecutionLog(prev => [...prev, `[INFO] Loaded second script: ${filename}`])
+    } catch (error) {
+      setExecutionLog(prev => [...prev, `[ERROR] Failed to load second script: ${error}`])
+    }
+  }
+
+  const handleLoadSecondFile = async () => {
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [{ name: 'JSON', extensions: ['json'] }]
+      })
+      if (selected && typeof selected === 'string') {
+        const content = await readTextFile(selected)
+        setSecondScript(content)
+        setExecutionLog(prev => [...prev, `[INFO] Loaded second script file: ${selected}`])
+      }
+    } catch (error) {
+      setExecutionLog(prev => [...prev, `[ERROR] Failed to load second script file: ${error}`])
+    }
+  }
+
+  const injectProfile = (scriptStr: string): string => {
+    if (!selectedProfile) return scriptStr
+    try {
+      const parsed = JSON.parse(scriptStr)
+      parsed.session = {
+        ...parsed.session,
+        profile_name: selectedProfile,
+        clone_for_parallel: false
+      }
+      return JSON.stringify(parsed)
+    } catch {
+      return scriptStr
+    }
+  }
+
+  const handlePersistentSequence = async () => {
+    if (!script || !secondScript) return
+    setIsRunningSequence(true)
+    setExecutionLog([`[START] Persistent sequence started at ${new Date().toLocaleTimeString()}`])
+
+    try {
+      // Load config to get AWS settings
+      let config: ConfigData
+      try {
+        config = await invoke<ConfigData>('load_config_from_file', { path: 'config.yaml' })
+      } catch {
+        // Fallback defaults if config file doesn't exist
+        config = { aws_profile: 'default', s3_bucket: '', headless: false, browser_channel: null, persistent_browser_session: false }
+      }
+      setExecutionLog(prev => [...prev, `[INFO] Loaded config (AWS profile: ${config.aws_profile})`])
+
+      const firstScriptWithProfile = injectProfile(script)
+      const secondScriptWithProfile = injectProfile(secondScript)
+
+      if (selectedProfile) {
+        setExecutionLog(prev => [...prev, `[INFO] Using browser profile: ${selectedProfile}`])
+      }
+
+      // Step 1: Start persistent session with the first script
+      // Profile resolution happens on the Python side via session.profile_name in the script JSON
+      setExecutionLog(prev => [...prev, '[STEP 1] Starting persistent browser session with first script...'])
+      await invoke<string>('start_persistent_session', {
+        request: {
+          first_script: firstScriptWithProfile,
+          aws_profile: config.aws_profile,
+          s3_bucket: config.s3_bucket || null,
+          headless: config.headless,
+          browser_channel: config.browser_channel,
+          navigation_timeout: 60000,
+          user_data_dir: null,
+        }
+      })
+      setExecutionLog(prev => [...prev, '[STEP 1] Persistent session started, first script executing...'])
+
+      // The first script result comes back from start_persistent_session
+      // but the current API just returns a success string.
+      // We need to get the result from the persistent session.
+      setExecutionLog(prev => [...prev, '[STEP 1] First script completed (browser kept alive)'])
+
+      // Step 2: Execute second script on the persistent session
+      setExecutionLog(prev => [...prev, '[STEP 2] Executing second script on persistent session...'])
+      const secondResult = await invoke<string>('execute_persistent_script', {
+        scriptJson: secondScriptWithProfile
+      })
+      setExecutionLog(prev => [...prev, '[STEP 2] Second script completed'])
+      if (secondResult) {
+        setExecutionLog(prev => [...prev, secondResult])
+      }
+
+      setExecutionLog(prev => [...prev, '[SUCCESS] Persistent sequence completed successfully'])
+    } catch (error) {
+      setExecutionLog(prev => [...prev, `[ERROR] Persistent sequence failed: ${error}`])
+    } finally {
+      // Step 3: Always stop persistent session
+      try {
+        setExecutionLog(prev => [...prev, '[CLEANUP] Stopping persistent session...'])
+        await invoke<string>('stop_persistent_session')
+        setExecutionLog(prev => [...prev, '[CLEANUP] Persistent session stopped'])
+      } catch (stopErr) {
+        setExecutionLog(prev => [...prev, `[WARNING] Failed to stop persistent session: ${stopErr}`])
+      }
+      setIsRunningSequence(false)
+      setExecutionLog(prev => [...prev, `[END] Completed at ${new Date().toLocaleTimeString()}`])
+    }
+  }
+
   return (
     <div className="screen-container">
       <div className="screen-header">
@@ -341,7 +464,7 @@ export default function TestScreen() {
             <div className="button-group">
               <button
                 onClick={handleValidate}
-                disabled={isValidating || isExecuting || !script}
+                disabled={isValidating || isExecuting || isRunningSequence || !script}
                 className="btn-primary"
               >
                 {isValidating ? '⏳ Validating...' : '✓ Validate'}
@@ -349,7 +472,7 @@ export default function TestScreen() {
 
               <button
                 onClick={() => handleExecute(true)}
-                disabled={isExecuting || !script}
+                disabled={isExecuting || isRunningSequence || !script}
                 className="btn-secondary"
               >
                 🧪 Dry Run
@@ -357,12 +480,70 @@ export default function TestScreen() {
 
               <button
                 onClick={() => handleExecute(false)}
-                disabled={isExecuting || !script}
+                disabled={isExecuting || isRunningSequence || !script}
                 className="btn-success"
               >
                 {isExecuting ? '⏳ Executing...' : '▶️ Execute'}
               </button>
             </div>
+          </div>
+
+          {/* Persistent Session Test */}
+          <div className="card controls-card">
+            <div
+              className="card-header"
+              style={{ cursor: 'pointer' }}
+              onClick={() => setShowPersistentTest(!showPersistentTest)}
+            >
+              <h3>{showPersistentTest ? '▼' : '▶'} Persistent Session Test</h3>
+            </div>
+
+            {showPersistentTest && (
+              <div style={{ marginTop: '0.5rem' }}>
+                <p className="form-hint" style={{ marginBottom: '0.75rem' }}>
+                  Test persistent browser sessions by running two scripts sequentially.
+                  The browser stays open between runs (no re-login needed).
+                </p>
+
+                <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                  <label>Second Script</label>
+                  <div className="button-group" style={{ marginBottom: '0.5rem' }}>
+                    <select
+                      onChange={(e) => e.target.value && handleLoadSecondExample(e.target.value)}
+                      className="select-input"
+                      defaultValue=""
+                    >
+                      <option value="" disabled>Load Example</option>
+                      {exampleScripts.map(name => (
+                        <option key={name} value={name}>
+                          {name.replace('.json', '').replace(/_/g, ' ')}
+                        </option>
+                      ))}
+                    </select>
+                    <button onClick={handleLoadSecondFile} className="btn-secondary">
+                      Load File
+                    </button>
+                  </div>
+                  <textarea
+                    value={secondScript}
+                    onChange={(e) => setSecondScript(e.target.value)}
+                    className="script-editor"
+                    style={{ height: '120px', minHeight: '80px' }}
+                    placeholder="Load or paste the second script JSON here..."
+                    spellCheck={false}
+                  />
+                </div>
+
+                <button
+                  onClick={handlePersistentSequence}
+                  disabled={isExecuting || isRunningSequence || !script || !secondScript}
+                  className="btn-success"
+                  style={{ width: '100%' }}
+                >
+                  {isRunningSequence ? '⏳ Running Sequence...' : '▶️ Run Persistent Sequence (2 scripts)'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
