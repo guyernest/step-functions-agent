@@ -459,8 +459,8 @@
           "action": "wait",
           "description": "Random delay before search to avoid bot detection",
           "duration_range": [
-            1500,
-            3500
+            2000,
+            5000
           ]
         },
         {
@@ -550,20 +550,7 @@
           "description": "Progressive address matching: regex -> fuzzy -> vision with scroll",
           "strategies": [
             {
-              "name": "Strategy 1: Regex - building number + first word",
-              "steps": [
-                {
-                  "action": "click",
-                  "locator": {
-                    "strategy": "selector",
-                    "value": "text=/^\\s*(?:\\d+-)?143(?:-\\d+)?[A-Za-z]?\\s+\\w+/i",
-                    "nth": 0
-                  }
-                }
-              ]
-            },
-            {
-              "name": "Strategy 2: DOM extract + LLM text matching",
+              "name": "Strategy 1: DOM extract + LLM text matching (select_option)",
               "steps": [
                 {
                   "action": "select_by_llm",
@@ -575,7 +562,7 @@
               ]
             },
             {
-              "name": "Strategy 3: Vision LLM with scroll capability (fallback)",
+              "name": "Strategy 2: Vision LLM with scroll capability (fallback)",
               "escalate": {
                 "type": "vision_llm",
                 "prompt": "Find and click the address matching '143 Belle Vue Road, Bournemouth BH6 3EN' in the address list. CRITICAL INSTRUCTIONS:\n\n1. FIRST SEARCH: Look carefully at ALL visible addresses for one containing:\n   - Building number: '143'\n   - Street name: 'Belle Vue Road'\n   - Format may vary (case, commas, word order)\n\n2. IF FOUND: Click it immediately\n\n3. IF NOT VISIBLE:\n   a) The list is likely SCROLLABLE - look for:\n      - A dropdown/select element that can be scrolled\n      - Scroll arrows (up/down)\n      - A scrollbar on the address list\n   b) SCROLL DOWN within the list (not the whole page)\n   c) After scrolling, SEARCH AGAIN for the address\n   d) Repeat: scroll -> search -> scroll -> search (up to 3 scroll attempts)\n\n4. MATCHING RULES:\n   - Accept variations: '143 Belle Vue Road', '143, Belle Vue Road', '143 Belle Vue Road, City'\n   - Case-insensitive matching\n   - Must have BOTH building number AND street name\n\n5. MAX ACTIONS: 8 actions total (including scrolls and clicks)\n\n6. IF STILL NOT FOUND: Report failure.",
@@ -586,11 +573,16 @@
           ]
         },
         {
+          "action": "execute_js",
+          "description": "Force Angular change event on select element - required when Vision LLM fallback clicks option text instead of using select_option()",
+          "script": "(() => { const sel = document.querySelector('select.custom-select'); if (sel && sel.selectedIndex > 0) { sel.dispatchEvent(new Event('change', { bubbles: true })); return 'change_event_dispatched_index_' + sel.selectedIndex; } return 'no_select_or_default'; })()"
+        },
+        {
           "action": "wait",
           "description": "Random delay before submit to avoid bot detection",
           "duration_range": [
-            1500,
-            3500
+            2000,
+            5000
           ]
         },
         {
@@ -726,54 +718,18 @@
           "description": "Capture address details page for cloud extraction"
         },
         {
-          "action": "extract_dom",
-          "description": "Extract Exchange Code, L2SID, and ONT Details from page HTML",
-          "extractions": [
-            {
-              "name": "exchange_code",
-              "selector": ".ExhangeCodeSetup > span:last-child",
-              "fallback_js": "(() => { const wrapper = document.querySelector('.ExhangeCodeSetup'); if (wrapper) { const spans = wrapper.querySelectorAll('span'); for (const s of spans) { if (!s.classList.contains('ExhangeCodeSetupTwo') && s.textContent.trim() && !s.textContent.includes('Exchange Code')) { return s.textContent.trim(); } } } return null; })()"
-            },
-            {
-              "name": "l2sid_new_ont",
-              "selector": "tr:has(th:has-text('L2SID (New ONT)')) td",
-              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('L2SID (New ONT)')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
-            },
-            {
-              "name": "fttp_existing_ont",
-              "selector": "tr:has(th:has-text('FTTP Existing ONT Available')) td",
-              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('FTTP Existing ONT Available')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
-            },
-            {
-              "name": "fttp_new_ont",
-              "selector": "tr:has(th:has-text('FTTP New ONT Available')) td",
-              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('FTTP New ONT Available')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
-            },
-            {
-              "name": "ont_reference",
-              "selector": "table:has(th:has-text('ONT Details')) tr:has(td:has-text('Working')) td:nth-child(2)",
-              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { const header = t.querySelector('th'); if (header && header.textContent.includes('ONT Details')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[1]?.textContent?.trim() || null; } } } } return null; })()"
-            },
-            {
-              "name": "ont_serial_no",
-              "selector": "table:has(th:has-text('ONT Details')) tr:has(td:has-text('Working')) td:nth-child(3)",
-              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { const header = t.querySelector('th'); if (header && header.textContent.includes('ONT Details')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[2]?.textContent?.trim() || null; } } } } return null; })()"
-            },
-            {
-              "name": "port_service_id",
-              "selector": "table:has(th:has-text('ONT Details')) tr:has(td:has-text('Working')) td:nth-child(4)",
-              "fallback_js": "(() => { const tables = document.querySelectorAll('table'); for (const t of tables) { const header = t.querySelector('th'); if (header && header.textContent.includes('ONT Details')) { const rows = t.querySelectorAll('tr'); for (const r of rows) { if (r.textContent.includes('Working')) { const cells = r.querySelectorAll('td'); return cells[3]?.textContent?.trim() || null; } } } } return null; })()"
-            },
-            {
-              "name": "wbc_fttp_rag",
-              "selector": "tr:has(th:has-text('WBC FTTP')) td:first-of-type",
-              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('WBC FTTP')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
-            },
-            {
-              "name": "premise_type",
-              "selector": "tr:has(th:has-text('Premise Type')) td",
-              "fallback_js": "(() => { const rows = document.querySelectorAll('tr'); for (const r of rows) { const th = r.querySelector('th'); if (th && th.textContent.includes('Premise Type')) { const td = r.querySelector('td'); return td ? td.textContent.trim() : null; } } return null; })()"
-            }
+          "action": "extract_by_llm",
+          "description": "Use LLM to extract values from page HTML - more resilient than CSS selectors",
+          "fields": [
+            {"name": "exchange_code", "description": "Exchange Code value (alphanumeric, e.g. 'LNBOU')"},
+            {"name": "l2sid_new_ont", "description": "L2SID (New ONT) value - long alphanumeric string"},
+            {"name": "fttp_existing_ont", "description": "FTTP Existing ONT Available - Yes/No or similar"},
+            {"name": "fttp_new_ont", "description": "FTTP New ONT Available - Yes/No or similar"},
+            {"name": "ont_reference", "description": "ONT Reference for Working status row - alphanumeric ID"},
+            {"name": "ont_serial_no", "description": "ONT Serial Number for Working status row - alphanumeric"},
+            {"name": "port_service_id", "description": "Port Service ID for Working status row - alphanumeric"},
+            {"name": "wbc_fttp_rag", "description": "WBC FTTP RAG status (Green/Amber/Red)"},
+            {"name": "premise_type", "description": "Premise Type value"}
           ]
         },
         {

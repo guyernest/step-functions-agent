@@ -1142,6 +1142,7 @@ class OpenAIPlaywrightExecutor:
             "screenshot": self._step_screenshot,
             "extract": self._step_extract,
             "extract_dom": self._step_extract_dom,
+            "extract_by_llm": self._step_extract_by_llm,
             "execute_js": self._step_execute_js,
             "press": self._step_press,
             "select_by_llm": self._step_select_by_llm,
@@ -1845,7 +1846,13 @@ class OpenAIPlaywrightExecutor:
                 "error": "extract_dom requires 'extractions' array"
             }
 
-        print(f"  Extracting {len(extractions)} fields from DOM...", file=sys.stderr)
+        # Log current URL for debugging extraction failures
+        try:
+            current_url = self.page.url
+            print(f"  Extracting {len(extractions)} fields from DOM (URL: {current_url})...", file=sys.stderr)
+        except Exception:
+            current_url = "unknown"
+            print(f"  Extracting {len(extractions)} fields from DOM (URL: unknown)...", file=sys.stderr)
 
         results = {}
         errors = []
@@ -2001,6 +2008,32 @@ class OpenAIPlaywrightExecutor:
         except Exception:
             page_url = None
 
+        # Diagnostic: if most fields are missing, log page state to help debug
+        if len(results) <= 1 and len(extractions) > 3:
+            print(f"  ⚠ DOM extraction mostly empty ({len(results)}/{len(extractions)} fields). Diagnosing page state...", file=sys.stderr)
+            try:
+                # Check for key page markers
+                markers = await self.page.evaluate("""
+                    (() => {
+                        const markers = {};
+                        markers.title = document.title;
+                        markers.hasExchangeCode = !!document.querySelector('.ExhangeCodeSetup');
+                        markers.hasFeaturedProducts = !!document.querySelector('th');
+                        markers.tableCount = document.querySelectorAll('table').length;
+                        markers.hasError = !!(document.body.textContent.match(/unavailable|error|sorry/i));
+                        markers.bodyLength = document.body.textContent.length;
+                        // Get first 500 chars of visible text for context
+                        markers.bodyPreview = document.body.innerText.substring(0, 500).replace(/\\s+/g, ' ');
+                        return markers;
+                    })()
+                """)
+                print(f"  ⚠ Page markers: title='{markers.get('title')}', exchangeCode={markers.get('hasExchangeCode')}, "
+                      f"tables={markers.get('tableCount')}, hasError={markers.get('hasError')}, bodyLen={markers.get('bodyLength')}", file=sys.stderr)
+                if markers.get('bodyPreview'):
+                    print(f"  ⚠ Page preview: {markers['bodyPreview'][:200]}", file=sys.stderr)
+            except Exception as diag_err:
+                print(f"  ⚠ Diagnostic failed: {diag_err}", file=sys.stderr)
+
         return {
             "success": True,
             "action": "extract_dom",
@@ -2009,6 +2042,149 @@ class OpenAIPlaywrightExecutor:
             "fields_requested": len(extractions),
             "errors": errors if errors else None,
             "page_url": page_url,
+        }
+
+    async def _step_extract_by_llm(self, step: Dict[str, Any], step_num: int) -> Dict[str, Any]:
+        """
+        Extract values from page HTML using LLM text analysis.
+
+        More resilient than CSS-selector-based extract_dom when page structure
+        varies or doesn't fully load. Sends cleaned HTML to the LLM with a list
+        of fields to extract.
+
+        Usage in script:
+        {
+          "action": "extract_by_llm",
+          "description": "Extract key values from results page",
+          "fields": [
+            {"name": "exchange_code", "description": "Exchange Code value"},
+            {"name": "ont_reference", "description": "ONT Reference for Working status row"}
+          ],
+          "selector": "body",
+          "max_html_length": 50000
+        }
+        """
+        fields = step.get("fields", [])
+        if not fields:
+            return {
+                "success": False,
+                "action": "extract_by_llm",
+                "error": "extract_by_llm requires 'fields' array",
+            }
+
+        container_selector = step.get("selector", "body")
+        max_html_length = step.get("max_html_length", 50000)
+
+        # 1. Get page HTML, scoped to container if specified, with non-content elements stripped
+        try:
+            html = await self.page.evaluate("""
+                (selector) => {
+                    const el = document.querySelector(selector) || document.body;
+                    const clone = el.cloneNode(true);
+                    clone.querySelectorAll('script, style, svg, link, meta, noscript').forEach(e => e.remove());
+                    return clone.innerHTML;
+                }
+            """, container_selector)
+        except Exception as e:
+            return {
+                "success": False,
+                "action": "extract_by_llm",
+                "error": f"Failed to get page HTML: {e}",
+            }
+
+        if not html or not html.strip():
+            return {
+                "success": False,
+                "action": "extract_by_llm",
+                "error": "Page HTML is empty",
+            }
+
+        # 2. Truncate if too large
+        if len(html) > max_html_length:
+            html = html[:max_html_length] + "\n... [truncated]"
+
+        print(f"  Extracting {len(fields)} fields via LLM ({len(html)} chars of HTML)...", file=sys.stderr)
+
+        # 3. Build prompt
+        field_descriptions = "\n".join(
+            f"- {f['name']}: {f.get('description', f['name'])}"
+            for f in fields
+        )
+
+        prompt = f"""Extract the following values from this HTML page content.
+Return a JSON object with each field name as key and the extracted value as string, or null if not found.
+
+FIELDS TO EXTRACT:
+{field_descriptions}
+
+IMPORTANT:
+- Extract exact values including all characters (these are IDs/codes, not descriptions)
+- Values are typically in <td>, <span>, or similar elements near their label
+- Return null for fields that don't exist on this page
+- Do NOT guess or fabricate values
+
+HTML CONTENT:
+{html}
+
+Respond with valid JSON only."""
+
+        # 4. Call LLM
+        try:
+            llm_client = self._ensure_llm_client()
+
+            if self.llm_provider == "openai":
+                response = llm_client.chat.completions.create(
+                    model=self.llm_model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=1000,
+                    temperature=0,
+                    response_format={"type": "json_object"},
+                )
+                content = response.choices[0].message.content
+            elif self.llm_provider == "claude":
+                response = llm_client.messages.create(
+                    model=self.llm_model,
+                    max_tokens=1000,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                content = response.content[0].text
+            else:
+                return {
+                    "success": False,
+                    "action": "extract_by_llm",
+                    "error": f"Unsupported LLM provider: {self.llm_provider}",
+                }
+
+            # 5. Parse response
+            result_data = json.loads(content)
+        except json.JSONDecodeError as e:
+            return {
+                "success": False,
+                "action": "extract_by_llm",
+                "error": f"LLM returned invalid JSON: {e}",
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "action": "extract_by_llm",
+                "error": f"LLM call failed: {e}",
+            }
+
+        # 6. Filter nulls, log results
+        results = {k: v for k, v in result_data.items() if v is not None}
+        for field in fields:
+            name = field["name"]
+            if name in results:
+                print(f"  ✓ LLM extracted {name}: {str(results[name])[:50]}", file=sys.stderr)
+            else:
+                print(f"  ⚠ LLM found no value for {name}", file=sys.stderr)
+
+        return {
+            "success": True,
+            "action": "extract_by_llm",
+            "data": results,
+            "fields_found": len(results),
+            "fields_requested": len(fields),
         }
 
     async def _execute_extracted_action(self, extracted_data: Dict[str, Any]) -> Dict[str, Any]:
