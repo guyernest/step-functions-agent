@@ -655,8 +655,33 @@ def main():
     parser.add_argument("--browser-channel", help="Browser channel (chrome, msedge, chromium)")
     parser.add_argument("--navigation-timeout", type=int, default=60000, help="Navigation timeout in ms")
     parser.add_argument("--user-data-dir", help="User data directory for browser profile")
+    parser.add_argument("--server-mode", action="store_true", help="Run in persistent server mode (NDJSON over stdin/stdout)")
 
     args = parser.parse_args()
+
+    # Server mode: delegate to OpenAIPlaywrightExecutor's run_server_mode
+    if args.server_mode:
+        import asyncio
+        from openai_playwright_executor import OpenAIPlaywrightExecutor
+
+        browser_channel = args.browser_channel
+        if not browser_channel:
+            browser_channel = 'msedge' if platform.system() == 'Windows' else 'chrome'
+
+        executor = OpenAIPlaywrightExecutor(
+            llm_provider='openai',
+            llm_model=os.environ.get('OPENAI_MODEL', 'gpt-4o-mini'),
+            llm_api_key=os.environ.get('OPENAI_API_KEY'),
+            s3_bucket=args.s3_bucket,
+            aws_profile=args.aws_profile,
+            headless=args.headless,
+            browser_channel=browser_channel,
+            user_data_dir=args.user_data_dir,
+            navigation_timeout=args.navigation_timeout,
+        )
+
+        asyncio.run(executor.run_server_mode())
+        sys.exit(0)
 
     try:
         # Determine input mode
