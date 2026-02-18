@@ -18,6 +18,16 @@ from typing import Dict, Any, List, Optional
 from condition_evaluator import ConditionEvaluator
 
 
+# Configure stderr for UTF-8 encoding on Windows to prevent encoding errors
+# with Unicode characters in error messages (e.g., ✓, ✗, →, etc.)
+if sys.platform == 'win32':
+    import io
+    try:
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace', newline='\n')
+    except Exception:
+        pass  # Fallback to default encoding if wrapping fails
+
+
 class WorkflowError(Exception):
     """Raised when workflow execution fails."""
     pass
@@ -194,9 +204,13 @@ class WorkflowExecutor:
                 await self._dispatch_step(step)
 
             except Exception as e:
-                print(f"\n✗ ERROR in step '{self.current_step_name}': {e}", file=sys.stderr)
+                # Truncate very long error messages to prevent potential I/O issues
+                error_str = str(e)
+                if len(error_str) > 500:
+                    error_str = error_str[:500] + "... [truncated]"
+                print(f"\n✗ ERROR in step '{self.current_step_name}': {error_str}", file=sys.stderr)
                 if abort_on_error:
-                    raise WorkflowError(f"Step '{self.current_step_name}' failed: {e}")
+                    raise WorkflowError(f"Step '{self.current_step_name}' failed: {error_str}")
                 else:
                     print(f"  Continuing despite error (abort_on_error=false)", file=sys.stderr)
 
@@ -283,8 +297,25 @@ class WorkflowExecutor:
             print(f"\n  [{strategy_index + 1}/{len(strategies)}] Attempting: {strategy_name}", file=sys.stderr)
 
             try:
+                # Check if strategy uses 'escalate' (vision LLM fallback)
+                if "escalate" in strategy:
+                    escalate_config = strategy["escalate"]
+                    escalate_type = escalate_config.get("type", "unknown")
+
+                    # For now, escalate strategies are not implemented in workflow executor
+                    # Fail with a clear message instead of silently succeeding
+                    raise NotImplementedError(
+                        f"Escalate strategy type '{escalate_type}' is not yet implemented in workflow executor. "
+                        f"Use 'steps' array with explicit actions instead."
+                    )
+
                 # Execute strategy steps
                 strategy_steps = strategy.get("steps", [])
+
+                # Validate strategy has something to execute
+                if not strategy_steps:
+                    raise ValueError(f"Strategy '{strategy_name}' has no 'steps' to execute")
+
                 for substep in strategy_steps:
                     await self._dispatch_step(substep)
 
@@ -301,7 +332,11 @@ class WorkflowExecutor:
 
             except Exception as e:
                 last_error = e
-                print(f"    ✗ {strategy_name} failed: {e}", file=sys.stderr)
+                # Truncate very long error messages (Playwright timeouts can be verbose)
+                error_str = str(e)
+                if len(error_str) > 500:
+                    error_str = error_str[:500] + "... [truncated]"
+                print(f"    ✗ {strategy_name} failed: {error_str}", file=sys.stderr)
                 continue
 
         # All strategies failed
