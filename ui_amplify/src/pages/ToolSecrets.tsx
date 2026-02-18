@@ -131,7 +131,10 @@ const ToolSecrets: React.FC = () => {
       if (parsedUpdate?.success) {
         setSecretValues({
           ...secretValues,
-          [toolName]: tempValues[toolName] || {}
+          [toolName]: {
+            ...secretValues[toolName],
+            ...filteredSecrets
+          }
         });
         setEditMode({ ...editMode, [toolName]: false });
         setMessage({ type: 'success', text: parsedUpdate.message || `Successfully updated secrets for ${toolName}` });
